@@ -1,0 +1,10 @@
+{
+  "name": "booze-elroy-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Booze Elroy - Web Edition (faithful JavaScript port of the Love2D game)",
+  "scripts": {
+    "build": "python3 tools/build.py",
+    "serve": "python3 -m http.server 8080 --directory public"
+  }
+}

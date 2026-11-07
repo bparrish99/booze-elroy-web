@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Booze Elroy</title>
+<style>
+html,body{overscroll-behavior:none;margin:0;height:100%;background:#000;color:#ffd400;overflow:hidden;font-family:"Courier New",monospace}
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#screen{display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#fs{display:none;position:absolute;top:max(8px,env(safe-area-inset-top,0px));left:max(8px,env(safe-area-inset-left,0px));z-index:5;width:44px;height:44px;padding:0;border:0;background:none;color:#a8a8a8;font:28px/44px Arial,Helvetica,sans-serif;text-align:center;text-shadow:0 0 3px #000;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer;opacity:.55;transition:opacity .2s}
+#fs.on{display:block}
+#fs:hover,#fs:focus-visible,#esc:hover,#esc:focus-visible{opacity:.9}
+#esc{display:none;position:absolute;top:max(8px,env(safe-area-inset-top,0px));right:max(8px,env(safe-area-inset-right,0px));z-index:5;width:44px;height:44px;padding:0;border:0;background:none;color:#a8a8a8;font:28px/44px Arial,Helvetica,sans-serif;text-align:center;text-shadow:0 0 3px #000;touch-action:manipulation;-webkit-tap-highlight-color:transparent;opacity:.55;transition:opacity .2s}
+#esc.on{display:block}
+#loading{position:absolute;color:#8a8a9a;letter-spacing:.2em;text-transform:uppercase;font-size:14px}
+</style><link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAFkklEQVR4XsWXOWycVRDHf/Pebnbt2N51nLWdOFwJCBBNJKRAAQVHhagoKKgoKWhANDRQ0iCIBAVCKZBAogTEJQFNiLkkEIhDgkgEFEgCzmETJ97ze4Pm+95b7/oKV8Ron/Y75r03838z/5kP/meRrfZXcJDrKFAGngN2xvs0197Z9XngYWAlzREI/6l/CosKusloKZT+7oYbTtDCI5MXgH0UnpiuoZBtgoDpvK/QiwgsAQ8CF20hKVD8e6JwdAuPN0MiPV9RqNqOAw6tEzvjviRFhRcVPgamo8fmtY1LSdJLuocVXo/IbWnIkCh8GT0P/wKBNPdMio2NkMgRiNGePP8KuOYvenwpMSRGgS8U3oixsd6QAQPmhzwXdN3YPAs2001IHB/Yp5/+a7PActii2SLW//7QrXSuqCPdDOkFZg/O45fbIBbTMagjS4SRMr89cjuhWsIIwPR2HZxHOpkiKFpkw1pJBkg8HzsSF7zLxAmdmXHae2q2SG5AqJZxzR4SwlBSacnn79q7J3JD1EHpjxahUkICuCzL17UjWBsHQ0yowvsod//20IGsde2Ud9scbPOF0ebwUgsyZffBjyidMbAgVDynHruNXm0EGSuDi0tmAb3YM70w98y8oxd+ELghpWXihRwBhbFoYX4fpnYQZmdone0Q2hE0gZHGRIG4Hzg5cYTpabKJEVrnjYMKMdQr02Wcu5Ae+UWo16Eb6TqXtNKrwC0g42bObP1Rr7sPcP+hwNfHPdVtBoTy5uMwsyPg/KeR+i0cqszNPMWi38kDz8JyW/Koa4wF3npSGJMTTuVthPZVdZGjqH4ncEeyKhlgBaYRAxDnJ6BUo+TJh7dRWh06xF+C83V81DddO2jnwZVsXCSIoCIlJzSC7RMsTHPrNRlgsNgpF6Eda+BLD2cEu8nVldERVyTxQOTk1yrUJuC9JwIW8j7Pt8C2soNeD9ftWtao6Tno2MZrEbBlVpddWYbl84yUq2CL5OoKKxcg64EOVlmFi0tItcxodTQPwqaHnkK7LKgF8uQk2mshsiLBcFnqjcHJgMwVkaxwJBKMzVMdq6vWGxpe/F7DYdXwnmp4J6ju269aa6j68mohck51YkqzK2/U8FpTf5lXbXRVa5nqdEe10exqY+G0NhY+08YCOnn22jaqi2j27mAQDssFq6Qg507CuR1gmdBtw9mT8MfpIbByQjp/FrJuri9+HDmnOTcsTNahLFC1EGsBUzHU1sg6BEQ0H9XtqqMTcYyrOl88X0vH9syQGBnXbHtNl8cn9NjevVpttdTO3mWZor0MtfvW14YxesJqxCYdTKLZ1obsuV6SSc3lPH6NVDLv2PvTTyzVapyanaXUDexaWLTzzn65YlefHDaOgeRhQiL9b1WI7F3UCyLa815bInpsz54chat//DFrOdGW8FW/bG2KQJKExGpzOdTArBMt0kMsF0SoTDeoTtv5g3hPZdcsRtE4Z0YNMeGlZOuNV8X1K+XYdvT5p8mmZ4q3O6fQVw4hzTbcc19/RiIiszw1m4OSSvNRjECKYmJzUruexPSsEHxvZRy4Pue5yHdR3x5kyHCrnjzbHicO9geGkb23Be8V2A804/3a7wnTMyNuZnT0LjPSiXgqFT9WreR7OPtVKz7PgAFJG34ePbwOmOxTMnwX2+pOrOMfxkb1pthqmZjn3wBn8n3MSzgSVMva6crpTq8C7G863+w0W986cYbmxqL0W7KUWLZRTv+DjYTCrwMZYcWvlvT6K6eCoVot6oD+MBDcwy2ZFjAbhJ9EyrJrg64dN85LzkDX9AGwJy5ofO7WGChXHztWOTE3d0BhJitQqnrVOwWWe+SIXyax1jSHQ2ei5zkPDIxTG8VAMafwehXFTT4u/6KeBezLMVbSB67Jz5fJ9X8mfwIIoR4uy+utTwAAAABJRU5ErkJggg==">
+</head><body>
+<div id="stage"><canvas id="screen"></canvas><div id="loading">Loading…</div><button id="fs" type="button" aria-label="Toggle fullscreen"title="Fullscreen (F)">⛶</button><button id="esc" type="button" aria-label="Exit to menu">✕</button></div>
+<script>window.BOOZE_ASSETS=/*ASSETS*/;</script>
+<script>/*CODE*/</script>
+</body></html>
