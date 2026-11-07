@@ -11,10 +11,25 @@ html,body{overscroll-behavior:none;margin:0;height:100%;background:#000;color:#f
 #fs:hover,#fs:focus-visible,#esc:hover,#esc:focus-visible{opacity:.9}
 #esc{display:none;position:absolute;top:max(8px,env(safe-area-inset-top,0px));right:max(8px,env(safe-area-inset-right,0px));z-index:5;width:44px;height:44px;padding:0;border:0;background:none;color:#a8a8a8;font:28px/44px Arial,Helvetica,sans-serif;text-align:center;text-shadow:0 0 3px #000;touch-action:manipulation;-webkit-tap-highlight-color:transparent;opacity:.55;transition:opacity .2s}
 #esc.on{display:block}
+#reset{background:#000;color:#ffd400;border:2px solid #2121de;border-radius:6px;padding:20px 22px;font:15px/1.5 "Courier New",monospace;max-width:min(320px,calc(100vw - 48px))}
+#reset::backdrop{background:rgba(0,0,0,.7)}
+#reset h2{margin:0 0 12px;font-size:16px;letter-spacing:.15em}
+#reset label{display:block;margin:6px 0}
+#reset input[type=password]{width:100%;box-sizing:border-box;margin-top:4px;padding:6px 8px;background:#111;color:#fff;border:1px solid #555;border-radius:3px;font:inherit}
+#reset .row{display:flex;flex-direction:row-reverse;gap:10px;justify-content:flex-start;margin-top:14px}
+#reset button{padding:6px 14px;background:#111;color:#ffd400;border:1px solid #ffd400;border-radius:3px;font:inherit;cursor:pointer}
+#reset button[value=reset]{background:#ffd400;color:#000}
+#reset .msg{min-height:1.5em;margin-top:8px;color:#ffb8ff}
 #loading{position:absolute;color:#8a8a9a;letter-spacing:.2em;text-transform:uppercase;font-size:14px}
 </style><link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAFkklEQVR4XsWXOWycVRDHf/Pebnbt2N51nLWdOFwJCBBNJKRAAQVHhagoKKgoKWhANDRQ0iCIBAVCKZBAogTEJQFNiLkkEIhDgkgEFEgCzmETJ97ze4Pm+95b7/oKV8Ron/Y75r03838z/5kP/meRrfZXcJDrKFAGngN2xvs0197Z9XngYWAlzREI/6l/CosKusloKZT+7oYbTtDCI5MXgH0UnpiuoZBtgoDpvK/QiwgsAQ8CF20hKVD8e6JwdAuPN0MiPV9RqNqOAw6tEzvjviRFhRcVPgamo8fmtY1LSdJLuocVXo/IbWnIkCh8GT0P/wKBNPdMio2NkMgRiNGePP8KuOYvenwpMSRGgS8U3oixsd6QAQPmhzwXdN3YPAs2001IHB/Yp5/+a7PActii2SLW//7QrXSuqCPdDOkFZg/O45fbIBbTMagjS4SRMr89cjuhWsIIwPR2HZxHOpkiKFpkw1pJBkg8HzsSF7zLxAmdmXHae2q2SG5AqJZxzR4SwlBSacnn79q7J3JD1EHpjxahUkICuCzL17UjWBsHQ0yowvsod//20IGsde2Ud9scbPOF0ebwUgsyZffBjyidMbAgVDynHruNXm0EGSuDi0tmAb3YM70w98y8oxd+ELghpWXihRwBhbFoYX4fpnYQZmdone0Q2hE0gZHGRIG4Hzg5cYTpabKJEVrnjYMKMdQr02Wcu5Ae+UWo16Eb6TqXtNKrwC0g42bObP1Rr7sPcP+hwNfHPdVtBoTy5uMwsyPg/KeR+i0cqszNPMWi38kDz8JyW/Koa4wF3npSGJMTTuVthPZVdZGjqH4ncEeyKhlgBaYRAxDnJ6BUo+TJh7dRWh06xF+C83V81DddO2jnwZVsXCSIoCIlJzSC7RMsTHPrNRlgsNgpF6Eda+BLD2cEu8nVldERVyTxQOTk1yrUJuC9JwIW8j7Pt8C2soNeD9ftWtao6Tno2MZrEbBlVpddWYbl84yUq2CL5OoKKxcg64EOVlmFi0tItcxodTQPwqaHnkK7LKgF8uQk2mshsiLBcFnqjcHJgMwVkaxwJBKMzVMdq6vWGxpe/F7DYdXwnmp4J6ju269aa6j68mohck51YkqzK2/U8FpTf5lXbXRVa5nqdEe10exqY+G0NhY+08YCOnn22jaqi2j27mAQDssFq6Qg507CuR1gmdBtw9mT8MfpIbByQjp/FrJuri9+HDmnOTcsTNahLFC1EGsBUzHU1sg6BEQ0H9XtqqMTcYyrOl88X0vH9syQGBnXbHtNl8cn9NjevVpttdTO3mWZor0MtfvW14YxesJqxCYdTKLZ1obsuV6SSc3lPH6NVDLv2PvTTyzVapyanaXUDexaWLTzzn65YlefHDaOgeRhQiL9b1WI7F3UCyLa815bInpsz54chat//DFrOdGW8FW/bG2KQJKExGpzOdTArBMt0kMsF0SoTDeoTtv5g3hPZdcsRtE4Z0YNMeGlZOuNV8X1K+XYdvT5p8mmZ4q3O6fQVw4hzTbcc19/RiIiszw1m4OSSvNRjECKYmJzUruexPSsEHxvZRy4Pue5yHdR3x5kyHCrnjzbHicO9geGkb23Be8V2A804/3a7wnTMyNuZnT0LjPSiXgqFT9WreR7OPtVKz7PgAFJG34ePbwOmOxTMnwX2+pOrOMfxkb1pthqmZjn3wBn8n3MSzgSVMva6crpTq8C7G863+w0W986cYbmxqL0W7KUWLZRTv+DjYTCrwMZYcWvlvT6K6eCoVot6oD+MBDcwy2ZFjAbhJ9EyrJrg64dN85LzkDX9AGwJy5ofO7WGChXHztWOTE3d0BhJitQqnrVOwWWe+SIXyax1jSHQ2ei5zkPDIxTG8VAMafwehXFTT4u/6KeBezLMVbSB67Jz5fJ9X8mfwIIoR4uy+utTwAAAABJRU5ErkJggg==">
 </head><body>
 <div id="stage"><canvas id="screen"></canvas><div id="loading">Loading…</div><button id="fs" type="button" aria-label="Toggle fullscreen"title="Fullscreen (F)">⛶</button><button id="esc" type="button" aria-label="Exit to menu">✕</button></div>
+<dialog id="reset"><form method="dialog"><h2>RESET HIGH SCORES</h2>
+<label><input type="radio" name="scope" value="board" checked> Leaderboard for the current settings</label>
+<label><input type="radio" name="scope" value="all"> All leaderboards (every setting)</label>
+<label>Password<input type="password" name="password" autocomplete="current-password"></label>
+<div class="row"><button value="reset">Reset</button><button value="cancel" formnovalidate>Cancel</button></div>
+<div class="msg" role="status"></div></form></dialog>
 <script>window.BOOZE_ASSETS=/*ASSETS*/;</script>
 <script>/*CODE*/</script>
 </body></html>

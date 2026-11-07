@@ -12,8 +12,13 @@
   async function start() {
     const down = {};
     const audio = BoozeAudio.createAudio(A.sounds);
-    const hsKey = "booze-elroy-highscore";
-    let hs = 0; try { hs = parseInt(localStorage.getItem(hsKey) || "0", 10) || 0; } catch { /* ignore */ }
+    // online leaderboard + per-settings high score (only over http(s); a file:// page plays offline)
+    let storage = null; try { storage = window.localStorage; } catch { /* ignore */ }
+    const LB = BoozeLeaderboard.create({
+      storage: storage || { getItem: () => null, setItem() {}, removeItem() {} },
+      apiBase: /^https?:$/.test(location.protocol) ? "/api/scores" : null,
+      fetch: (...a) => fetch(...a),
+    });
     // xorshift-free: normal Math.random in the browser
     // intermission 3 plays a short video (with sound); core calls video.play()/stop()
     let videoEl = null, videoPrimed = false;
@@ -64,14 +69,14 @@
     };
     const core = BoozeCore.create(A.data, {
       noExit: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      saveHighScore: (s) => { try { localStorage.setItem(hsKey, String(s)); } catch { /* ignore */ } },
-      resetHighScore: () => { try { localStorage.removeItem(hsKey); } catch { /* ignore */ } },
+      scenes: LB.scenes, afterGameOver: (s) => LB.afterGameOver(s),
+      saveHighScore: (s) => LB.saveBest(s), resetHighScore: () => openReset(),
       saveConfig: (c) => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => { try { return JSON.parse(localStorage.getItem("booze-elroy-options") || "null"); } catch { return null; } },
       setFullscreen: (on) => { try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ } },
     });
     core.T = BoozeCore.T;
-    if (hs) core.g.highScore = hs;
+    LB.attach(core);
     window.__core = core;
 
     const [spr16, spr8, text8, banner] = await Promise.all(["spr16", "spr8", "text8", "banner"].map((n) => loadImg(A.images[n])));
@@ -93,9 +98,34 @@
     window.addEventListener("resize", fit); fit();
 
     core.init();
-    if (core.g.highScore === undefined && hs) core.g.highScore = hs;
+
+    // "Reset High Scores" (Options): wipes the online boards; the password is checked by the server
+    const rs = document.getElementById("reset"), rsForm = rs.querySelector("form"), rsMsg = rs.querySelector(".msg");
+    const resetOpen = () => rs.open;
+    function openReset() {
+      if (typeof rs.showModal !== "function") return;
+      for (const k in down) down[k] = false;
+      rsMsg.textContent = ""; rsForm.reset();
+      rs.showModal();
+    }
+    rsForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (e.submitter && e.submitter.value === "cancel") { rs.close(); return; }
+      const pw = rsForm.elements.password.value;
+      if (!pw) { rsMsg.textContent = "Enter the password."; return; }
+      rsMsg.textContent = "Resetting…";
+      const res = await LB.reset(pw, rsForm.elements.scope.value === "all");
+      if (res.ok) { rsMsg.textContent = "Done."; setTimeout(() => rs.close(), 900); }
+      else rsMsg.textContent = res.status === 403 ? "Wrong password." : res.status === 503 ? "Reset isn't set up on the server." : res.status === 0 ? "Can't reach the leaderboard server." : "Reset failed (" + res.status + ").";
+    });
+    rs.addEventListener("close", () => canvas.focus && canvas.focus());
 
     window.addEventListener("keydown", (e) => {
+      if (resetOpen()) return; // typing into the reset dialog
+      // name entry takes typed characters as they are (shifted symbols included)
+      if (core.g.scene.name === "nameEntry" && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault(); core.keypressed(e.key); return;
+      }
       const k = KEYMAP[e.code]; if (k === undefined || k === null) return;
       e.preventDefault(); audio.unlock(); primeVideo(); primeVideo();
       if (!down[k]) { down[k] = true; core.keypressed(k); }
@@ -192,7 +222,7 @@
       fsBtn.addEventListener("click", (e) => { e.preventDefault(); toggleFullscreen(); fsBtn.blur(); });
       document.addEventListener("fullscreenchange", syncFsButton);
       document.addEventListener("webkitfullscreenchange", syncFsButton);
-      window.addEventListener("keydown", (e) => { if (e.code === "KeyF" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFullscreen(); } });
+      window.addEventListener("keydown", (e) => { if (!resetOpen() && core.g.scene.name !== "nameEntry" && e.code === "KeyF" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFullscreen(); } });
     }
     // touch devices have no Esc key: a small button leaves the game / autoplay / sub-screens
     const escBtn = document.getElementById("esc");
@@ -229,8 +259,9 @@
       acc += dt;
       const step = core.FIXED_DT;
       if (touchDir && ["playerUp", "ready", "dying", "caught", "gameover", "levelAnimation", "intermission1", "intermission2", "intermission3", "destroyed"].includes(core.g.mode)) setTouchDir(null);
-      pollPad();
+      if (!resetOpen()) pollPad();
       while (acc >= step) { core.update(); acc -= step; }
+      LB.tick();
       R.draw(); P.present();
       escBtn.classList.toggle("on", core.g.scene.name !== "attract");
       if (core.g.scene.name === "game") canvas.style.cursor = "none";

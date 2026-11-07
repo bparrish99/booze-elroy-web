@@ -1,0 +1,147 @@
+// Unit tests: board keys vs the core's options, and the leaderboard API against a local Blobs server.
+//   node --test tests/   (or npm test)
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { handle } from "../netlify/lib/scores.mjs";
+import { startBlobs } from "./blobs.mjs";
+
+const require = createRequire(import.meta.url);
+const SK = require("../src/scorekey.js");
+const BoozeCore = require("../src/core.js");
+const DATA = require("../assets/data.json");
+
+const AUDIO_VIDEO = ["background", "mazeColor", "crtEffect", "volume"];
+
+test("board key covers exactly the gameplay options, with the core's values in the core's order", () => {
+  const core = BoozeCore.create(DATA, { noExit: true });
+  core.init();
+  const menuKeys = core.optMenu.filter((it) => it.key).map((it) => it.key);
+  assert.deepEqual(SK.FIELDS.map((f) => f[0]), menuKeys.filter((k) => !AUDIO_VIDEO.includes(k)));
+  for (const [key, vals] of SK.FIELDS) {
+    const item = core.optMenu.find((it) => it.key === key);
+    const seen = item.options.map((o) => { o.action(); return core.g.config[key]; });
+    assert.deepEqual(seen, vals, key);
+  }
+});
+
+test("keyFor: defaults, cosmetic options ignored, Lua-style falsy flags, unknown values rejected", () => {
+  const core = BoozeCore.create(DATA, {});
+  const def = { ...core.g.defaultConfig };
+  const k = SK.keyFor(def);
+  assert.equal(k, "pac.1.0.f.f.f.3.1.f.0.4.t.f.f");
+  assert.ok(SK.isKey(k));
+  assert.equal(SK.keyFor({ ...def, background: "galaxy", mazeColor: 7, crtEffect: false, volume: 0 }), k);
+  assert.equal(SK.keyFor({ ...def, afterDark: null, radar: undefined }), k);
+  assert.notEqual(SK.keyFor({ ...def, ghostCount: 0 }), k);
+  assert.equal(SK.keyFor({ ...def, ghostCount: 99 }), null);
+  assert.ok(!SK.isKey("pac.1.0"));
+  assert.ok(!SK.isKey("pac.1.0.f.f.f.3.1.f.0.4.t.f.x"));
+});
+
+test("cleanName", () => {
+  assert.equal(SK.cleanName("x-1/y!"), "X-1/Y!");
+  assert.equal(SK.cleanName("  pin   back!  "), "PIN BACK!");
+  assert.equal(SK.cleanName("A".repeat(16)), "A".repeat(16));
+  assert.equal(SK.cleanName("A".repeat(17)), null);
+  assert.equal(SK.cleanName("   "), null);
+  assert.equal(SK.cleanName("bad.name"), null);
+  assert.equal(SK.cleanName("$%"), null);
+  assert.equal(SK.cleanName("who?"), null); // no "?" glyph in the font
+});
+
+// ---------------------------------------------------------------- API
+let blobs;
+before(async () => { blobs = await startBlobs(); });
+after(async () => { await blobs.stop(); });
+
+const BOARD = "pac.1.0.f.f.f.3.1.f.0.4.t.f.f";
+const env = { LEADERBOARD_ADMIN_PASSWORD: "correct horse" };
+const call = async (method, path, body) => {
+  const req = new Request("http://x" + path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await handle(req, blobs.store, { env, failDelay: 0 });
+  return { status: res.status, data: await res.json() };
+};
+const submit = (name, score, board = BOARD) => call("POST", "/api/scores", { board, name, score });
+
+test("API: empty board, ranking, ties, top 10", async () => {
+  assert.deepEqual((await call("GET", "/api/scores?board=" + BOARD)).data, { board: BOARD, entries: [] });
+  let r = await submit("first", 5000);
+  assert.equal(r.data.rank, 1);
+  r = await submit("second", 7000);
+  assert.equal(r.data.rank, 1);
+  r = await submit("tie", 5000); // equal scores: the earlier one keeps the higher place
+  assert.equal(r.data.rank, 3);
+  assert.deepEqual(r.data.entries.map((e) => e.name), ["SECOND", "FIRST", "TIE"]);
+  for (let i = 0; i < 7; i++) await submit("fill " + i, 100 + i);
+  r = await submit("too low", 50);
+  assert.equal(r.data.rank, null);
+  assert.equal(r.data.entries.length, 10);
+  r = await submit("bumps", 101);
+  assert.equal(r.data.rank, 10);
+  assert.equal(r.data.entries.length, 10);
+  assert.equal(r.data.entries.at(-1).name, "BUMPS");
+  const g = await call("GET", "/api/scores?board=" + BOARD);
+  assert.deepEqual(g.data.entries, r.data.entries);
+});
+
+// in-memory store with atomic conditional writes (like the real service), and a yield on every call so requests interleave
+function memStore() {
+  const m = new Map(); let n = 0;
+  const tick = () => new Promise((r) => setTimeout(r, Math.random() * 5));
+  return {
+    async getWithMetadata(k) { await tick(); const v = m.get(k); return v ? { data: JSON.parse(v.body), etag: v.etag, metadata: {} } : null; },
+    async setJSON(k, data, o = {}) {
+      await tick();
+      const v = m.get(k);
+      if ((o.onlyIfNew && v) || (o.onlyIfMatch && (!v || v.etag !== o.onlyIfMatch))) return { modified: false };
+      const etag = String(++n); m.set(k, { body: JSON.stringify(data), etag }); return { etag, modified: true };
+    },
+    async get(k) { await tick(); const v = m.get(k); return v ? JSON.parse(v.body) : null; },
+  };
+}
+
+test("API: simultaneous submissions to one board are all kept", async () => {
+  const B = "booze.1.0.f.f.f.3.1.f.0.4.t.f.f", store = memStore();
+  const post = (name, score) => handle(new Request("http://x/api/scores", { method: "POST", body: JSON.stringify({ board: B, name, score }) }), store, { env })
+    .then(async (r) => ({ status: r.status, data: await r.json() }));
+  const rs = await Promise.all([1, 2, 3, 4, 5, 6].map((i) => post("racer " + i, i * 1000)));
+  assert.ok(rs.every((r) => r.status === 200 && r.data.rank), JSON.stringify(rs.map((r) => r.status)));
+  assert.deepEqual((await store.get(B)).map((e) => e.score), [6000, 5000, 4000, 3000, 2000, 1000]);
+});
+
+test("API: rejects bad input", async () => {
+  assert.equal((await call("GET", "/api/scores?board=nope")).status, 400);
+  assert.equal((await submit("ok", 100, "nope")).status, 400);
+  assert.equal((await submit("bad.name", 100)).status, 400);
+  assert.equal((await submit("x".repeat(17), 100)).status, 400);
+  assert.equal((await submit("ok", 0)).status, 400);
+  assert.equal((await submit("ok", 12.5)).status, 400);
+  assert.equal((await submit("ok", 10000000)).status, 400);
+  assert.equal((await call("POST", "/api/scores", "not an object")).status, 400);
+  assert.equal((await call("DELETE", "/api/scores")).status, 405);
+});
+
+test("API: reset needs the password; one board or all", async () => {
+  const OTHER = "mspac.1.0.f.f.f.3.1.f.0.4.t.f.f";
+  await submit("keep", 900, OTHER);
+  assert.equal((await call("POST", "/api/scores/reset", { password: "wrong" })).status, 403);
+  assert.equal((await call("POST", "/api/scores/reset", {})).status, 403);
+  assert.equal((await call("GET", "/api/scores/reset")).status, 405);
+  assert.equal((await call("GET", "/api/scores?board=" + BOARD)).data.entries.length, 10);
+
+  let r = await call("POST", "/api/scores/reset", { password: "correct horse", board: BOARD });
+  assert.deepEqual(r.data, { reset: BOARD });
+  assert.equal((await call("GET", "/api/scores?board=" + BOARD)).data.entries.length, 0);
+  assert.equal((await call("GET", "/api/scores?board=" + OTHER)).data.entries.length, 1);
+
+  r = await call("POST", "/api/scores/reset", { password: "correct horse" });
+  assert.deepEqual(r.data, { reset: "all" });
+  assert.equal((await call("GET", "/api/scores?board=" + OTHER)).data.entries.length, 0);
+});
+
+test("API: reset is disabled when no password is configured", async () => {
+  const req = new Request("http://x/api/scores/reset", { method: "POST", body: JSON.stringify({ password: "" }) });
+  const res = await handle(req, blobs.store, { env: {}, failDelay: 0 });
+  assert.equal(res.status, 503);
+});

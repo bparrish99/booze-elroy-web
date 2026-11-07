@@ -943,7 +943,8 @@
         },
         gameover: {
           state: { running: false, showPac: false, showGhosts: false }, frames: 240,
-          endFunc() { if (g.autoplay) setScene("game"); else setScene("attract"); },
+          // web edition: env.afterGameOver can route a real (non-autoplay, non-demo) game to name entry
+          endFunc() { if (g.autoplay) setScene("game"); else setScene((!g.attract && env.afterGameOver && env.afterGameOver(g.score)) || "attract"); },
         },
         levelComplete: {
           state: { running: false, showPac: true, showGhosts: true }, frames: 120,
@@ -1029,6 +1030,8 @@
       ], { selectedItem: 1 }),
     };
     if (env.noExit) { menus.main.splice(3, 1); menus.main[3].y -= 1; }
+    // web edition: the online leaderboard takes the old Exit slot (Autoplay back at its original row)
+    if (env.scenes && env.scenes.leaderboard) { menus.main.splice(3, 0, { text: "Leaderboard", x: 10, y: 29, action() { setScene("leaderboard"); } }); menus.main[4].y = 31; }
     const menuConfirm = (menu) => {
       const item = menu[menu.selectedItem - 1];
       if (item.text && item.text === "Play") { g.sounds.coindrop.stop(); g.sounds.coindrop.play(); }
@@ -1687,7 +1690,7 @@
       Object.assign(ON_OFF("crtEffect"), { y: 26 }),
       Object.assign(opt("volume", range(0, 10), null, () => applyVolume()), { y: 27, x: 18 }),
       { text: "Restore Defaults", sound: "phase", x: 6, y: 29, action() { resetConfigs(); resetSelectedOptions(); saveConfig(); } },
-      { text: "Reset High Score", sound: "phase", x: 6, y: 30, action() { g.highScore = false; if (env.resetHighScore) env.resetHighScore(); } },
+      { text: env.scenes ? "Reset High Scores" : "Reset High Score", sound: "phase", x: 6, y: 30, action() { if (env.scenes) { env.resetHighScore(); return; } g.highScore = false; if (env.resetHighScore) env.resetHighScore(); } },
       { text: "Back", x: 12, y: 32, action() { setScene("attract", true); } },
     ], { selectedItem: 1, autosave: saveConfig });
     // value lists kept alongside for selection lookup
@@ -1739,11 +1742,13 @@
       else if (s === "attract") g.scene = attract;
       else if (s === "credits") g.scene = credits;
       else if (s === "options") g.scene = options;
+      else if (env.scenes && env.scenes[s]) g.scene = env.scenes[s]; // web edition: leaderboard, name entry
       g.scene.start(opt);
     }
 
     // love.keypressed from main.lua
     function keypressed(key) {
+      if (g.scene.captureInput) { g.scene.keypressed(key); return; } // web-edition scenes handle Esc/Backspace themselves
       if (key === "escape" || key === "backspace") {
         if (g.scene === attract) { if (env.quit) env.quit(); }
         else if (g.scene === game && !g.attract) setScene("attract");
@@ -1755,6 +1760,7 @@
 
     // love.gamepadpressed from main.lua
     function gamepadpressed(button) {
+      if (g.scene.captureInput) { g.scene.gamepadpressed(button); return; }
       if (button === "start") { setScene("attract"); return; }
       if (button === "b") {
         if (g.scene === options || g.scene === credits) setScene("attract");

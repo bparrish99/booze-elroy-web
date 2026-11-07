@@ -203,6 +203,8 @@
       print("1up", 3, 0); print("high score", 9, 0);
       print(core.formatScore(g.score || 0), 0, 1, 0);
       if (g.highScore) print(core.formatScore(g.highScore), 10, 1);
+      // web edition: name of the online leader for the current settings, under the score
+      if (g.highScoreName) print(g.highScoreName, 14 - g.highScoreName.length / 2, 2, 4);
     }
     function begin(withBg) {
       ctx.globalAlpha = 1; setColor(1, 1, 1);
@@ -456,6 +458,45 @@
       drawChar(core.creditsBooze, core.creditsBooze.x, core.creditsBooze.y);
     }
 
+    // ---- web edition: online leaderboard and arcade name entry (scenes live in leaderboard.js)
+    const center = (m, y, o) => print(m, 14 - m.length / 2, y, o);
+    function drawLeaderboard() {
+      const sc = g.scene;
+      begin(true); drawHeader();
+      center("leaderboard", 4, 3);
+      sc.summary(26).slice(0, 5).forEach((l, i) => center(l, 6 + i, 0));
+      const b = sc.board();
+      if (!b.entries.length) center(b.status === "loading" ? "loading" : b.status === "error" ? "leaderboard offline" : "no scores yet", 20, 0);
+      b.entries.slice(0, 10).forEach((e, i) => {
+        const y = 12 + i * 2, hi = sc.highlight === i + 1;
+        const o = hi ? (sc.fc % 30 < 15 ? 1 : 3) : 0;
+        const rk = String(i + 1);
+        print(rk, 3 - rk.length, y, o);
+        print(core.formatScore(e.score), 4, y, o);
+        print(e.name, 12, y, hi ? o : 4);
+      });
+      if (sc.message) center(sc.message, 31, 2);
+      drawMenu(sc.menu, 12, 33, 1);
+    }
+    function drawNameEntry() {
+      const sc = g.scene;
+      begin(true); drawHeader();
+      center("new high score!", 4, sc.fc % 40 < 20 ? 3 : 1);
+      center("rank " + sc.place + "   " + String(sc.score), 6, 0);
+      center("enter your name", 10, 0);
+      for (let i = 0; i < 16; i++) {
+        const ch = sc.entry[i], x = 6 + i;
+        if (ch !== undefined && ch !== " ") print(ch, x, 13, 1);
+        else if (ch === undefined) {
+          if (i === sc.entry.length) { if (sc.fc % 30 < 20) drawSpriteAtTile("spr8", 2, x, 13); }
+          else drawSpriteAtTile("spr8", 1, x, 13);
+        }
+      }
+      sc.menu.forEach((it, i0) => print(it.text, it.x, it.y, sc.menu.selectedItem === i0 + 1 ? 1 : 0));
+      if (sc.sending) center("saving", 30, 2);
+      else { center("time " + Math.ceil(sc.timer / 60), 30, 0); center("esc to skip", 32, 2); }
+    }
+
     // clickable rows of the current menu, in game pixels (mirrors drawMenu's placement)
     function menuLayout() {
       const scene = g.scene.name;
@@ -463,6 +504,7 @@
       if (scene === "attract") { if (g.state && g.state.showHelperText) spec = [core.attractMenu, 6, 23, 1]; }
       else if (scene === "options") spec = [core.optMenu, 18, 5, 1];
       else if (scene === "credits") spec = [core.creditsMenu, 12, 27, 2];
+      else if ((scene === "leaderboard" || scene === "nameEntry") && !g.scene.sending) spec = [g.scene.menu, 0, 0, 1];
       if (!spec) return [];
       const [menu, mx, my, sp] = spec, rows = [];
       menu.forEach((item, i0) => {
@@ -484,6 +526,8 @@
       else if (scene === "attract") drawAttract();
       else if (scene === "options") drawOptions();
       else if (scene === "credits") drawCredits();
+      else if (scene === "leaderboard") drawLeaderboard();
+      else if (scene === "nameEntry") drawNameEntry();
       else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, GW, GH); print(scene, 2, 2, 0); }
     }
 

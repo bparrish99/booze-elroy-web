@@ -8,7 +8,16 @@ export default [
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "script",
-      globals: { ...globals.browser, ...globals.node, BoozeCore: "readonly", BoozeAudio: "readonly", BoozeRender: "readonly" },
+      globals: {
+        ...globals.browser, ...globals.node,
+        BoozeCore: "readonly", BoozeAudio: "readonly", BoozeRender: "readonly", BoozeScoreKey: "readonly", BoozeLeaderboard: "readonly",
+      },
     },
   },
+  {
+    files: ["netlify/**/*.mjs", "tests/**/*.mjs", "tools/**/*.mjs"],
+    languageOptions: { ecmaVersion: 2022, sourceType: "module", globals: { ...globals.node } },
+  },
+  // Playwright page.evaluate() callbacks run in the page
+  { files: ["tests/**/*.mjs"], languageOptions: { globals: { ...globals.browser } } },
 ];

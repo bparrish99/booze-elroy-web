@@ -1,3 +1,11 @@
-# The built page (public/index.html) is committed, so Netlify just serves it - no build step.
+# The built page (public/index.html) is committed, so there is no build command: Netlify serves public/ as-is
+# and deploys the leaderboard function from netlify/functions/ (scores stored in Netlify Blobs).
 [build]
   publish = "public"
+
+[build.environment]
+  # Playwright is only for local tests; don't download browsers during Netlify's npm install
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
+
+[functions]
+  node_bundler = "esbuild"
