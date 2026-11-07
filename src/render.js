@@ -202,9 +202,26 @@
     function drawHeader() {
       print("1up", 3, 0); print("high score", 9, 0);
       print(core.formatScore(g.score || 0), 0, 1, 0);
-      if (g.highScore) print(core.formatScore(g.highScore), 10, 1);
-      // web edition: name of the online leader for the current settings, under the score
-      if (g.highScoreName) print(g.highScoreName, 14 - g.highScoreName.length / 2, 2, 4);
+      if (!g.highScore) return;
+      if (g.highScoreName) drawLeaderTicker(core.formatScore(g.highScore), g.highScoreName);
+      else print(core.formatScore(g.highScore), 10, 1);
+    }
+    // web edition: the HIGH SCORE field shows the score for a while, then scrolls left through the online leader's
+    // name until the score slides back into place (own timer, never touches game state)
+    const TICK_HOLD = 3000, TICK_SPEED = 40; // ms on the score, pixels per second
+    let tickKey = null, tickT0 = 0;
+    function drawLeaderTicker(score, name) {
+      const now = performance.now();
+      if (tickKey !== score + "|" + name) { tickKey = score + "|" + name; tickT0 = now; } // new leader: start on the score
+      const gap = 3, span = (score.length + gap + name.length + gap) * TILE;
+      const t = (now - tickT0) % (TICK_HOLD + (span / TICK_SPEED) * 1000);
+      const d = Math.round(Math.max(0, t - TICK_HOLD) * TICK_SPEED / 1000);
+      clip(9 * TILE, TILE, 10 * TILE, TILE); // under the "high score" label
+      const x = 10 - d / TILE;
+      print(score, x, 1);
+      print(name, x + score.length + gap, 1, 4);
+      print(score, x + score.length + gap + name.length + gap, 1);
+      ctx.restore();
     }
     function begin(withBg) {
       ctx.globalAlpha = 1; setColor(1, 1, 1);
