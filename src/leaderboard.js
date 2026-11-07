@@ -12,7 +12,7 @@
 
   // option labels as the Options screen shows them
   const LABELS = {
-    mazepack: "maze", startingLevel: "level", difficulty: "difficulty", plusMode: "plus mode", afterDark: "blindfold",
+    mazepack: "maze", difficulty: "difficulty", plusMode: "plus mode", afterDark: "blindfold",
     radar: "sonar", startingLives: "lives", freeGuy: "extra life", ability: "ability", movement: "speed",
     ghostCount: "ghosts", pinkyBug: "pinky bug", scatterOption: "scatter", freeGhost: "unrestricted",
   };

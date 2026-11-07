@@ -20,4 +20,4 @@ Pinback's Pac-Man variant "Booze Elroy" (original: Love2D/Lua, not in this repo)
 Verification against the original was done with a headless Lua-vs-JS trace diff kept outside this repo.
 
 ## Leaderboard
-Netlify Function `netlify/functions/scores.mjs` + Netlify Blobs store "leaderboard", one JSON blob per settings combination (key from `scorekey.js`: the 14 Game/Player/Ghost options; Audio/Video options never count). Top 10, names up to 16 chars (A-Z 0-9 ! - / space: the font has no "?" or "."), trust-the-client. Reset password: Netlify env var LEADERBOARD_ADMIN_PASSWORD. `npm run dev` previews locally (password "dev").
+Netlify Function `netlify/functions/scores.mjs` + Netlify Blobs store "leaderboard", one JSON blob per settings combination (key from `scorekey.js`: 13 Game/Player/Ghost options; starting level and Audio/Video options never count). Top 10, names up to 16 chars (A-Z 0-9 ! - / space: the font has no "?" or "."), trust-the-client. Reset password: Netlify env var LEADERBOARD_ADMIN_PASSWORD. `npm run dev` previews locally (password "dev").

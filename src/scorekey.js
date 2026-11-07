@@ -1,6 +1,7 @@
 /* Booze Elroy - leaderboard keys (web-edition addition, not in the Lua original).
  * Every option that affects gameplay gets its own board. The board key is the selected values in a fixed order,
- * e.g. "pac.1.0.f.f.f.3.1.f.0.4.t.f.f". Cosmetic options (background, maze style, CRT, volume) are left out.
+ * e.g. "pac.0.f.f.f.3.1.f.0.4.t.f.f". Cosmetic options (background, maze style, CRT, volume) are left out, and so is
+ * the starting level (starting on level 2 is the same game as starting on 1).
  * Shared by the browser bundle (global BoozeScoreKey) and the Netlify Function (CommonJS import).
  * The value lists mirror OPT_VALUES in core.js, in the same order; tests/unit.test.js checks that they match.
  */
@@ -13,7 +14,6 @@
   // [config key, allowed values]  (order is part of the key format: append only, never reorder)
   const FIELDS = [
     ["mazepack", ["pac", "booze", "mspac", "junior", "ultra", "arrange", "mega", "normal", "large", "random"]],
-    ["startingLevel", range(1, 21)],
     ["difficulty", [0, 1, 2]],
     ["plusMode", [false, true]],
     ["afterDark", [false, 1, 2, 3, 4, 5]],

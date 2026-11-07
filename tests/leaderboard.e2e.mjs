@@ -8,7 +8,7 @@ import { startDev } from "../tools/dev-server.mjs";
 
 const blobsDir = mkdtempSync(join(tmpdir(), "booze-e2e-"));
 const dev = await startDev({ port: 0, blobsDir, password: "pw", quiet: true });
-const DEFAULT = "pac.1.0.f.f.f.3.1.f.0.4.t.f.f";
+const DEFAULT = "pac.0.f.f.f.3.1.f.0.4.t.f.f";
 const api = (path, body) => fetch(dev.url + "/api/scores" + path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}).then((r) => r.json());
 let failed = false;
 const check = (ok, msg) => { console.log((ok ? "PASS " : "FAIL ") + msg); if (!ok) { failed = true; process.exitCode = 1; } };

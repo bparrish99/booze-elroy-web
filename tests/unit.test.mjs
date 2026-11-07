@@ -11,13 +11,14 @@ const SK = require("../src/scorekey.js");
 const BoozeCore = require("../src/core.js");
 const DATA = require("../assets/data.json");
 
-const AUDIO_VIDEO = ["background", "mazeColor", "crtEffect", "volume"];
+// Audio/Video options, plus the starting level (same game whichever level you start on)
+const NOT_COUNTED = ["startingLevel", "background", "mazeColor", "crtEffect", "volume"];
 
 test("board key covers exactly the gameplay options, with the core's values in the core's order", () => {
   const core = BoozeCore.create(DATA, { noExit: true });
   core.init();
   const menuKeys = core.optMenu.filter((it) => it.key).map((it) => it.key);
-  assert.deepEqual(SK.FIELDS.map((f) => f[0]), menuKeys.filter((k) => !AUDIO_VIDEO.includes(k)));
+  assert.deepEqual(SK.FIELDS.map((f) => f[0]), menuKeys.filter((k) => !NOT_COUNTED.includes(k)));
   for (const [key, vals] of SK.FIELDS) {
     const item = core.optMenu.find((it) => it.key === key);
     const seen = item.options.map((o) => { o.action(); return core.g.config[key]; });
@@ -25,18 +26,19 @@ test("board key covers exactly the gameplay options, with the core's values in t
   }
 });
 
-test("keyFor: defaults, cosmetic options ignored, Lua-style falsy flags, unknown values rejected", () => {
+test("keyFor: defaults, cosmetic options and starting level ignored, Lua-style falsy flags, unknown values rejected", () => {
   const core = BoozeCore.create(DATA, {});
   const def = { ...core.g.defaultConfig };
   const k = SK.keyFor(def);
-  assert.equal(k, "pac.1.0.f.f.f.3.1.f.0.4.t.f.f");
+  assert.equal(k, "pac.0.f.f.f.3.1.f.0.4.t.f.f");
   assert.ok(SK.isKey(k));
   assert.equal(SK.keyFor({ ...def, background: "galaxy", mazeColor: 7, crtEffect: false, volume: 0 }), k);
+  assert.equal(SK.keyFor({ ...def, startingLevel: 5 }), k);
   assert.equal(SK.keyFor({ ...def, afterDark: null, radar: undefined }), k);
   assert.notEqual(SK.keyFor({ ...def, ghostCount: 0 }), k);
   assert.equal(SK.keyFor({ ...def, ghostCount: 99 }), null);
   assert.ok(!SK.isKey("pac.1.0"));
-  assert.ok(!SK.isKey("pac.1.0.f.f.f.3.1.f.0.4.t.f.x"));
+  assert.ok(!SK.isKey("pac.0.f.f.f.3.1.f.0.4.t.f.x"));
 });
 
 test("cleanName", () => {
@@ -55,7 +57,7 @@ let blobs;
 before(async () => { blobs = await startBlobs(); });
 after(async () => { await blobs.stop(); });
 
-const BOARD = "pac.1.0.f.f.f.3.1.f.0.4.t.f.f";
+const BOARD = "pac.0.f.f.f.3.1.f.0.4.t.f.f";
 const env = { LEADERBOARD_ADMIN_PASSWORD: "correct horse" };
 const call = async (method, path, body) => {
   const req = new Request("http://x" + path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -102,7 +104,7 @@ function memStore() {
 }
 
 test("API: simultaneous submissions to one board are all kept", async () => {
-  const B = "booze.1.0.f.f.f.3.1.f.0.4.t.f.f", store = memStore();
+  const B = "booze.0.f.f.f.3.1.f.0.4.t.f.f", store = memStore();
   const post = (name, score) => handle(new Request("http://x/api/scores", { method: "POST", body: JSON.stringify({ board: B, name, score }) }), store, { env })
     .then(async (r) => ({ status: r.status, data: await r.json() }));
   const rs = await Promise.all([1, 2, 3, 4, 5, 6].map((i) => post("racer " + i, i * 1000)));
@@ -123,7 +125,7 @@ test("API: rejects bad input", async () => {
 });
 
 test("API: reset needs the password; one board or all", async () => {
-  const OTHER = "mspac.1.0.f.f.f.3.1.f.0.4.t.f.f";
+  const OTHER = "mspac.0.f.f.f.3.1.f.0.4.t.f.f";
   await submit("keep", 900, OTHER);
   assert.equal((await call("POST", "/api/scores/reset", { password: "wrong" })).status, 403);
   assert.equal((await call("POST", "/api/scores/reset", {})).status, 403);
