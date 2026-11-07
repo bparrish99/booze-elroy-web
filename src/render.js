@@ -202,13 +202,18 @@
     function drawHeader() {
       print("1up", 3, 0); print("high score", 9, 0);
       print(core.formatScore(g.score || 0), 0, 1, 0);
+      drawHighScore();
+    }
+    // HIGH SCORE value; the online leader's name scrolls through it while the value shown is the leader's score
+    // (so not once a game, or an autoplay run, has gone past it)
+    function drawHighScore() {
       if (!g.highScore) return;
-      if (g.highScoreName) drawLeaderTicker(core.formatScore(g.highScore), g.highScoreName);
+      if (g.highScoreName && g.highScore === g.highScoreNameScore) drawLeaderTicker(core.formatScore(g.highScore), g.highScoreName);
       else print(core.formatScore(g.highScore), 10, 1);
     }
     // web edition: the HIGH SCORE field shows the score for a while, then scrolls left through the online leader's
     // name until the score slides back into place (own timer, never touches game state)
-    const TICK_HOLD = 3000, TICK_SPEED = 40; // ms on the score, pixels per second
+    const TICK_HOLD = 1500, TICK_SPEED = 40; // ms on the score, pixels per second
     let tickKey = null, tickT0 = 0;
     function drawLeaderTicker(score, name) {
       const now = performance.now();
@@ -280,7 +285,9 @@
         if (core.gameFc() % 32 < 16) print("1up", 3, 0);
         print("high score", 9, 0);
         print(core.formatScore(g.score || 0), 0, 1, 0);
-        if (g.highScore) print(core.formatScore(g.highScore), 10, 1);
+        // web edition: the leader's name scrolls in the attract demo and autoplay, never in a real game
+        if (g.attract || g.autoplay) drawHighScore();
+        else if (g.highScore) print(core.formatScore(g.highScore), 10, 1);
       }
       if (g.mode === "gameover") {
         print("game", cm.w / 2 - 5, cm.ready, 1, true);

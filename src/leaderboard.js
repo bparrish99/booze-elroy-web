@@ -77,6 +77,7 @@
       const best = Math.max(leader ? leader.score : 0, mine);
       g.highScore = best > 0 ? best : false;
       g.highScoreName = leader && leader.score >= mine ? leader.name : null;
+      g.highScoreNameScore = leader ? leader.score : 0;
     }
     // once per frame, from main.js
     function tick() {
