@@ -493,7 +493,7 @@
   // =============================================================== presenter: normal CRT + "MAX" CRT (non-canon)
   function createPresenter(canvas, source, getConfig) {
     let gl = null;
-    try { gl = canvas.getContext("webgl", { alpha: false, antialias: false, preserveDrawingBuffer: true }); } catch (e) { /* fall through */ }
+    try { gl = canvas.getContext("webgl", { alpha: false, antialias: false, preserveDrawingBuffer: true }); } catch { /* fall through */ }
     if (!gl) {
       const c2 = canvas.getContext("2d");
       return { webgl: false, ultra: true, resize(w, h) { canvas.width = w; canvas.height = h; }, present() { c2.imageSmoothingEnabled = true; c2.drawImage(source, 0, 0, canvas.width, canvas.height); } };

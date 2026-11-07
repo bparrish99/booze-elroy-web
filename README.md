@@ -18,9 +18,14 @@ same iteration orders, same RNG usage. `src/render.js` draws it on a 224x288 can
 | `tests/smoke.js` | Playwright smoke test |
 
 ## Build and run
+Node 24 (`nvm use` reads `.nvmrc`) and Python 3.
 ```
-npm run build      # python3 tools/build.py  ->  public/index.html  (needs Python 3 + Node)
+npm install                          # dev tools: eslint, playwright
+npx playwright install chromium      # once; on WSL/Linux also: sudo apt-get install libnspr4 libnss3 libglib2.0-0
+npm run build      # python3 tools/build.py  ->  public/index.html
 npm run serve      # http://localhost:8080
+npm run lint       # eslint src tests
+npm test           # Playwright smoke test against public/index.html
 ```
 ## Deploy
 Netlify serves `public/` as-is (see `netlify.toml`). Run the build, commit `public/index.html`, push.

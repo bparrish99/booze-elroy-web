@@ -1,5 +1,5 @@
 // Quick smoke test: loads the built page, starts a game, checks it plays without errors.
-// Needs Playwright:  npm i -D playwright && npx playwright install chromium   then:  node tests/smoke.js
+// Needs Playwright:  npm install && npx playwright install chromium   then:  npm test
 const { chromium } = require("playwright"); const path = require("path");
 (async () => {
   const b = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });

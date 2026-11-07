@@ -15,7 +15,7 @@ Pinback's Pac-Man variant "Booze Elroy" (original: Love2D/Lua, not in this repo)
 - Credits: "pinback" pulses colours and links to a mailto; the bottom marquee ("form is emptiness...") links to https://pinback.substack.com.
 
 ## Workflow
-`npm run build` -> `public/index.html` (commit it). `node tests/smoke.js` needs Playwright. `assets/` is generated once by `tools/prep_assets.py` from the original source (needs Pillow, ffmpeg and BOOZE_SRC); `tools/export_data.py` regenerates `assets/data.json` from the Lua (needs lupa).
+`npm run build` -> `public/index.html` (commit it). Node 24 via nvm (`.nvmrc`; system Node is an old 12, so `. ~/.nvm/nvm.sh` first). `npm run lint` (ESLint 9, must stay clean), `npm test` (Playwright smoke test). `assets/` is generated once by `tools/prep_assets.py` from the original source (needs Pillow, ffmpeg and BOOZE_SRC); `tools/export_data.py` regenerates `assets/data.json` from the Lua (needs lupa).
 Verification against the original was done with a headless Lua-vs-JS trace diff kept outside this repo.
 
 ## Planned

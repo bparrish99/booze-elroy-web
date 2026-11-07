@@ -30,7 +30,7 @@
       const tryNext = () => {
         if (ci >= cands.length) return;
         const c = cands[ci++];
-        try { videoEl.src = c.get(); videoEl.load(); } catch (e) { tryNext(); }
+        try { videoEl.src = c.get(); videoEl.load(); } catch { tryNext(); }
         videoEl.dataset.src = c.label;
       };
       videoEl.preload = "auto"; videoEl.playsInline = true; videoEl.loop = false;
@@ -67,7 +67,7 @@
       saveHighScore: (s) => { try { localStorage.setItem(hsKey, String(s)); } catch { /* ignore */ } },
       resetHighScore: () => { try { localStorage.removeItem(hsKey); } catch { /* ignore */ } },
       saveConfig: (c) => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
-      loadConfig: () => { try { return JSON.parse(localStorage.getItem("booze-elroy-options") || "null"); } catch (e) { return null; } },
+      loadConfig: () => { try { return JSON.parse(localStorage.getItem("booze-elroy-options") || "null"); } catch { return null; } },
       setFullscreen: (on) => { try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ } },
     });
     core.T = BoozeCore.T;
