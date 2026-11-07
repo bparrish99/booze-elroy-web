@@ -532,7 +532,6 @@
             c.scatterX = r.x; c.scatterY = r.y;
           }
         };
-        const common = (c) => { c.frame = 1; c.entering = false; c.leaving = false; c.dead = false; c.frightened = false; c.stunned = false; c.leaveRight = false; };
         if (N > 0) {
           const c = g.chars.blinky;
           c.frame = 1; c.x = 8 * hc.x; c.y = 8 * (hc.y - 3) + 4; c.dir = 2; c.iDir = 2;

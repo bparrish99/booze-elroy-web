@@ -29,7 +29,7 @@
       play() { if (this.playing) return; if (ctx && ctx.state === "suspended") ctx.resume(); this._start(this.offset); }
       stop() { this._kill(); this.offset = 0; }
       pause() { if (!this.playing) return; this.offset = ctx.currentTime - this.startedAt; this._kill(); }
-      _kill() { if (this.node) { const n = this.node; this.node = null; n.onended = null; try { n.stop(); } catch (e) {} } this.playing = false; }
+      _kill() { if (this.node) { const n = this.node; this.node = null; n.onended = null; try { n.stop(); } catch { /* ignore */ } } this.playing = false; }
       isPlaying() { return this.playing; }
       setVolume(v) { this.vol = v; if (this.gain) this.gain.gain.value = v; }
       setLooping(l) { this.loop = !!l; if (this.node) this.node.loop = this.loop; }

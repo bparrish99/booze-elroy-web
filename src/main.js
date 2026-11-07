@@ -13,7 +13,7 @@
     const down = {};
     const audio = BoozeAudio.createAudio(A.sounds);
     const hsKey = "booze-elroy-highscore";
-    let hs = 0; try { hs = parseInt(localStorage.getItem(hsKey) || "0", 10) || 0; } catch (e) {}
+    let hs = 0; try { hs = parseInt(localStorage.getItem(hsKey) || "0", 10) || 0; } catch { /* ignore */ }
     // xorshift-free: normal Math.random in the browser
     // intermission 3 plays a short video (with sound); core calls video.play()/stop()
     let videoEl = null, videoPrimed = false;
@@ -47,7 +47,7 @@
       videoPrimed = true;
       videoEl.muted = true;
       const pr = videoEl.play();
-      const done = () => { try { videoEl.pause(); videoEl.currentTime = 0; } catch (e) {} videoEl.muted = false; };
+      const done = () => { try { videoEl.pause(); videoEl.currentTime = 0; } catch { /* ignore */ } videoEl.muted = false; };
       if (pr && pr.then) pr.then(done, () => { videoPrimed = false; videoEl.muted = false; }); else done();
     }
     const video = {
@@ -58,17 +58,17 @@
           videoEl.volume = Math.max(0, Math.min(1, (core.g.config.volume || 0) / 10));
           const pr = videoEl.play();
           if (pr && pr.catch) pr.catch(() => { videoEl.muted = true; const p2 = videoEl.play(); if (p2 && p2.catch) p2.catch(() => {}); });
-        } catch (e) {}
+        } catch { /* ignore */ }
       },
-      stop() { if (videoEl) try { videoEl.pause(); } catch (e) {} },
+      stop() { if (videoEl) try { videoEl.pause(); } catch { /* ignore */ } },
     };
     const core = BoozeCore.create(A.data, {
       noExit: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      saveHighScore: (s) => { try { localStorage.setItem(hsKey, String(s)); } catch (e) {} },
-      resetHighScore: () => { try { localStorage.removeItem(hsKey); } catch (e) {} },
-      saveConfig: (c) => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch (e) {} },
+      saveHighScore: (s) => { try { localStorage.setItem(hsKey, String(s)); } catch { /* ignore */ } },
+      resetHighScore: () => { try { localStorage.removeItem(hsKey); } catch { /* ignore */ } },
+      saveConfig: (c) => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => { try { return JSON.parse(localStorage.getItem("booze-elroy-options") || "null"); } catch (e) { return null; } },
-      setFullscreen: (on) => { try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} },
+      setFullscreen: (on) => { try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ } },
     });
     core.T = BoozeCore.T;
     if (hs) core.g.highScore = hs;
@@ -152,7 +152,7 @@
     function gestureStart(e) {
       if (e.pointerType === "mouse" || core.g.scene.name !== "game") return false;
       e.preventDefault();
-      try { canvas.setPointerCapture(e.pointerId); } catch (er) {}
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now() });
       if (touches.size === 2 && !twoFinger) { twoFinger = true; core.keypressed("p"); }
       return true;
@@ -183,7 +183,7 @@
       : root.webkitRequestFullscreen ? { req: () => root.webkitRequestFullscreen(), exit: () => document.webkitExitFullscreen(), el: () => document.webkitFullscreenElement } : null;
     function toggleFullscreen() {
       if (!fsApi) return;
-      try { const pr = fsApi.el() ? fsApi.exit() : fsApi.req(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {}
+      try { const pr = fsApi.el() ? fsApi.exit() : fsApi.req(); if (pr && pr.catch) pr.catch(() => {}); } catch { /* ignore */ }
     }
     function syncFsButton() { fsBtn.title = fsApi && fsApi.el() ? "Exit fullscreen (F)" : "Fullscreen (F)"; setTimeout(() => window.dispatchEvent(new Event("resize")), 60); }
     if (fsApi && (document.fullscreenEnabled || document.webkitFullscreenEnabled || true)) {
@@ -196,8 +196,6 @@
     }
     // touch devices have no Esc key: a small button leaves the game / autoplay / sub-screens
     const escBtn = document.getElementById("esc");
-    let sawTouch = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
-    window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" || e.pointerType === "pen") sawTouch = true; }, true);
     escBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
     escBtn.addEventListener("click", (e) => { e.preventDefault(); core.keypressed("escape"); });
     window.addEventListener("blur", () => { for (const k in down) down[k] = false; });
@@ -231,6 +229,7 @@
       acc += dt;
       const step = core.FIXED_DT;
       if (touchDir && ["playerUp", "ready", "dying", "caught", "gameover", "levelAnimation", "intermission1", "intermission2", "intermission3", "destroyed"].includes(core.g.mode)) setTouchDir(null);
+      pollPad();
       while (acc >= step) { core.update(); acc -= step; }
       R.draw(); P.present();
       escBtn.classList.toggle("on", core.g.scene.name !== "attract");
