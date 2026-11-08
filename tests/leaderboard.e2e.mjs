@@ -65,6 +65,11 @@ try {
   await p.keyboard.press("Escape");
   check(await until("g.scene.name === 'attract'"), "Esc returns to the title");
 
+  // Restore Defaults: gameplay options reset, Audio/Video ones stay
+  await ev(() => { const c = window.__core; c.setScene("options"); Object.assign(c.g.config, { ghostCount: 2, crtEffect: false, volume: 9, background: "stars", mazeColor: 5 }); c.optMenu.find((i) => i.text === "Restore Defaults").action(); });
+  check(await g("g.config.ghostCount === 4 && g.config.crtEffect === false && g.config.volume === 9 && g.config.background === 'stars' && g.config.mazeColor === 5"), "Restore Defaults keeps the Audio/Video settings");
+  await ev(() => { const c = window.__core; Object.assign(c.g.config, { crtEffect: true, volume: 4, background: "none", mazeColor: 99 }); c.setScene("attract"); });
+
   // a different gameplay setting is a different board; a cosmetic one isn't
   await ev(() => { window.__core.g.config.crtEffect = false; window.__core.g.config.background = "galaxy"; });
   await p.waitForTimeout(600);

@@ -1682,6 +1682,7 @@
     const PACKS = ["pac", "booze", "mspac", "junior", "ultra", "arrange", "mega", "normal", "large", "random"];
     const PACK_TEXTS = ["pac-1", "booze-4", "mspac-4", "junior-7", "ultra-5", "arrange-3", "mega-1", "normal-17", "large-8", "random"];
     const saveConfig = () => { if (env.saveConfig) env.saveConfig(g.config); };
+    const AV_KEYS = ["background", "mazeColor", "crtEffect", "volume", "musicVolume"]; // the Audio/Video section
     const MAZE_COLORS = [99].concat(range(1, 26), [0]);
     const optMenu = Object.assign([
       Object.assign(opt("mazepack", PACKS, PACK_TEXTS, (v) => { g.currentMaze = setCurrentMaze(v); }), { y: 4 }),
@@ -1702,7 +1703,12 @@
       Object.assign(opt("mazeColor", MAZE_COLORS, ["Default"].concat(range(1, 26), ["Random"])), { y: 25 }),
       Object.assign(ON_OFF("crtEffect"), { y: 26 }),
       Object.assign(opt("volume", range(0, 10), null, () => applyVolume()), { y: 27, x: 18 }),
-      { text: "Restore Defaults", sound: "phase", x: 6, y: 29, action() { resetConfigs(); resetSelectedOptions(); saveConfig(); } },
+      { text: "Restore Defaults", sound: "phase", x: 6, y: 29, action() {
+        // web edition (env.restoreKeepsAV): Audio/Video settings stay as they are; only Game/Player/Ghost options reset
+        const keep = env.restoreKeepsAV ? AV_KEYS.map((k) => [k, g.config[k]]) : [];
+        resetConfigs(); for (const [k, v] of keep) g.config[k] = v;
+        resetSelectedOptions(); saveConfig();
+      } },
       { text: "Reset High Score", sound: "phase", x: 6, y: 30, action() { g.highScore = false; if (env.resetHighScore) env.resetHighScore(); } },
       { text: "Back", x: 12, y: 32, action() { setScene("attract", true); } },
     ], { selectedItem: 1, autosave: saveConfig });
