@@ -38,7 +38,7 @@ Run the build, commit `public/index.html`, push.
 - One top-10 board per combination of the Game/Player/Ghost options; Audio/Video options don't matter.
 - Scores live in the Netlify Blobs store `leaderboard`, one JSON blob per board, keyed by the settings
   (e.g. `pac.0.f.f.f.3.1.f.0.4.t.f.f` = defaults). Netlify UI: Project > Blobs.
-- "Reset High Scores" (Options) wipes the current board or all boards. It needs the password in the Netlify
+- Visiting `booze-elroy.com/?resetscores` opens the reset dialog (no menu item) to wipe the current board or all boards. It needs the password in the Netlify
   environment variable `LEADERBOARD_ADMIN_PASSWORD`; without it, reset is disabled.
 - Scores are trusted as sent by the browser (no anti-cheat).
 

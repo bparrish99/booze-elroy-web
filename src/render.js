@@ -441,19 +441,23 @@
       const name = "pinback", step = Math.floor(performance.now() / 110);
       for (let i = 0; i < name.length; i++) print(name[i], 14 - name.length / 2 + i, 11, PULSE[(step + name.length - i) % PULSE.length]);
     }
-    // endless, ghostly marquee along the bottom; links to the substack
-    const PHRASE = "form is emptiness is ";
+    // ghostly message drifting along the bottom: one pass, then a couple of seconds of nothing; links to the substack
+    const PHRASE = "what is seeing this?";
+    const SCROLL_SPEED = 18, SCROLL_GAP = 2; // px/s, seconds between passes
+    const SCROLL_TRAVEL = (224 + 8 + PHRASE.length * 8) / SCROLL_SPEED;
     function scrollMessage() {
-      const t = performance.now() / 16.67, off = (t * 0.3) % (PHRASE.length * 8);
-      const k0 = Math.floor(off / 8), k1 = Math.floor((off + 224) / 8) + 1;
-      for (let k = k0; k <= k1; k++) {
-        const px = Math.round(k * 8 - off);
-        if (px < -8 || px > 224) continue;
+      const now = performance.now(), t = now / 16.67, ph = (now / 1000) % (SCROLL_TRAVEL + SCROLL_GAP);
+      if (ph > SCROLL_TRAVEL) return;
+      const x0 = 224 - ph * SCROLL_SPEED;
+      for (let k = 0; k < PHRASE.length; k++) {
+        const px = Math.round(x0 + k * 8);
+        if (px < -8 || px > 224 || PHRASE[k] === " ") continue;
         const edge = Math.max(0, Math.min(1, (px + 8) / 48, (224 - px) / 48));
         const a = (0.2 + 0.3 * (0.5 + 0.5 * Math.sin(t * 0.05 + k * 0.55))) * edge;
         const y = 34 * 8 + Math.round(Math.sin(t * 0.04 + k * 0.7) * 1.5);
         setColor(1, 1, 1, a);
-        print(PHRASE[k % PHRASE.length], px / 8, y / 8, [3, 2, 0][(k + Math.floor(t / 40)) % 3]);
+        // the font only has "?" in colour 3
+        print(PHRASE[k], px / 8, y / 8, PHRASE[k] === "?" ? 3 : [3, 2, 0][(k + Math.floor(t / 40)) % 3]);
       }
       setColor(1, 1, 1);
     }
@@ -461,7 +465,9 @@
       { x0: 80, y0: 84, x1: 144, y1: 100, url: "mailto:bparrish99@gmail.com" },
       { x0: 0, y0: 264, x1: 224, y1: 284, url: "https://pinback.substack.com" },
     ];
-    const creditsLinks = () => (g.scene.name === "credits" ? LINKS : []);
+    // web edition: "web edition" on the title opens the credits
+    const TITLE_LINKS = [{ x0: 64, y0: 276, x1: 160, y1: 288, scene: "credits" }];
+    const creditsLinks = () => (g.scene.name === "credits" ? LINKS : g.scene.name === "attract" && g.state && g.state.showHelperText ? TITLE_LINKS : []);
 
     function drawCredits() {
       begin(true); drawHeader();
@@ -553,6 +559,19 @@
       else if (scene === "leaderboard") drawLeaderboard();
       else if (scene === "nameEntry") drawNameEntry();
       else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, GW, GH); print(scene, 2, 2, 0); }
+      drawToast();
+    }
+    // web edition: short popup message (g.toast = {text, until}), e.g. "link copied to clipboard"
+    function drawToast() {
+      const tt = g.toast;
+      if (!tt) return;
+      if (performance.now() > tt.until) { g.toast = null; return; }
+      const w = (tt.text.length + 2) * 8, x = Math.floor((GW - w) / 2), y = 15 * 8 - 4;
+      ctx.globalAlpha = 0.9; ctx.fillStyle = "#000"; ctx.fillRect(x, y, w, 16);
+      ctx.globalAlpha = 1; ctx.fillStyle = "#ffb8ff"; // pink frame, like the maze-wall highlights
+      ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + 15, w, 1); ctx.fillRect(x, y, 1, 16); ctx.fillRect(x + w - 1, y, 1, 16);
+      setColor(1, 1, 1);
+      print(tt.text, x / 8 + 1, 15, 0);
     }
 
     return { screen, draw, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks };

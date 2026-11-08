@@ -1032,6 +1032,13 @@
     if (env.noExit) { menus.main.splice(3, 1); menus.main[3].y -= 1; }
     // web edition: the online leaderboard takes the old Exit slot (Autoplay back at its original row)
     if (env.scenes && env.scenes.leaderboard) { menus.main.splice(3, 0, { text: "Leaderboard", x: 10, y: 29, action() { setScene("leaderboard"); } }); menus.main[4].y = 31; }
+    // web edition: "Share Config" copies a link that carries the gameplay settings (env.shareConfig, see main.js)
+    const shareItem = (x, y) => ({ text: "Share Config", share: true, x, y, action() { env.shareConfig(); } });
+    // web edition: no Autoplay item (env.noAutoplay; the autoplay code itself stays), Share Config in its row
+    if (env.noAutoplay) menus.main.splice(menus.main.findIndex((it) => it.text === "Autoplay"), 1);
+    if (env.shareConfig) menus.main.splice(env.noAutoplay ? menus.main.length : menus.main.length - 1, 0, shareItem(10, env.noAutoplay ? 31 : 30));
+    // web edition: Credits lives on the Options page (env.creditsInOptions); its row stays blank
+    if (env.creditsInOptions) menus.main.splice(menus.main.findIndex((it) => it.text === "Credits"), 1);
     const menuConfirm = (menu) => {
       const item = menu[menu.selectedItem - 1];
       if (item.text && item.text === "Play") { g.sounds.coindrop.stop(); g.sounds.coindrop.play(); }
@@ -1690,9 +1697,19 @@
       Object.assign(ON_OFF("crtEffect"), { y: 26 }),
       Object.assign(opt("volume", range(0, 10), null, () => applyVolume()), { y: 27, x: 18 }),
       { text: "Restore Defaults", sound: "phase", x: 6, y: 29, action() { resetConfigs(); resetSelectedOptions(); saveConfig(); } },
-      { text: env.scenes ? "Reset High Scores" : "Reset High Score", sound: "phase", x: 6, y: 30, action() { if (env.scenes) { env.resetHighScore(); return; } g.highScore = false; if (env.resetHighScore) env.resetHighScore(); } },
+      { text: "Reset High Score", sound: "phase", x: 6, y: 30, action() { g.highScore = false; if (env.resetHighScore) env.resetHighScore(); } },
       { text: "Back", x: 12, y: 32, action() { setScene("attract", true); } },
     ], { selectedItem: 1, autosave: saveConfig });
+    // web edition: the online boards are reset from a hidden page link instead (see main.js), so the item goes;
+    // Share Config takes its row
+    if (env.scenes) optMenu.splice(optMenu.findIndex((it) => it.text === "Reset High Score"), 1);
+    if (env.shareConfig) optMenu.splice(optMenu.length - 1, 0, shareItem(6, 30));
+    if (env.creditsInOptions) {
+      optMenu.splice(optMenu.length - 1, 0, { text: "Credits", x: 6, y: 31, action() { setScene("credits", "options"); } });
+      optMenu[optMenu.length - 1].y = 33; // Back
+    }
+    // web edition: plain menu items (not option values) centred on the 28-column screen
+    if (env.centerMenus) for (const m of [menus.main, optMenu]) for (const it of m) if (it.text && !it.options) it.x = 14 - it.text.length / 2;
     // value lists kept alongside for selection lookup
     const OPT_VALUES = {
       mazepack: PACKS, startingLevel: range(1, 21), difficulty: [0, 1, 2], plusMode: [false, true],
@@ -1718,19 +1735,22 @@
     }
     const options = env.options || {
       name: "options",
-      start() { selectFromConfig(); optMenu.selectedItem = 1; },
+      start(keep) { selectFromConfig(); if (!keep) optMenu.selectedItem = 1; }, // keep: back from credits (web edition)
       update() {},
       keypressed(key) { menus.keypressed(optMenu, key); },
       gamepadpressed(button) { menus.gamepadpressed(optMenu, button); },
       menu: optMenu,
     };
 
-    const creditsMenu = Object.assign([{ text: "Back", action() { setScene("attract", true); } }], { selectedItem: 1 });
+    // web edition: credits can be opened from Options (setScene("credits", "options")) and then goes back there
+    let creditsReturn = "attract";
+    const leaveCredits = () => { if (creditsReturn === "options") setScene("options", true); else setScene("attract", true); };
+    const creditsMenu = Object.assign([{ text: "Back", action() { leaveCredits(); } }], { selectedItem: 1 });
     let creditsFc = 0;
     const creditsBooze = { x: 112, y: 35, dir: 0, speed: 0, animator: () => animations.booze };
     const credits = env.credits || {
       name: "credits",
-      start() { creditsMenu.selectedItem = 1; creditsFc = 0; },
+      start(from) { creditsMenu.selectedItem = 1; creditsFc = 0; creditsReturn = from === "options" ? "options" : "attract"; },
       update() { creditsFc += 1; graphics.updateAnimation(creditsBooze, creditsFc); },
       keypressed(key) { menus.keypressed(creditsMenu, key); },
       gamepadpressed(button) { menus.gamepadpressed(creditsMenu, button); },
@@ -1752,6 +1772,7 @@
       if (key === "escape" || key === "backspace") {
         if (g.scene === attract) { if (env.quit) env.quit(); }
         else if (g.scene === game && !g.attract) setScene("attract");
+        else if (g.scene === credits) leaveCredits();
         else setScene("attract", true);
         return;
       }
@@ -1763,7 +1784,8 @@
       if (g.scene.captureInput) { g.scene.gamepadpressed(button); return; }
       if (button === "start") { setScene("attract"); return; }
       if (button === "b") {
-        if (g.scene === options || g.scene === credits) setScene("attract");
+        if (g.scene === credits && creditsReturn === "options") setScene("options", true);
+        else if (g.scene === options || g.scene === credits) setScene("attract");
         return;
       }
       if (g.scene.gamepadpressed) g.scene.gamepadpressed(button);

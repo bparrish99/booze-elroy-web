@@ -18,6 +18,7 @@
       storage: storage || { getItem: () => null, setItem() {}, removeItem() {} },
       apiBase: /^https?:$/.test(location.protocol) ? "/api/scores" : null,
       fetch: (...a) => fetch(...a),
+      share: () => shareConfig(),
     });
     // xorshift-free: normal Math.random in the browser
     // intermission 3 plays a short video (with sound); core calls video.play()/stop()
@@ -67,12 +68,42 @@
       },
       stop() { if (videoEl) try { videoEl.pause(); } catch { /* ignore */ } },
     };
+    // share links: ?cfg=<share code> preselects the gameplay settings (only those that pick a leaderboard)
+    const SK = BoozeScoreKey;
+    let sharedCfg = null;
+    try { sharedCfg = SK.configFromCode(new URLSearchParams(location.search).get("cfg")); } catch { /* ignore */ }
+    const loadSaved = () => { try { return JSON.parse(localStorage.getItem("booze-elroy-options") || "null"); } catch { return null; } };
+    const showToast = (text) => { core.g.toast = { text, until: performance.now() + 2000 }; };
+    function shareLink() {
+      // the real site, except when running locally or on a Netlify deploy/branch preview ("name--site.netlify.app")
+      const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.hostname.includes("--");
+      const base = /^https?:$/.test(location.protocol) && local ? location.origin + "/" : "https://booze-elroy.com/";
+      return base + "?cfg=" + SK.shareCode(core.g.config);
+    }
+    function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
+      return legacyCopy(text);
+    }
+    function legacyCopy(text) {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand("copy"); } catch { /* ignore */ }
+      ta.remove();
+      return ok ? Promise.resolve() : Promise.reject(new Error("copy failed"));
+    }
+    function shareConfig() {
+      const url = shareLink();
+      copyText(url).then(() => showToast("link copied to clipboard"), () => { console.log("share link: " + url); showToast("could not copy link"); });
+    }
+
     const core = BoozeCore.create(A.data, {
-      noExit: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
+      noExit: true, noAutoplay: true, centerMenus: true, creditsInOptions: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
       scenes: LB.scenes, afterGameOver: (s) => LB.afterGameOver(s),
-      saveHighScore: (s) => LB.saveBest(s), resetHighScore: () => openReset(),
+      saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
-      loadConfig: () => { try { return JSON.parse(localStorage.getItem("booze-elroy-options") || "null"); } catch { return null; } },
+      loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
+      shareConfig,
       setFullscreen: (on) => { try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ } },
     });
     core.T = BoozeCore.T;
@@ -98,8 +129,14 @@
     window.addEventListener("resize", fit); fit();
 
     core.init();
+    if (sharedCfg) {
+      // keep the shared settings as the player's own, and drop ?cfg so a reload doesn't undo later changes
+      try { localStorage.setItem("booze-elroy-options", JSON.stringify(core.g.config)); } catch { /* ignore */ }
+      try { history.replaceState(null, "", location.pathname + location.hash); } catch { /* ignore */ }
+    }
 
-    // "Reset High Scores" (Options): wipes the online boards; the password is checked by the server
+    // Reset High Scores: opened by visiting the page with ?resetscores (no menu item); wipes the online boards,
+    // the password is checked by the server
     const rs = document.getElementById("reset"), rsForm = rs.querySelector("form"), rsMsg = rs.querySelector(".msg");
     const resetOpen = () => rs.open;
     function openReset() {
@@ -119,6 +156,10 @@
       else rsMsg.textContent = res.status === 403 ? "Wrong password." : res.status === 503 ? "Reset isn't set up on the server." : res.status === 0 ? "Can't reach the leaderboard server." : "Reset failed (" + res.status + ").";
     });
     rs.addEventListener("close", () => canvas.focus && canvas.focus());
+    if (new URLSearchParams(location.search).has("resetscores")) {
+      try { history.replaceState(null, "", location.pathname + location.hash); } catch { /* ignore */ }
+      openReset();
+    }
 
     window.addEventListener("keydown", (e) => {
       if (resetOpen()) return; // typing into the reset dialog
@@ -163,14 +204,24 @@
     });
     canvas.addEventListener("pointerdown", (e) => {
       if (gestureStart(e)) return;
-      { const L = linkAt(e); if (L) { e.preventDefault(); openUrl(L.url); return; } }
+      { const L = linkAt(e); if (L) { e.preventDefault(); if (L.scene) { core.g.sounds.wakka1.play(); core.setScene(L.scene); } else openUrl(L.url); return; } }
       const row = rowAt(e);
       if (!row) return;
       e.preventDefault();
       row.menu.selectedItem = row.index;
+      // a touch only counts as a user gesture (needed for the clipboard) once the finger lifts
+      if (e.pointerType !== "mouse" && row.menu[row.index - 1].share) { pendingShareTap = e.pointerId; return; }
       if (row.hasOptions) core.keypressed(e.button === 2 ? "left" : "right");
       else core.keypressed("return");
     });
+    let pendingShareTap = null;
+    canvas.addEventListener("pointerup", (e) => {
+      if (pendingShareTap !== e.pointerId) return;
+      pendingShareTap = null;
+      const row = rowAt(e);
+      if (row && row.menu[row.index - 1].share) core.keypressed("return");
+    });
+    canvas.addEventListener("pointercancel", () => { pendingShareTap = null; });
     // touch gameplay: swipe = direction (stays latched, like holding a key), tap = ability, two-finger tap = pause
     const touches = new Map(); let touchDir = null, twoFinger = false;
     const setTouchDir = (d) => {

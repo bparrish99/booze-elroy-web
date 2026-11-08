@@ -41,6 +41,39 @@ test("keyFor: defaults, cosmetic options and starting level ignored, Lua-style f
   assert.ok(!SK.isKey("pac.0.f.f.f.3.1.f.0.4.t.f.x"));
 });
 
+test("configFor: inverse of keyFor, rejects bad keys", () => {
+  const core = BoozeCore.create(DATA, {});
+  const cfg = { ...core.g.defaultConfig, mazepack: "random", afterDark: 3, radar: false, pinkyBug: false, ghostCount: 0 };
+  const back = SK.configFor(SK.keyFor(cfg));
+  assert.deepEqual(Object.keys(back), SK.FIELDS.map((f) => f[0]));
+  for (const k of Object.keys(back)) assert.equal(back[k], cfg[k], k);
+  assert.equal(SK.configFor("nope"), null);
+  assert.equal(SK.configFor(null), null);
+});
+
+test("share codes: short, reversible for every option value, reject junk", () => {
+  const core = BoozeCore.create(DATA, {});
+  const def = { ...core.g.defaultConfig };
+  assert.equal(SK.COMBOS, 55296000);
+  const seen = new Set();
+  for (const [k, vals] of SK.FIELDS) for (const v of vals) {
+    const cfg = { ...def, [k]: v }, code = SK.shareCode(cfg);
+    assert.match(code, /^[0-9a-z]{6}$/);
+    assert.equal(SK.keyFor(SK.configFromCode(code)), SK.keyFor(cfg), k + "=" + v);
+    seen.add(code);
+  }
+  assert.ok(seen.size > 40); // different settings, different codes
+  for (let i = 0; i < 2000; i++) { // random combinations round-trip
+    const cfg = {}; for (const [k, vals] of SK.FIELDS) cfg[k] = vals[Math.floor(Math.random() * vals.length)];
+    assert.equal(SK.keyFor(SK.configFromCode(SK.shareCode(cfg))), SK.keyFor(cfg));
+  }
+  const code = SK.shareCode(def);
+  assert.equal(SK.configFromCode(code.toUpperCase()) !== null, true);
+  const typo = code.slice(0, 2) + (code[2] === "a" ? "b" : "a") + code.slice(3);
+  assert.equal(SK.configFromCode(typo), null);
+  for (const bad of [null, "", "zzzzzz", "abc", "pac.0.f.f.f.3.1.f.0.4.t.f.f", "!!!!!!"]) assert.equal(SK.configFromCode(bad), null, String(bad));
+});
+
 test("cleanName", () => {
   assert.equal(SK.cleanName("x-1/y!"), "X-1/Y!");
   assert.equal(SK.cleanName("  pin   back!  "), "PIN BACK!");

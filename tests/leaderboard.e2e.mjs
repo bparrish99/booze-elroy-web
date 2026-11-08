@@ -26,11 +26,28 @@ try {
   await p.goto(dev.url + "/"); await p.waitForTimeout(1500);
   check(await until("g.highScore === 5000 && g.highScoreName === 'PINBACK'"), "title header shows the online leader for the default settings");
   await shot("1-title");
-  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Options,Credits,Leaderboard,Autoplay", "main menu has Leaderboard");
+  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Options,Leaderboard,Share Config", "main menu: Leaderboard and Share Config, no Autoplay or Credits");
+  check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Restore Defaults,Share Config,Credits,Back", "Options: Restore Defaults, Share Config, Credits, Back");
+  await ev(() => { const c = window.__core; c.setScene("options"); c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Credits") + 1; });
+  await p.keyboard.press("Enter");
+  check(await g("g.scene.name === 'credits'"), "Options > Credits opens the credits");
+  await p.keyboard.press("Escape");
+  check(await g("g.scene.name === 'options' && window.__core.optMenu[window.__core.optMenu.selectedItem - 1].text === 'Credits'"), "Esc from those credits goes back to Options");
+  await ev(() => window.__core.setScene("attract"));
+  await p.waitForTimeout(300);
+  await p.mouse.click(336, 845); // "web edition", bottom row (3x scale)
+  check(await g("g.scene.name === 'credits'"), "clicking WEB EDITION on the title opens the credits");
+  await p.keyboard.press("Escape");
+  check(await g("g.scene.name === 'attract'"), "and Esc goes back to the title");
 
-  for (let i = 0; i < 3; i++) await p.keyboard.press("ArrowDown");
+  for (let i = 0; i < 2; i++) await p.keyboard.press("ArrowDown");
   await p.keyboard.press("Enter");
   check(await until("g.scene.name === 'leaderboard' && g.scene.board().entries.length === 1"), "leaderboard page lists the board");
+  check(await ev(() => window.__core.g.scene.menu.map((i) => i.text).join(",")) === "Share Config,Back", "leaderboard page has Share Config and Back");
+  await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check(await g("g.scene.name === 'leaderboard' && !!g.toast"), "Share Config on the leaderboard copies (or tries to)");
+  await p.keyboard.press("ArrowDown");
+  check(await ev(() => { const m = window.__core.g.scene.menu; return m[m.selectedItem - 1].text; }) === "Back", "down moves to Back");
   await p.waitForTimeout(300); await shot("2-leaderboard");
   await p.keyboard.press("Escape");
   check(await until("g.scene.name === 'attract'"), "Esc returns to the title");
@@ -73,11 +90,11 @@ try {
   await p.keyboard.press("Escape");
   check(await until("g.scene.name === 'attract' && g.highScore === 7000 && g.highScoreName === 'TESTER-1'"), "title header shows the new leader");
 
-  // Reset High Scores: password dialog
-  await ev(() => { const c = window.__core; c.setScene("options"); c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Reset High Scores") + 1; });
-  check(await ev(() => window.__core.optMenu.some((i) => i.text === "Reset High Scores")), "option is called Reset High Scores");
-  await p.keyboard.press("Enter");
-  check(await p.isVisible("#reset"), "reset asks for a password");
+  // Reset High Scores: hidden ?resetscores link -> password dialog
+  check(await ev(() => !window.__core.optMenu.some((i) => /reset/i.test(i.text || ""))), "Options has no reset item");
+  await p.goto(dev.url + "/?resetscores"); await p.waitForTimeout(1000);
+  check(await p.isVisible("#reset"), "?resetscores asks for the password");
+  check(await ev(() => location.search === ""), "and drops ?resetscores from the address");
   await p.fill("#reset input[name=password]", "wrong");
   await p.click("#reset button[value=reset]");
   await p.waitForFunction(() => document.querySelector("#reset .msg").textContent === "Wrong password.", null, { timeout: 5000 }).then(() => check(true, "wrong password is refused"), () => check(false, "wrong password is refused"));
@@ -89,6 +106,38 @@ try {
   await p.waitForFunction(() => !document.querySelector("#reset").open, null, { timeout: 5000 }).then(() => check(true, "right password resets and closes"), () => check(false, "right password resets and closes"));
   check((await api("?board=" + DEFAULT)).entries.length === 0, "all boards cleared on the server");
   check(await until("g.highScore === false"), "header cleared");
+
+  // Share Config: copies a link with the gameplay settings; opening it preselects them (and nothing else)
+  {
+    const ctx = await b.newContext({ viewport: { width: 672, height: 864 }, permissions: ["clipboard-read", "clipboard-write"] });
+    const q = await ctx.newPage(); q.on("pageerror", (e) => errs.push(e.message));
+    await q.goto(dev.url + "/"); await q.waitForTimeout(1000);
+    await q.evaluate(() => { const c = window.__core.g.config; c.mazepack = "mspac"; c.ghostCount = 2; c.radar = 60; c.startingLevel = 7; c.volume = 3; });
+    await q.evaluate(() => { const m = window.__core.attractMenu; m.selectedItem = m.findIndex((i) => i.text === "Share Config") + 1; });
+    await q.keyboard.press("Enter");
+    await q.waitForTimeout(200);
+    check(await q.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "link copied to clipboard", "main-menu Share Config shows the popup");
+    if (process.env.SHOTS) await q.screenshot({ path: join(process.env.SHOTS, "6-share.png") });
+    const link = await q.evaluate(() => navigator.clipboard.readText());
+    const code = new URL(link).searchParams.get("cfg");
+    check(link.startsWith(new URL(dev.url).origin + "/?cfg=") && /^[0-9a-z]{6}$/.test(code), "link carries a short share code: " + link);
+    check(await q.evaluate((c) => window.BoozeScoreKey.keyFor(window.BoozeScoreKey.configFromCode(c)), code) === "mspac.0.f.f.60.3.1.f.0.2.t.f.f", "the code holds only the gameplay settings");
+    await q.evaluate(() => { const c = window.__core; c.setScene("options"); c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Share Config") + 1; window.__core.g.toast = null; });
+    await q.keyboard.press("Enter"); await q.waitForTimeout(200);
+    check(await q.evaluate(() => !!window.__core.g.toast), "Options has Share Config too");
+    await ctx.close();
+
+    const ctx2 = await b.newContext({ viewport: { width: 672, height: 864 } });
+    const r = await ctx2.newPage(); r.on("pageerror", (e) => errs.push(e.message));
+    await r.goto(link); await r.waitForTimeout(1000);
+    const cfg = await r.evaluate(() => window.__core.g.config);
+    check(cfg.mazepack === "mspac" && cfg.ghostCount === 2 && cfg.radar === 60, "opening the link selects the shared settings");
+    check(cfg.startingLevel === 1 && cfg.volume !== 3, "starting level and volume are not shared");
+    check(await r.evaluate(() => location.search === "" && JSON.parse(localStorage.getItem("booze-elroy-options")).ghostCount === 2), "settings saved, ?cfg removed from the address");
+    await r.goto(dev.url + "/?cfg=garbage"); await r.waitForTimeout(800);
+    check(await r.evaluate(() => window.__core.g.config.ghostCount === 2), "a bad ?cfg is ignored");
+    await ctx2.close();
+  }
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join(" | ") : ""));
 } finally {
   await b.close(); await dev.stop(); rmSync(blobsDir, { recursive: true, force: true });

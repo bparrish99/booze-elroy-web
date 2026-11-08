@@ -121,7 +121,13 @@
     // ---------------------------------------------------------------- scenes
     const sfx = (n) => { const s = g.sounds[n]; if (s) { s.stop(); s.play(); } };
 
-    const lbMenu = Object.assign([{ text: "Back", x: 12, y: 33, action() { core.setScene("attract", true); } }], { selectedItem: 1 });
+    // Share Config only when the page can copy links (opts.share); otherwise just Back
+    const lbMenu = Object.assign([
+      ...(opts.share ? [{ text: "Share Config", share: true, x: 8, y: 33, action() { opts.share(); } }] : []),
+      { text: "Back", x: 12, y: opts.share ? 35 : 33, action() { core.setScene("attract", true); } },
+    ], { selectedItem: 1 });
+    const lbMove = (d) => { sfx("wakka1"); lbMenu.selectedItem = ((lbMenu.selectedItem - 1 + d + lbMenu.length) % lbMenu.length) + 1; };
+    const lbBack = () => lbMenu[lbMenu.length - 1].action();
     const leaderboard = {
       name: "leaderboard",
       menu: lbMenu,
@@ -137,8 +143,17 @@
       update() { this.fc += 1; },
       board() { return boardFor(currentKey()); },
       summary,
-      keypressed(key) { if (key === "return" || key === "space") { sfx("wakka1"); lbMenu[0].action(); } },
-      gamepadpressed(button) { if (button === "a" || button === "b") lbMenu[0].action(); },
+      keypressed(key) {
+        if (key === "return" || key === "space") { sfx("wakka1"); lbMenu[lbMenu.selectedItem - 1].action(); }
+        else if (key === "up" || key === "left") lbMove(-1);
+        else if (key === "down" || key === "right") lbMove(1);
+      },
+      gamepadpressed(button) {
+        if (button === "a") lbMenu[lbMenu.selectedItem - 1].action();
+        else if (button === "b") lbBack();
+        else if (button === "dpup" || button === "dpleft") lbMove(-1);
+        else if (button === "dpdown" || button === "dpright") lbMove(1);
+      },
     };
 
     // grid cells double as a "menu" so the mouse / touch code can hover and click them

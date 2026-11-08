@@ -45,6 +45,50 @@
     }
     return parts.join(".");
   }
+  /** the gameplay settings a key stands for ({mazepack: "pac", ...}), or null if it isn't a well-formed key.
+   *  Used by share links (?cfg=<key>). */
+  function configFor(s) {
+    if (!isKey(s)) return null;
+    const parts = s.split("."), c = {};
+    FIELDS.forEach(([k, vals], i) => { c[k] = vals.find((v) => tok(v) === parts[i]); });
+    return c;
+  }
+
+  // Share codes: the same settings packed into one short, scrambled token (obfuscation, not security).
+  // The option indices make one mixed-radix number below COMBOS; it is scrambled with an affine map mod COMBOS
+  // (the multiplier is prime and doesn't divide COMBOS, so the map is reversible), written as 5 base-36 digits,
+  // plus 1 check digit so typos and made-up codes are rejected.
+  const COMBOS = FIELDS.reduce((n, [, vals]) => n * vals.length, 1);
+  const MUL = 27644437, ADD = 12345678, B36 = "0123456789abcdefghijklmnopqrstuvwxyz";
+  const mulmod = (a, b, m) => Number((BigInt(a) * BigInt(b)) % BigInt(m));
+  const MUL_INV = (() => { // modular inverse by extended Euclid
+    let [r0, r1, t0, t1] = [COMBOS, MUL % COMBOS, 0, 1];
+    while (r1) { const q = Math.floor(r0 / r1); [r0, r1] = [r1, r0 - q * r1]; [t0, t1] = [t1, t0 - q * t1]; }
+    return ((t0 % COMBOS) + COMBOS) % COMBOS;
+  })();
+  const check = (s) => { let c = 7; for (let i = 0; i < s.length; i++) c = (c * 31 + B36.indexOf(s[i]) * (i + 3)) % 36; return B36[c]; };
+  /** short share code for a config, e.g. "k4t9x2"; null if some gameplay option holds a value we don't know */
+  function shareCode(config) {
+    let n = 0;
+    for (const [k, vals] of FIELDS) { const i = indexOf(vals, config[k]); if (i < 0) return null; n = n * vals.length + i; }
+    const body = ((mulmod(n, MUL, COMBOS) + ADD) % COMBOS).toString(36).padStart(5, "0");
+    return body + check(body);
+  }
+  /** the gameplay settings a share code stands for, or null if it isn't a valid code */
+  function configFromCode(s) {
+    if (typeof s !== "string" || !/^[0-9a-z]{6}$/i.test(s)) return null;
+    s = s.toLowerCase();
+    const body = s.slice(0, 5);
+    if (check(body) !== s[5]) return null;
+    const m = parseInt(body, 36);
+    if (m >= COMBOS) return null;
+    let n = mulmod((m - ADD + COMBOS) % COMBOS, MUL_INV, COMBOS);
+    const c = {};
+    for (let f = FIELDS.length - 1; f >= 0; f--) { const [k, vals] = FIELDS[f]; c[k] = vals[n % vals.length]; n = Math.floor(n / vals.length); }
+    const out = {};
+    for (const [k] of FIELDS) out[k] = c[k];
+    return out;
+  }
   /** true if s is a well-formed board key */
   function isKey(s) {
     if (typeof s !== "string" || s.length > 100) return false;
@@ -73,5 +117,5 @@
     return i < BOARD_SIZE ? i : -1;
   }
 
-  return { FIELDS, keyFor, isKey, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
+  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
 });
