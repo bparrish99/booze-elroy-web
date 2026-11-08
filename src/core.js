@@ -1032,7 +1032,7 @@
     };
     if (env.noExit) { menus.main.splice(3, 1); menus.main[3].y -= 1; }
     // web edition: the online leaderboard takes the old Exit slot (Autoplay back at its original row)
-    if (env.scenes && env.scenes.leaderboard) { menus.main.splice(3, 0, { text: "Leaderboard", x: 10, y: 29, action() { setScene("leaderboard"); } }); menus.main[4].y = 31; }
+    if (env.scenes && env.scenes.leaderboard) { menus.main.splice(3, 0, { text: "Leaderboards", x: 10, y: 29, action() { setScene("leaderboard"); } }); menus.main[4].y = 31; }
     // web edition: "Share Config" copies a link that carries the gameplay settings (env.shareConfig, see main.js)
     const shareItem = (x, y) => ({ text: "Share Config", share: true, x, y, action() { env.shareConfig(); } });
     // web edition: no Autoplay item (env.noAutoplay; the autoplay code itself stays), Share Config in its row
@@ -1043,7 +1043,7 @@
     // web edition: Arenas (24-hour leaderboards) right under Play
     if (env.scenes && env.scenes.arenas) {
       menus.main.splice(1, 0, { text: "Arena", x: 10, y: 27, action() { setScene("arenas"); } });
-      for (const it of menus.main) if (it.text === "Options") it.y = 29; else if (it.text === "Leaderboard") it.y = 31; // a blank row between items
+      for (const it of menus.main) if (it.text === "Options") it.y = 29; else if (it.text === "Leaderboards") it.y = 31; // a blank row between items
     }
     const menuConfirm = (menu) => {
       const item = menu[menu.selectedItem - 1];

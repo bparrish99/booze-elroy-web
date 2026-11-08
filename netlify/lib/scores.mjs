@@ -3,6 +3,7 @@
 //
 //   GET  /api/scores?board=<key>                      -> { board, entries: [{ name, score, at }] }
 //   POST /api/scores        { board, name, score }    -> { board, entries, rank }   (rank null: didn't make the top 10)
+//   GET  /api/scores/boards                           -> { boards: [{ board, count, top: { name, score } }] }  (every board with scores)
 //   POST /api/scores/reset  { password, board? }      -> { reset: "all" | <key> }    (needs LEADERBOARD_ADMIN_PASSWORD)
 //
 // Trust-the-client: scores aren't verified, only checked for shape. Each board is one JSON blob; writes are
@@ -40,13 +41,18 @@ export async function updateJSON(store, key, change) {
   }
   return null; // busy
 }
-/** put a score into a top-10 blob -> { entries, rank } (rank null: didn't place), or null if the store stayed busy */
-export function addScore(store, key, name, score) {
+/** put a score into a top-10 blob -> { entries, rank } (rank null: didn't place), or null if the store stayed busy.
+ *  unique: one entry per name (arena boards): a better score replaces that name's old one; a worse one doesn't place
+ *  ({ rank: null, best: <their score on the board> }). */
+export function addScore(store, key, name, score, unique) {
   return updateJSON(store, key, (data) => {
     const entries = tidy(data);
-    const i = placeOf(entries, score);
+    const mine = unique ? entries.find((e) => e.name === name) : null;
+    if (mine && mine.score >= score) return { result: { entries, rank: null, best: mine.score } };
+    const others = mine ? entries.filter((e) => e !== mine) : entries;
+    const i = placeOf(others, score);
     if (i < 0) return { result: { entries, rank: null } };
-    const next = entries.slice();
+    const next = others.slice();
     next.splice(i, 0, { name, score, at: new Date().toISOString() });
     next.length = Math.min(next.length, BOARD_SIZE);
     return { value: next, result: { entries: next, rank: i + 1 } };
@@ -74,6 +80,21 @@ export async function handle(req, store, opts = {}) {
     }
     await store.deleteAll();
     return json(200, { reset: "all" });
+  }
+
+  if (path.endsWith("/boards")) {
+    if (req.method !== "GET") return json(405, { error: "method not allowed" });
+    const { blobs } = await store.list();
+    const keys = blobs.map((b) => b.key).filter(isKey);
+    const boards = [];
+    for (let i = 0; i < keys.length; i += 25) { // a few reads at a time
+      const part = await Promise.all(keys.slice(i, i + 25).map(async (board) => {
+        const entries = tidy(await store.get(board, { type: "json" }));
+        return entries.length ? { board, count: entries.length, top: { name: entries[0].name, score: entries[0].score } } : null;
+      }));
+      boards.push(...part.filter(Boolean));
+    }
+    return json(200, { boards });
   }
 
   if (req.method === "GET") {

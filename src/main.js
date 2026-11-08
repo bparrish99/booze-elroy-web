@@ -19,7 +19,7 @@
       apiBase: /^https?:$/.test(location.protocol) ? "/api/scores" : null,
       arenaBase: /^https?:$/.test(location.protocol) ? "/api/arenas" : null,
       fetch: (...a) => fetch(...a),
-      share: () => shareConfig(),
+      share: (cfg) => shareConfig(cfg ? "?cfg=" + SK.shareCode(cfg) : null), // the board on show on the Leaderboards page
       shareArena: (id) => shareConfig("?arena=" + id), // link straight to an arena's page
     });
     // xorshift-free: normal Math.random in the browser

@@ -33,7 +33,7 @@ try {
   };
 
   await p.goto(dev.url + "/"); await p.waitForTimeout(1500);
-  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Options,Leaderboard", "main menu: Play 1P, Arena, Options, Leaderboard");
+  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Options,Leaderboards", "main menu: Play 1P, Arena, Options, Leaderboards");
   await shot("a1-title");
 
   // the player's own settings: 6 ghosts, level 5, volume 2

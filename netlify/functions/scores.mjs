@@ -4,4 +4,4 @@ import { handle } from "../lib/scores.mjs";
 
 export default (req) => handle(req, getStore({ name: "leaderboard", consistency: "strong" }));
 
-export const config = { path: ["/api/scores", "/api/scores/reset"] };
+export const config = { path: ["/api/scores", "/api/scores/boards", "/api/scores/reset"] };

@@ -26,7 +26,7 @@ try {
   await p.goto(dev.url + "/"); await p.waitForTimeout(1500);
   check(await until("g.highScore === 5000 && g.highScoreName === 'PINBACK'"), "title header shows the online leader for the default settings");
   await shot("1-title");
-  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Options,Leaderboard", "main menu: Play 1P, Arena, Options, Leaderboard");
+  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Options,Leaderboards", "main menu: Play 1P, Arena, Options, Leaderboards");
   check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Restore Defaults,Share Config,Credits,Back", "Options: Restore Defaults, Share Config, Credits, Back");
   await ev(() => { const c = window.__core; c.setScene("options"); c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Credits") + 1; });
   await p.keyboard.press("Enter");
@@ -49,6 +49,19 @@ try {
   await p.keyboard.press("ArrowDown");
   check(await ev(() => { const m = window.__core.g.scene.menu; return m[m.selectedItem - 1].text; }) === "Back", "down moves to Back");
   await p.waitForTimeout(300); await shot("2-leaderboard");
+  // other boards with scores: left / right flip through them (current settings first), Share Config shares the one on show
+  await api("", { board: "mspac.0.f.f.f.3.1.f.0.4.t.f.f", name: "beefart", score: 900 });
+  await ev(() => window.__core.setScene("leaderboard"));
+  check(await until("g.scene.subtitle() === 'prev    1/2     next'"), "Leaderboards: board 1 of 2 (current settings first)");
+  await p.keyboard.press("ArrowRight");
+  check(await until("g.scene.key === 'mspac.0.f.f.f.3.1.f.0.4.t.f.f' && g.scene.board().entries[0]?.name === 'BEEFART' && g.highScoreName === 'BEEFART'"), "right flips to the other board (header follows)");
+  check(await g("g.scene.summary(26).join(' ')") === "maze mspac-4", "its settings are summarised");
+  await shot("2b-leaderboard-other");
+  await p.keyboard.press("ArrowRight");
+  check(await g("g.scene.key === 'pac.0.f.f.f.3.1.f.0.4.t.f.f'"), "and wraps round");
+  await p.mouse.click(4 * 24 + 30, 4 * 24 + 12); // "prev" (3x scale)
+  check(await g("g.scene.key === 'mspac.0.f.f.f.3.1.f.0.4.t.f.f'"), "clicking prev flips too");
+  check(await g("g.config.mazepack === 'pac'"), "flipping doesn't change the player's settings");
   await p.keyboard.press("Escape");
   check(await until("g.scene.name === 'attract'"), "Esc returns to the title");
 

@@ -176,6 +176,20 @@ test("API: reset needs the password; one board or all", async () => {
   assert.equal((await call("GET", "/api/scores?board=" + OTHER)).data.entries.length, 0);
 });
 
+test("API: boards lists every board with scores (count and leader); regular boards keep duplicate names", async () => {
+  const OTHER_B = "mspac.0.f.f.f.3.1.f.0.4.t.f.f";
+  await call("POST", "/api/scores/reset", { password: "correct horse" });
+  assert.deepEqual((await call("GET", "/api/scores/boards")).data, { boards: [] });
+  await submit("pinback", 500); await submit("pinback", 700); await submit("beefart", 600, OTHER_B);
+  const r = await call("GET", "/api/scores/boards");
+  const byKey = Object.fromEntries(r.data.boards.map((b) => [b.board, b]));
+  assert.equal(r.data.boards.length, 2);
+  assert.deepEqual(byKey[BOARD], { board: BOARD, count: 2, top: { name: "PINBACK", score: 700 } });
+  assert.deepEqual(byKey[OTHER_B], { board: OTHER_B, count: 1, top: { name: "BEEFART", score: 600 } });
+  assert.equal((await call("POST", "/api/scores/boards", {})).status, 405);
+  await call("POST", "/api/scores/reset", { password: "correct horse" });
+});
+
 test("API: reset is disabled when no password is configured", async () => {
   const req = new Request("http://x/api/scores/reset", { method: "POST", body: JSON.stringify({ password: "" }) });
   const res = await handle(req, blobs.store, { env: {}, failDelay: 0 });
@@ -215,6 +229,19 @@ test("arenas: create, list, unique open names, scores and leader, closing, grace
   assert.equal(r.data.arena.board, BOARD);
   assert.equal((await acall("POST", "/api/arenas/score", { id: "zzzzzzzzzz", name: "x", score: 1 })).status, 404);
   assert.equal((await acall("POST", "/api/arenas/score", { id: a.id, name: "x", score: 0 })).status, 400);
+  // one entry per name on an arena board: a better score replaces the old one, a worse one doesn't place
+  r = await acall("POST", "/api/arenas/score", { id: a.id, name: "Pinback", score: 2000 });
+  assert.equal(r.data.rank, null); assert.equal(r.data.best, 3000);
+  assert.deepEqual(r.data.entries.map((e) => e.name), ["BEEFART", "DJ LARRY", "PINBACK"]);
+  r = await acall("POST", "/api/arenas/score", { id: a.id, name: "pinback", score: 3000 });
+  assert.equal(r.data.rank, null, "a tie with your own best doesn't add a second entry");
+  r = await acall("POST", "/api/arenas/score", { id: a.id, name: "pinback", score: 6000 });
+  assert.equal(r.data.rank, 2);
+  assert.deepEqual(r.data.entries.map((e) => e.name + " " + e.score), ["BEEFART 9000", "PINBACK 6000", "DJ LARRY 5000"]);
+  r = await acall("POST", "/api/arenas/score", { id: a.id, name: "pinback", score: 9500 });
+  assert.equal(r.data.rank, 1);
+  assert.deepEqual(r.data.arena.leader, { name: "PINBACK", score: 9500 });
+  assert.deepEqual(r.data.entries.map((e) => e.name), ["PINBACK", "BEEFART", "DJ LARRY"]);
 
   clock += 24 * HOUR + GRACE / 2; // closed, but a game that was running may still post
   assert.equal((await acall("POST", "/api/arenas/score", { id: a.id, name: "late", score: 100 })).status, 200);

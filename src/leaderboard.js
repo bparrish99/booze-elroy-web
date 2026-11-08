@@ -104,6 +104,7 @@
       }
       lastScene = scene;
       if (scene === "arena" || (scene === "nameEntry" && ownConfig)) { arenaHeader(); return; }
+      if (scene === "leaderboard" && g.scene.key) { refreshHeader(g.scene.key); return; } // the board on show
       const key = currentKey();
       if (key !== lastKey) { lastKey = key; keyChangedAt = performance.now(); }
       // flicking through Options changes the key a lot: only fetch once it settles
@@ -185,38 +186,82 @@
     // ---------------------------------------------------------------- scenes
     const sfx = (n) => { const s = g.sounds[n]; if (s) { s.stop(); s.play(); } };
 
-    // Share Config only when the page can copy links (opts.share); otherwise just Back
+    // every board that has scores (the Leaderboards page flips through them), from GET /api/scores/boards
+    const boardList = { status: api ? "loading" : "error", boards: [], p: null };
+    function loadBoardList() {
+      if (!api) return Promise.resolve(boardList);
+      if (boardList.p) return boardList.p;
+      boardList.p = fetchFn(api + "/boards", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
+        .then((d) => { boardList.boards = (d.boards || []).filter((b) => SK.isKey(b.board)); boardList.status = "ok"; })
+        .catch(() => { if (boardList.status !== "ok") boardList.status = "error"; })
+        .finally(() => { boardList.p = null; });
+      return boardList.p;
+    }
+
+    // Share Config only when the page can copy links (opts.share; it shares the board on show); otherwise just Back
     const lbMenu = Object.assign([
-      ...(opts.share ? [{ text: "Share Config", share: true, x: 8, y: 33, action() { opts.share(); } }] : []),
+      ...(opts.share ? [{ text: "Share Config", share: true, x: 8, y: 33, action() { opts.share(SK.configFor(leaderboard.key)); } }] : []),
       { text: "Back", x: 12, y: opts.share ? 35 : 33, action() { core.setScene("attract", true); } },
     ], { selectedItem: 1 });
     const lbMove = (d) => { sfx("wakka1"); lbMenu.selectedItem = ((lbMenu.selectedItem - 1 + d + lbMenu.length) % lbMenu.length) + 1; };
     const lbBack = () => lbMenu[lbMenu.length - 1].action();
+    // Leaderboards: starts on the current settings' board; left / right (or prev / next) flip through every board
+    // with scores: the current one first, then the busiest (most entries, then highest top score)
     const leaderboard = {
       name: "leaderboard",
       menu: lbMenu,
-      highlight: null, message: null,
+      highlight: null, message: null, key: null, links: [],
       start(o) {
         o = o || {};
         this.highlight = o.highlight || null;
         this.message = o.message || null;
         this.fc = 0;
+        this.key = currentKey();
         lbMenu.selectedItem = 1;
-        if (!o.fresh) load(currentKey(), true);
+        if (!o.fresh) load(this.key, true);
+        loadBoardList();
+        const lx = (x, n) => ({ x0: x * 8 - 6, y0: 3 * 8, x1: (x + n) * 8 + 6, y1: 6 * 8 }); // roomy: the CRT curve bends the corners
+        this.links = [{ ...lx(4, 4), action: () => this.flip(-1) }, { ...lx(20, 4), action: () => this.flip(1) }];
       },
       update() { this.fc += 1; },
-      board() { return boardFor(currentKey()); },
-      summary,
+      keys() {
+        const cur = currentKey();
+        const rest = boardList.boards.filter((b) => b.board !== cur)
+          .sort((a, b) => b.count - a.count || b.top.score - a.top.score || (a.board < b.board ? -1 : 1));
+        return [cur, ...rest.map((b) => b.board)];
+      },
+      flip(d) {
+        const ks = this.keys();
+        if (ks.length < 2) return;
+        sfx("wakka1");
+        const i = Math.max(0, ks.indexOf(this.key));
+        this.key = ks[(i + d + ks.length) % ks.length];
+        this.highlight = null; this.message = null;
+        load(this.key);
+      },
+      title() { return "leaderboards"; },
+      // "prev   3/14   next" (just the count while there's only the one)
+      subtitle() {
+        const ks = this.keys(), n = String(Math.max(1, ks.indexOf(this.key) + 1)) + "/" + ks.length;
+        return ks.length < 2 ? n : "prev" + " ".repeat(Math.max(1, 6 - Math.ceil(n.length / 2))) + n + " ".repeat(Math.max(1, 6 - Math.floor(n.length / 2))) + "next";
+      },
+      board() { return boardFor(this.key); },
+      summary(width) { return summary(width, SK.configFor(this.key)); },
       keypressed(key) {
         if (key === "return" || key === "space") { sfx("wakka1"); lbMenu[lbMenu.selectedItem - 1].action(); }
-        else if (key === "up" || key === "left") lbMove(-1);
-        else if (key === "down" || key === "right") lbMove(1);
+        else if (key === "left") this.flip(-1);
+        else if (key === "right") this.flip(1);
+        else if (key === "up") lbMove(-1);
+        else if (key === "down") lbMove(1);
       },
       gamepadpressed(button) {
         if (button === "a") lbMenu[lbMenu.selectedItem - 1].action();
         else if (button === "b") lbBack();
-        else if (button === "dpup" || button === "dpleft") lbMove(-1);
-        else if (button === "dpdown" || button === "dpright") lbMove(1);
+        else if (button === "dpleft" || button === "leftshoulder") this.flip(-1);
+        else if (button === "dpright" || button === "rightshoulder") this.flip(1);
+        else if (button === "dpup") lbMove(-1);
+        else if (button === "dpdown") lbMove(1);
       },
     };
 
@@ -477,7 +522,7 @@
           arenaBoards.set(this.arenaId, { status: "ok", entries: ar.data.entries || [], at: performance.now() });
           if (ar.data.arena) arena = ar.data.arena;
           rank = ar.data.rank;
-          msg = grank ? "leaderboard rank " + grank : rank ? null : "not in the arena top 10";
+          msg = grank ? "leaderboard rank " + grank : rank ? null : ar.data.best ? "your arena best is " + ar.data.best : "not in the arena top 10";
         } else msg = ar && ar.status === 410 ? "the arena has closed" : "score could not be saved";
         core.setScene("arena", { fresh: !!(ar && ar.ok), highlight: rank, message: msg });
       },

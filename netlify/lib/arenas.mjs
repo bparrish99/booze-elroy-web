@@ -4,7 +4,8 @@
 //   GET  /api/arenas                         -> { now, arenas: [{ id, name, board, createdAt, endsAt, leader }] }
 //   GET  /api/arenas/board?id=<id>           -> { now, arena, entries }
 //   POST /api/arenas         { name, board } -> { now, arena }            (409: an open arena has that name)
-//   POST /api/arenas/score   { id, name, score } -> { now, arena, entries, rank }   (410: arena closed)
+//   POST /api/arenas/score   { id, name, score } -> { now, arena, entries, rank, best? }   (410: arena closed)
+//        one entry per name: a better score replaces that name's old one; a worse one gets rank null, best = their score
 //   POST /api/arenas/delete  { id, password } -> { deleted: id }          (LEADERBOARD_ADMIN_PASSWORD)
 //
 // Storage: blob "index" lists the arenas (with each one's current leader, for the list page);
@@ -78,7 +79,7 @@ export async function handleArenas(req, store, opts = {}) {
     const a = await find(id);
     if (!a) return json(404, { error: "no such arena" });
     if (now > a.endsAt + GRACE) return json(410, { error: "arena closed", arena: show(a) });
-    const r = await addScore(store, entriesKey(id), name, score);
+    const r = await addScore(store, entriesKey(id), name, score, true); // one entry per name
     if (!r) return json(409, { error: "busy, try again" });
     let arena = a;
     if (r.rank === 1) { // new leader: note it in the index for the list page
@@ -93,7 +94,7 @@ export async function handleArenas(req, store, opts = {}) {
         return { value: { arenas: next }, result: null };
       });
     }
-    return json(200, { now, arena: show(arena), entries: r.entries, rank: r.rank });
+    return json(200, { now, arena: show(arena), entries: r.entries, rank: r.rank, ...(r.best ? { best: r.best } : {}) });
   }
 
   if (path.endsWith("/delete")) {
