@@ -4,6 +4,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { handle } from "../netlify/lib/scores.mjs";
+import { handleArenas, HOUR, GRACE } from "../netlify/lib/arenas.mjs";
 import { startBlobs } from "./blobs.mjs";
 
 const require = createRequire(import.meta.url);
@@ -179,4 +180,61 @@ test("API: reset is disabled when no password is configured", async () => {
   const req = new Request("http://x/api/scores/reset", { method: "POST", body: JSON.stringify({ password: "" }) });
   const res = await handle(req, blobs.store, { env: {}, failDelay: 0 });
   assert.equal(res.status, 503);
+});
+
+// ---------------------------------------------------------------- arenas API (fake clock)
+let clock = Date.UTC(2026, 10, 8, 12);
+const acall = async (method, path, body) => {
+  const req = new Request("http://x" + path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await handleArenas(req, blobs.arenaStore, { env, failDelay: 0, now: () => clock });
+  return { status: res.status, data: await res.json() };
+};
+
+test("arenas: create, list, unique open names, scores and leader, closing, grace, falling off", async () => {
+  assert.deepEqual((await acall("GET", "/api/arenas")).data.arenas, []);
+  let r = await acall("POST", "/api/arenas", { name: "  sunday  fun ", board: BOARD });
+  assert.equal(r.status, 200);
+  const a = r.data.arena;
+  assert.equal(a.name, "SUNDAY FUN");
+  assert.equal(a.endsAt - a.createdAt, 24 * HOUR);
+  assert.equal((await acall("POST", "/api/arenas", { name: "sunday fun", board: BOARD })).status, 409, "open names are unique");
+  assert.equal((await acall("POST", "/api/arenas", { name: "bad.name", board: BOARD })).status, 400);
+  assert.equal((await acall("POST", "/api/arenas", { name: "ok", board: "nope" })).status, 400);
+  const b = (await acall("POST", "/api/arenas", { name: "ghostly", board: "mspac.0.f.f.f.3.1.f.0.2.t.f.f" })).data.arena;
+  assert.deepEqual((await acall("GET", "/api/arenas")).data.arenas.map((x) => x.name), ["SUNDAY FUN", "GHOSTLY"]);
+
+  r = await acall("POST", "/api/arenas/score", { id: a.id, name: "pinback", score: 3000 });
+  assert.equal(r.data.rank, 1);
+  r = await acall("POST", "/api/arenas/score", { id: a.id, name: "beefart", score: 9000 });
+  assert.equal(r.data.rank, 1);
+  r = await acall("POST", "/api/arenas/score", { id: a.id, name: "dj larry", score: 5000 });
+  assert.equal(r.data.rank, 2);
+  assert.deepEqual(r.data.arena.leader, { name: "BEEFART", score: 9000 });
+  r = await acall("GET", "/api/arenas/board?id=" + a.id);
+  assert.deepEqual(r.data.entries.map((e) => e.name), ["BEEFART", "DJ LARRY", "PINBACK"]);
+  assert.equal(r.data.arena.board, BOARD);
+  assert.equal((await acall("POST", "/api/arenas/score", { id: "zzzzzzzzzz", name: "x", score: 1 })).status, 404);
+  assert.equal((await acall("POST", "/api/arenas/score", { id: a.id, name: "x", score: 0 })).status, 400);
+
+  clock += 24 * HOUR + GRACE / 2; // closed, but a game that was running may still post
+  assert.equal((await acall("POST", "/api/arenas/score", { id: a.id, name: "late", score: 100 })).status, 200);
+  clock += GRACE;
+  assert.equal((await acall("POST", "/api/arenas/score", { id: a.id, name: "too late", score: 100 })).status, 410);
+  r = await acall("GET", "/api/arenas");
+  assert.equal(r.data.arenas.length, 2, "finished arenas stay listed");
+  assert.ok(r.data.arenas.every((x) => x.endsAt < r.data.now));
+  assert.equal((await acall("POST", "/api/arenas", { name: "sunday fun", board: BOARD })).status, 200, "a finished arena's name is free again");
+
+  clock += 24 * HOUR; // the first two fall off; creating one tidies their scores away
+  r = await acall("GET", "/api/arenas");
+  assert.deepEqual(r.data.arenas.map((x) => x.name), ["SUNDAY FUN"]);
+  assert.equal((await acall("GET", "/api/arenas/board?id=" + a.id)).status, 404);
+  await acall("POST", "/api/arenas", { name: "tidy", board: BOARD });
+  assert.equal(await blobs.arenaStore.get("e/" + a.id), null);
+
+  // delete needs the admin password
+  assert.equal((await acall("POST", "/api/arenas/delete", { id: b.id, password: "nope" })).status, 403);
+  const c = r.data.arenas[0];
+  assert.equal((await acall("POST", "/api/arenas/delete", { id: c.id, password: "correct horse" })).status, 200);
+  assert.ok(!(await acall("GET", "/api/arenas")).data.arenas.some((x) => x.id === c.id));
 });

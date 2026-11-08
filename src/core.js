@@ -291,6 +291,7 @@
           g.particles.push({
             x: x + offsetX, y: y + offsetY, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
             life: 20, maxLife: 20, size: 1.5 + rand() * 1.5, colors: [0.5, 0.5, 1.0], alpha: 0.6,
+            bubble: true, // web edition: render.js draws these as cartoon bubbles (no effect on the RNG)
           });
         }
       },
@@ -1036,9 +1037,14 @@
     const shareItem = (x, y) => ({ text: "Share Config", share: true, x, y, action() { env.shareConfig(); } });
     // web edition: no Autoplay item (env.noAutoplay; the autoplay code itself stays), Share Config in its row
     if (env.noAutoplay) menus.main.splice(menus.main.findIndex((it) => it.text === "Autoplay"), 1);
-    if (env.shareConfig) menus.main.splice(env.noAutoplay ? menus.main.length : menus.main.length - 1, 0, shareItem(10, env.noAutoplay ? 31 : 30));
+    // (Share Config is on the Options and Leaderboard pages, not the main menu)
     // web edition: Credits lives on the Options page (env.creditsInOptions); its row stays blank
     if (env.creditsInOptions) menus.main.splice(menus.main.findIndex((it) => it.text === "Credits"), 1);
+    // web edition: Arenas (24-hour leaderboards) right under Play
+    if (env.scenes && env.scenes.arenas) {
+      menus.main.splice(1, 0, { text: "Arena", x: 10, y: 27, action() { setScene("arenas"); } });
+      for (const it of menus.main) if (it.text === "Options") it.y = 29; else if (it.text === "Leaderboard") it.y = 31; // a blank row between items
+    }
     const menuConfirm = (menu) => {
       const item = menu[menu.selectedItem - 1];
       if (item.text && item.text === "Play") { g.sounds.coindrop.stop(); g.sounds.coindrop.play(); }
@@ -1750,7 +1756,7 @@
     const creditsBooze = { x: 112, y: 35, dir: 0, speed: 0, animator: () => animations.booze };
     const credits = env.credits || {
       name: "credits",
-      start(from) { creditsMenu.selectedItem = 1; creditsFc = 0; creditsReturn = from === "options" ? "options" : "attract"; },
+      start(from) { creditsMenu.selectedItem = 1; creditsFc = 0; if (from !== true) creditsReturn = from === "options" ? "options" : "attract"; }, // true: coming back (keep where to return)
       update() { creditsFc += 1; graphics.updateAnimation(creditsBooze, creditsFc); },
       keypressed(key) { menus.keypressed(creditsMenu, key); },
       gamepadpressed(button) { menus.gamepadpressed(creditsMenu, button); },

@@ -12,18 +12,46 @@ import scorekey from "../../src/scorekey.js";
 
 const { isKey, cleanName, placeOf, MAX_SCORE, BOARD_SIZE } = scorekey;
 const MAX_BODY = 2048;
-const json = (status, body) => new Response(JSON.stringify(body), {
+export const json = (status, body) => new Response(JSON.stringify(body), {
   status, headers: { "content-type": "application/json", "cache-control": "no-store" },
 });
-const sha = (s) => createHash("sha256").update(String(s)).digest();
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export const sha = (s) => createHash("sha256").update(String(s)).digest();
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function readBody(req) {
+export async function readBody(req) {
   const text = await req.text();
   if (text.length > MAX_BODY) return null;
   try { const b = JSON.parse(text); return b && typeof b === "object" ? b : null; } catch { return null; }
 }
-const tidy = (entries) => (Array.isArray(entries) ? entries : []).filter((e) => e && typeof e.score === "number" && typeof e.name === "string");
+export const tidy = (entries) => (Array.isArray(entries) ? entries : []).filter((e) => e && typeof e.score === "number" && typeof e.name === "string");
+
+/** read-modify-write of one JSON blob, conditional on what was read (retried if someone else wrote first).
+ *  change(current | null) returns { value, result } to write, or { result } alone to leave the blob as it is. */
+export async function updateJSON(store, key, change) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const cur = await store.getWithMetadata(key, { type: "json" });
+    const { value, result } = change(cur ? cur.data : null);
+    if (value === undefined) return result;
+    // the local dev Blobs server returns no ETag on reads, so there it's last-write-wins
+    const cond = !cur ? { onlyIfNew: true } : cur.etag ? { onlyIfMatch: cur.etag } : {};
+    const res = await store.setJSON(key, value, cond);
+    if (res.modified) return result;
+    await sleep(20 + Math.random() * 80);
+  }
+  return null; // busy
+}
+/** put a score into a top-10 blob -> { entries, rank } (rank null: didn't place), or null if the store stayed busy */
+export function addScore(store, key, name, score) {
+  return updateJSON(store, key, (data) => {
+    const entries = tidy(data);
+    const i = placeOf(entries, score);
+    if (i < 0) return { result: { entries, rank: null } };
+    const next = entries.slice();
+    next.splice(i, 0, { name, score, at: new Date().toISOString() });
+    next.length = Math.min(next.length, BOARD_SIZE);
+    return { value: next, result: { entries: next, rank: i + 1 } };
+  });
+}
 
 export async function handle(req, store, opts = {}) {
   const env = opts.env || process.env;
@@ -62,21 +90,8 @@ export async function handle(req, store, opts = {}) {
     if (!isKey(board)) return json(400, { error: "bad board" });
     if (!name) return json(400, { error: "bad name" });
     if (!Number.isInteger(score) || score < 1 || score > MAX_SCORE) return json(400, { error: "bad score" });
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const cur = await store.getWithMetadata(board, { type: "json" });
-      const entries = tidy(cur && cur.data);
-      const i = placeOf(entries, score);
-      if (i < 0) return json(200, { board, entries, rank: null });
-      const next = entries.slice();
-      next.splice(i, 0, { name, score, at: new Date().toISOString() });
-      next.length = Math.min(next.length, BOARD_SIZE);
-      // conditional on what we read; the local dev Blobs server returns no ETag on reads, so there it's last-write-wins
-      const cond = !cur ? { onlyIfNew: true } : cur.etag ? { onlyIfMatch: cur.etag } : {};
-      const res = await store.setJSON(board, next, cond);
-      if (res.modified) return json(200, { board, entries: next, rank: i + 1 });
-      await sleep(20 + Math.random() * 80); // someone else wrote first: re-read and retry
-    }
-    return json(409, { error: "busy, try again" });
+    const r = await addScore(store, board, name, score);
+    return r ? json(200, { board, ...r }) : json(409, { error: "busy, try again" });
   }
 
   return json(405, { error: "method not allowed" });

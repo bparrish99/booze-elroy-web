@@ -178,13 +178,73 @@
       if (bg) ctx.drawImage(bg, 0, 0, GW, GH);   // already dimmed to 40% at build time
     }
 
+    // Elroy's drunk bubbles (web edition). The core still emits its particles exactly as the Lua does (same RNG use);
+    // here some of them become pixel-art cartoon bubbles with their own (render-only) life: they wobble upward, woozy,
+    // swell a little and pop.
+    const BUBBLE_SPRITES = [];
+    for (let R = 1; R <= 5; R++) {
+      const S = 2 * R + 3, c = document.createElement("canvas"); c.width = S; c.height = S;
+      const x = c.getContext("2d"), m = S / 2, hx = m - R * 0.45, hy = m - R * 0.45, hr = Math.max(0.7, R * 0.28);
+      for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+        const d = Math.hypot(i + 0.5 - m, j + 0.5 - m);
+        if (Math.hypot(i + 0.5 - hx, j + 0.5 - hy) < hr && d < R) x.fillStyle = "#dcdcff"; // shine
+        else if (Math.abs(d - R) < 0.62) x.fillStyle = j + 0.5 > m + R * 0.3 ? "#6a6aee" : "#a8a8ff"; // blue rim, darker underneath
+        else if (d < R - 0.62) x.fillStyle = "rgba(128,128,255,0.35)"; // see-through blue middle (the original's colour)
+        else continue;
+        x.fillRect(i, j, 1, 1);
+      }
+      BUBBLE_SPRITES[R] = c;
+    }
+    const seenBubbles = new WeakSet(), bubbles = [];
+    let bubbleCount = 0, bubbleT = 0;
+    function updateBubbles() {
+      const now = performance.now(), dt = bubbleT ? Math.min(3, (now - bubbleT) / 16.67) : 1; bubbleT = now;
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+        const b = bubbles[i];
+        b.age += dt;
+        if (b.age > b.life + 4) { bubbles.splice(i, 1); continue; }
+        if (b.age > b.life) continue; // popping
+        b.x += (b.vx + Math.sin(b.age * 0.35 + b.phase) * 0.35 * b.wob) * dt;
+        b.y += b.vy * dt; b.vy *= Math.pow(0.97, dt);
+        b.r = Math.min(3, b.r + 0.02 * dt);
+      }
+    }
+    function drawBubble(b) {
+      const cx = -g.startX + b.x, cy = -g.startY + b.y + 24;
+      if (b.age > b.life) { // pop: a little ring of specks flying out
+        const t = (b.age - b.life) / 4, rr = b.r + 1 + t * 2;
+        ctx.globalAlpha = (1 - t) * 0.7; ctx.fillStyle = "#b0b0ff";
+        for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + b.phase; ctx.fillRect(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr), 1, 1); }
+        ctx.globalAlpha = 1;
+        return;
+      }
+      const R = Math.max(1, Math.min(3, Math.round(b.r))), spr = BUBBLE_SPRITES[R];
+      // fade in fast, dissolve over the second half of its life
+      ctx.globalAlpha = Math.min(1, b.age / 2) * Math.min(1, 2 * (1 - b.age / b.life)) * 0.9;
+      ctx.drawImage(spr, Math.round(cx - spr.width / 2), Math.round(cy - spr.height / 2));
+      ctx.globalAlpha = 1;
+    }
     function drawParticles() {
+      updateBubbles();
       for (const p of g.particles) {
+        if (p.bubble) {
+          if (!seenBubbles.has(p)) {
+            seenBubbles.add(p);
+            if (bubbleCount++ % 2 === 0) { // mostly tiny, the odd bigger one
+              const big = Math.random() < 0.15;
+              bubbles.push({ x: p.x, y: p.y - 2, vx: p.vx * 0.6, vy: -(0.6 + Math.random() * 0.5) + p.vy * 0.3,
+                r: big ? 2.4 + Math.random() * 0.6 : 1 + Math.random() * 1, age: 0, life: 16 + Math.random() * 14,
+                phase: Math.random() * Math.PI * 2, wob: 0.5 + Math.random() * 0.9 });
+            }
+          }
+          continue;
+        }
         const alpha = p.alpha !== undefined ? p.alpha : 1;
         const c = p.colors;
         ctx.fillStyle = `rgba(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)},${alpha})`;
         ctx.beginPath(); ctx.arc(-g.startX + p.x, -g.startY + p.y + 24, p.size, 0, Math.PI * 2); ctx.fill();
       }
+      for (const b of bubbles) drawBubble(b);
       setColor(1, 1, 1);
     }
 
@@ -409,9 +469,9 @@
         print("/", (I.pinky.x - 20) / 8, (I.pinky.y + 15) / 8, 3);
       }
     }
-    function drawIntermission3() {
-      const t = g.modeTimer, v = assets.video;
-      if (t <= 780 && t > 300 && core.mode.isStarted("intermission3") && v && v.readyState >= 2) {
+    function drawIntermission3(t = g.modeTimer, started = core.mode.isStarted("intermission3")) {
+      const v = assets.video;
+      if (t <= 780 && t > 300 && started && v && v.readyState >= 2) {
         const w = 1024 * 0.47, h = 576 * 0.47;
         ctx.drawImage(v, -129, 0, w, h);
       }
@@ -467,7 +527,7 @@
     ];
     // web edition: "web edition" on the title opens the credits
     const TITLE_LINKS = [{ x0: 64, y0: 276, x1: 160, y1: 288, scene: "credits" }];
-    const creditsLinks = () => (g.scene.name === "credits" ? LINKS : g.scene.name === "attract" && g.state && g.state.showHelperText ? TITLE_LINKS : []);
+    const creditsLinks = () => (g.scene.name === "credits" ? LINKS : g.scene.name === "attract" && g.state && g.state.showHelperText ? TITLE_LINKS : g.scene.links || []);
 
     function drawCredits() {
       begin(true); drawHeader();
@@ -490,30 +550,53 @@
 
     // ---- web edition: online leaderboard and arcade name entry (scenes live in leaderboard.js)
     const center = (m, y, o) => print(m, 14 - m.length / 2, y, o);
+    // the leaderboard page; an arena page is the same with its own title / time left (sc.title, sc.subtitle)
     function drawLeaderboard() {
       const sc = g.scene;
       begin(true); drawHeader();
-      center("leaderboard", 4, 3);
-      sc.summary(26).slice(0, 5).forEach((l, i) => center(l, 6 + i, 0));
+      if (sc.title) { center(sc.title(), 3, 3); center(sc.subtitle(), 4, 2); }
+      else center("leaderboard", 4, 3);
+      const lay = sc.layout || { summaryTop: 6, summaryLines: 5, listTop: 12, messageRow: 31 }; // the arena page packs tighter
+      sc.summary(26).slice(0, lay.summaryLines).forEach((l, i) => center(l, lay.summaryTop + i, 0));
       const b = sc.board();
-      if (!b.entries.length) center(b.status === "loading" ? "loading" : b.status === "error" ? "leaderboard offline" : "no scores yet", 20, 0);
+      if (!b.entries.length) center(sc.emptyText ? sc.emptyText(b) : b.status === "loading" ? "loading" : b.status === "error" ? "leaderboard offline" : "no scores yet", 20, 0);
       b.entries.slice(0, 10).forEach((e, i) => {
-        const y = 12 + i * 2, hi = sc.highlight === i + 1;
+        const y = lay.listTop + i * 2, hi = sc.highlight === i + 1;
         const o = hi ? (sc.fc % 30 < 15 ? 1 : 3) : 0;
         const rk = String(i + 1);
         print(rk, 3 - rk.length, y, o);
         print(core.formatScore(e.score), 4, y, o);
         print(e.name, 12, y, hi ? o : 4);
       });
-      if (sc.message) center(sc.message, 31, 2);
+      if (sc.message) center(sc.message, lay.messageRow, 2);
       drawMenu(sc.menu, 12, 33, 1);
+    }
+    // arena list: names are the menu; time left / winners / headings are sc.decor
+    function drawArenas() {
+      const sc = g.scene;
+      begin(true); drawHeader();
+      center("arenas", 3, 3);
+      const st = sc.status();
+      if (!sc.menu.some((it) => it.id)) {
+        if (st === "loading") center("loading", 15, 0);
+        else if (st === "error") center("no running arenas", 15, 0);
+      }
+      for (const d of sc.decor) print(d.text, d.x, d.y, d.o);
+      drawMenu(sc.menu, 0, 0, 1);
     }
     function drawNameEntry() {
       const sc = g.scene;
       begin(true); drawHeader();
-      center("new high score!", 4, sc.fc % 40 < 20 ? 3 : 1);
-      center("rank " + sc.place + "   " + String(sc.score), 6, 0);
-      center("enter your name", 10, 0);
+      if (sc.mode === "createArena") {
+        center("create arena", 3, 3);
+        sc.summary(26).slice(0, 4).forEach((l, i) => center(l, 5 + i, 0));
+        center("arena name", 10, 2);
+      } else {
+        center("new high score!", 4, sc.fc % 40 < 20 ? 3 : 1);
+        center((sc.arenaId && sc.arenaPlace ? "arena rank " : "rank ") + sc.place + "   " + String(sc.score), 6, 0);
+        if (sc.arenaId) center(sc.arenaName, 8, 2);
+        center("enter your name", 10, 0);
+      }
       for (let i = 0; i < 16; i++) {
         const ch = sc.entry[i], x = 6 + i;
         if (ch !== undefined && ch !== " ") print(ch, x, 13, 1);
@@ -524,6 +607,7 @@
       }
       sc.menu.forEach((it, i0) => print(it.text, it.x, it.y, sc.menu.selectedItem === i0 + 1 ? 1 : 0));
       if (sc.sending) center("saving", 30, 2);
+      else if (sc.mode === "createArena") { if (sc.message) center(sc.message, 30, 1); center("esc to cancel", 32, 2); }
       else { center("time " + Math.ceil(sc.timer / 60), 30, 0); center("esc to skip", 32, 2); }
     }
 
@@ -534,7 +618,7 @@
       if (scene === "attract") { if (g.state && g.state.showHelperText) spec = [core.attractMenu, 6, 23, 1]; }
       else if (scene === "options") spec = [core.optMenu, 18, 5, 1];
       else if (scene === "credits") spec = [core.creditsMenu, 12, 27, 2];
-      else if ((scene === "leaderboard" || scene === "nameEntry") && !g.scene.sending) spec = [g.scene.menu, 0, 0, 1];
+      else if ((scene === "leaderboard" || scene === "nameEntry" || scene === "arenas" || scene === "arena") && !g.scene.sending) spec = [g.scene.menu, 0, 0, 1];
       if (!spec) return [];
       const [menu, mx, my, sp] = spec, rows = [];
       menu.forEach((item, i0) => {
@@ -556,7 +640,9 @@
       else if (scene === "attract") drawAttract();
       else if (scene === "options") drawOptions();
       else if (scene === "credits") drawCredits();
-      else if (scene === "leaderboard") drawLeaderboard();
+      else if (scene === "leaderboard" || scene === "arena") drawLeaderboard();
+      else if (scene === "arenas") drawArenas();
+      else if (scene === "mina") { begin(false); drawIntermission3(g.scene.t, true); } // the "mina" cheat
       else if (scene === "nameEntry") drawNameEntry();
       else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, GW, GH); print(scene, 2, 2, 0); }
       drawToast();

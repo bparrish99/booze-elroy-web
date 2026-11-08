@@ -3,6 +3,8 @@
  *  - the header's HIGH SCORE shows the best for the current settings: the online leader (name on the row below)
  *    or this browser's own best for those settings, whichever is higher
  *  - scenes "nameEntry" (arcade letter grid, up to 16 characters) and "leaderboard" (top 10 for the current settings)
+ *  - arenas: 24-hour boards with fixed settings (scenes "arenas" = list, "arena" = one arena; nameEntry names new ones).
+ *    Playing an arena applies its settings (starting level 1) until the player leaves it; their own options come back.
  * Works offline: with no server (file://, network down) the boards simply stay empty and name entry is skipped.
  */
 (function (root) {
@@ -25,6 +27,10 @@
   const NCHARS = ROW_START[GRID.length], END = NCHARS + 2, SPECIAL_ROW = GRID.length, NROWS = GRID.length + 1;
   const SPECIAL_COL = [1, 5, 8]; // grid column each special sits under
   const ENTRY_FRAMES = 60 * 60; // a minute to enter a name, like a cabinet
+  const HOUR = 3600 * 1000;
+  const LIST_TOP = 6, LIST_BOTTOM = 29; // arena list rows
+  /** "23h", or "45m" in the last hour */
+  const timeLeft = (ms) => (ms >= HOUR ? Math.ceil(ms / HOUR) + "h" : Math.max(1, Math.ceil(ms / 60000)) + "m");
 
   // created before the core (the core reads env.scenes when it builds the main menu), then attach(core)
   function create(opts) {
@@ -32,6 +38,7 @@
     const storage = opts.storage;
     const api = opts.apiBase || null; // null = offline
     const fetchFn = opts.fetch;
+    const arenaApi = opts.arenaBase || null;
     const store = {
       get(k, d) { try { const v = storage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
       set(k, v) { try { storage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } },
@@ -61,6 +68,11 @@
       let d = null; try { d = await r.json(); } catch { /* ignore */ }
       return { ok: r.ok, status: r.status, data: d };
     }
+    async function post2(url, body) {
+      const r = await fetchFn(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      let d = null; try { d = await r.json(); } catch { /* ignore */ }
+      return { ok: r.ok, status: r.status, data: d };
+    }
     const currentKey = () => SK.keyFor(g.config);
 
     // ---------------------------------------------------------------- header high score per configuration
@@ -82,13 +94,16 @@
     // once per frame, from main.js
     function tick() {
       const scene = g.scene.name;
+      // left the arena some other way (Esc to the title, ...): the player's own settings come back
+      if (ownConfig && scene !== "game" && scene !== "arena" && scene !== "nameEntry") leaveArena();
       if (scene === "game") {
-        // a real game is starting: refresh its board so name entry has current data at game over
-        if (lastScene !== "game" && !g.attract && !g.autoplay) load(currentKey(), true);
+        // a real game is starting: refresh its board(s) so name entry has current data at game over
+        if (lastScene !== "game" && !g.attract && !g.autoplay) { load(currentKey(), true); if (ownConfig) loadArena(arena.id); }
         lastScene = scene;
         return; // in a game the core keeps HIGH SCORE up to date itself
       }
       lastScene = scene;
+      if (scene === "arena" || (scene === "nameEntry" && ownConfig)) { arenaHeader(); return; }
       const key = currentKey();
       if (key !== lastKey) { lastKey = key; keyChangedAt = performance.now(); }
       // flicking through Options changes the key a lot: only fetch once it settles
@@ -101,10 +116,11 @@
       const item = core.optMenu.find((it) => it.key === field);
       return item && item.options[i] ? item.options[i].text : String(vals[i]);
     }
-    function summary(width) {
+    function summary(width, cfg) {
+      cfg = cfg || g.config;
       const diffs = [];
       for (const [k, vals] of SK.FIELDS) {
-        const i = vals.indexOf(g.config[k]) >= 0 ? vals.indexOf(g.config[k]) : vals.indexOf(!!g.config[k]);
+        const i = vals.indexOf(cfg[k]) >= 0 ? vals.indexOf(cfg[k]) : vals.indexOf(!!cfg[k]);
         const d = vals.indexOf(g.defaultConfig[k]);
         if (i !== d) diffs.push(LABELS[k] + " " + optionText(k, vals, i));
       }
@@ -116,6 +132,54 @@
         else lines.push(d);
       }
       return lines;
+    }
+
+    // ---------------------------------------------------------------- arenas (list, boards, the one being played)
+    let clockOffset = 0; // server clock - this browser's clock
+    const serverNow = () => Date.now() + clockOffset;
+    const arenaList = { status: arenaApi ? "loading" : "error", arenas: [], at: -1e9, p: null };
+    function loadArenas(fresh) {
+      if (!arenaApi) return Promise.resolve(arenaList);
+      if (arenaList.p) return fresh ? arenaList.p.then(() => loadArenas()) : arenaList.p; // fresh: not one already under way
+      arenaList.p = fetchFn(arenaApi, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
+        .then((d) => { clockOffset = d.now - Date.now(); arenaList.arenas = d.arenas || []; arenaList.status = "ok"; })
+        .catch(() => { if (arenaList.status !== "ok") arenaList.status = "error"; })
+        .finally(() => { arenaList.at = performance.now(); arenaList.p = null; });
+      return arenaList.p;
+    }
+    const arenaBoards = new Map(); // id -> { status: "loading" | "ok" | "error" | "gone", entries, at }
+    function loadArena(id) {
+      if (!arenaApi) return Promise.resolve(null);
+      if (!arenaBoards.has(id)) arenaBoards.set(id, { status: "loading", entries: [], at: 0 });
+      return fetchFn(arenaApi + "/board?id=" + encodeURIComponent(id), { cache: "no-store" })
+        .then(async (r) => {
+          if (r.status === 404) { arenaBoards.set(id, { status: "gone", entries: [], at: performance.now() }); return; }
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const d = await r.json();
+          clockOffset = d.now - Date.now();
+          if (arena && arena.id === id) arena = d.arena;
+          arenaBoards.set(id, { status: "ok", entries: d.entries || [], at: performance.now() });
+        })
+        .catch(() => { const old = arenaBoards.get(id); arenaBoards.set(id, { status: old && old.status === "ok" ? "ok" : "error", entries: old ? old.entries : [], at: performance.now() }); });
+    }
+    let arena = null; // the arena being viewed / played
+    let ownConfig = null; // the player's own settings while an arena's are applied
+    const arenaOpen = (a) => !!a && serverNow() < a.endsAt;
+    function applyArena(a) {
+      if (!ownConfig) ownConfig = { ...g.config };
+      Object.assign(g.config, SK.configFor(a.board), { startingLevel: 1 });
+    }
+    function leaveArena() {
+      if (ownConfig) { Object.assign(g.config, ownConfig); ownConfig = null; }
+      arena = null;
+    }
+    const inArena = () => !!ownConfig;
+    function arenaHeader() {
+      const b = arena && arenaBoards.get(arena.id), leader = b && b.entries[0];
+      g.highScore = leader ? leader.score : false;
+      g.highScoreName = leader ? leader.name : null;
+      g.highScoreNameScore = leader ? leader.score : 0;
     }
 
     // ---------------------------------------------------------------- scenes
@@ -156,7 +220,150 @@
       },
     };
 
+    // shared menu moves for the arena scenes
+    const menuMove = (menu, d) => { sfx("wakka1"); menu.selectedItem = ((menu.selectedItem - 1 + d + menu.length) % menu.length) + 1; };
+    const menuKeys = (sc, key) => {
+      const m = sc.menu;
+      if (key === "return" || key === "space") { sfx("wakka1"); m[m.selectedItem - 1].action(); }
+      else if (key === "up" || key === "left") menuMove(m, -1);
+      else if (key === "down" || key === "right") menuMove(m, 1);
+    };
+    const menuPad = (sc, button) => {
+      const m = sc.menu;
+      if (button === "a") m[m.selectedItem - 1].action();
+      else if (button === "dpup" || button === "dpleft") menuMove(m, -1);
+      else if (button === "dpdown" || button === "dpright") menuMove(m, 1);
+    };
+    // keep the same item selected when a menu is rebuilt
+    function rebuildMenu(sc, items) {
+      const old = sc.menu[sc.menu.selectedItem - 1], id = old && (old.id || old.text);
+      const i = id ? items.findIndex((it) => (it.id || it.text) === id) : -1;
+      sc.menu = Object.assign(items, { selectedItem: i >= 0 ? i + 1 : Math.min(sc.menu.selectedItem || 1, items.length) });
+    }
+
+    // arena list: running arenas (name, time left), then ones finished in the last day (name, winner); scrolls
+    const arenas = {
+      name: "arenas",
+      menu: Object.assign([], { selectedItem: 1 }),
+      decor: [], links: [], scroll: 0, lastSel: 0, fc: 0,
+      start() {
+        leaveArena();
+        this.fc = 0; this.scroll = 0; this.lastSel = 0;
+        this.menu = Object.assign([], { selectedItem: 1 });
+        loadArenas(true);
+        this.build();
+        this.menu.selectedItem = 1;
+      },
+      update() {
+        this.fc += 1;
+        if (performance.now() - arenaList.at > 30000) loadArenas();
+        this.build();
+      },
+      status() { return arenaList.status; },
+      build() {
+        const now = serverNow();
+        const open = arenaList.arenas.filter((a) => a.endsAt > now).sort((a, b) => a.endsAt - b.endsAt);
+        const done = arenaList.arenas.filter((a) => a.endsAt <= now).sort((a, b) => b.endsAt - a.endsAt);
+        // virtual rows { h, item?, draw(y) }, laid out top to bottom and scrolled
+        const rows = [], items = [], decor = [];
+        const pick = (a) => () => core.setScene("arena", { arena: a });
+        for (const a of open) {
+          const it = { id: a.id, text: a.name, x: 2, action: pick(a) };
+          items.push(it);
+          rows.push({ h: 2, item: it, draw: (y) => { const t = timeLeft(a.endsAt - now); decor.push({ text: t, x: 26 - t.length, y, o: 2 }); } });
+        }
+        if (arenaList.status === "ok" && !open.length) rows.push({ h: 2, draw: (y) => decor.push({ text: "no running arenas", x: 14 - 8.5, y, o: 2 }) });
+        if (done.length) rows.push({ h: 2, draw: (y) => decor.push({ text: "finished", x: 2, y, o: 3 }) });
+        for (const a of done) {
+          const it = { id: a.id, text: a.name, x: 2, action: pick(a) };
+          items.push(it);
+          rows.push({ h: 3, item: it, draw: (y) => decor.push({ text: a.leader ? "won by " + a.leader.name : "no scores", x: 4, y: y + 1, o: a.leader ? 4 : 2 }) });
+        }
+        items.push({ text: "Create Arena", x: 8, y: 32, action() { core.setScene("nameEntry", { mode: "createArena" }); } });
+        items.push({ text: "Back", x: 12, y: 34, action() { core.setScene("attract", true); } });
+        rebuildMenu(this, items);
+        // scrolling: follow the selection when it moves; otherwise stay where the wheel / "more" left it
+        let vy = 0; for (const r of rows) { r.vy = vy; vy += r.h; }
+        const view = LIST_BOTTOM - LIST_TOP + 1, maxScroll = Math.max(0, vy - 1 - view);
+        const sel = this.menu[this.menu.selectedItem - 1];
+        if (this.menu.selectedItem !== this.lastSel) {
+          this.lastSel = this.menu.selectedItem;
+          const r = rows.find((x) => x.item === sel);
+          if (r) { if (r.vy < this.scroll) this.scroll = r.vy; else if (r.vy + r.h - 1 > this.scroll + view) this.scroll = r.vy + r.h - 1 - view; }
+        }
+        this.scroll = Math.max(0, Math.min(this.scroll, maxScroll));
+        for (const r of rows) {
+          const y = LIST_TOP + r.vy - this.scroll;
+          const visible = y >= LIST_TOP && y + r.h - 2 <= LIST_BOTTOM;
+          if (r.item) r.item.y = visible ? y : -10;
+          if (visible) r.draw(y);
+        }
+        this.links = [];
+        if (this.scroll > 0) { decor.push({ text: "more", x: 12, y: LIST_TOP - 1, o: 2 }); this.links.push({ x0: 88, y0: (LIST_TOP - 1) * 8 - 2, x1: 136, y1: LIST_TOP * 8, action: () => this.scrollBy(-6) }); }
+        if (this.scroll < maxScroll) { decor.push({ text: "more", x: 12, y: LIST_BOTTOM + 1, o: 2 }); this.links.push({ x0: 88, y0: (LIST_BOTTOM + 1) * 8 - 2, x1: 136, y1: (LIST_BOTTOM + 2) * 8 + 2, action: () => this.scrollBy(6) }); }
+        this.decor = decor;
+      },
+      scrollBy(n) { this.scroll += n; this.build(); },
+      keypressed(key) { menuKeys(this, key); },
+      gamepadpressed(button) { if (button === "b") core.setScene("attract", true); else menuPad(this, button); },
+    };
+
+    // one arena: its settings, time left and top 10; Play (while open) applies its settings and starts a game
+    const arenaScene = {
+      name: "arena",
+      captureInput: true, // Esc goes back to the arena list, not the title
+      layout: { summaryTop: 5, summaryLines: 3, listTop: 9, messageRow: 29 }, // leaves room for a spaced-out menu
+      menu: Object.assign([], { selectedItem: 1 }),
+      highlight: null, message: null, fc: 0,
+      start(o) {
+        o = o || {};
+        if (o.arena) arena = o.arena;
+        this.highlight = o.highlight || null;
+        this.message = o.message || null;
+        this.fc = 0;
+        this.menu = Object.assign([], { selectedItem: 1 });
+        if (!o.fresh) loadArena(arena.id);
+        this.build();
+        this.menu.selectedItem = 1;
+      },
+      update() {
+        this.fc += 1;
+        if (this.fc % 1800 === 0) loadArena(arena.id); // every 30 s
+        this.build();
+      },
+      build() {
+        const items = [];
+        if (arenaOpen(arena) && api) items.push({ text: "Play", x: 12, y: 31, action: () => this.play() });
+        if (opts.shareArena) items.push({ text: "Share Arena", share: true, x: 8.5, y: 33, action: () => opts.shareArena(arena.id) });
+        items.push({ text: "Back", x: 12, y: 35, action: () => this.back() });
+        rebuildMenu(this, items);
+      },
+      play() {
+        sfx("coindrop");
+        applyArena(arena);
+        // straight into a game (the title's "play" step only runs on the title scene, which would leave the arena)
+        g.autoplay = false; g.attract = false;
+        core.setScene("game");
+      },
+      back() { leaveArena(); core.setScene("arenas"); },
+      title() { return arena.name; },
+      subtitle() { return arenaOpen(arena) ? "ends in " + timeLeft(arena.endsAt - serverNow()) : "finished"; },
+      summary(width) { return summary(width, SK.configFor(arena.board)); },
+      board() { return arenaBoards.get(arena.id) || { status: "loading", entries: [] }; },
+      emptyText(b) { return b.status === "loading" ? "loading" : b.status === "gone" ? "arena not found" : b.status === "error" ? "try again soon" : "no scores yet"; },
+      keypressed(key) {
+        if (key === "escape" || key === "backspace") { sfx("wakka1"); this.back(); return; }
+        menuKeys(this, key);
+      },
+      gamepadpressed(button) {
+        if (button === "b") this.back();
+        else if (button === "start") core.setScene("attract");
+        else menuPad(this, button);
+      },
+    };
+
     // grid cells double as a "menu" so the mouse / touch code can hover and click them
+
     let pending = null;
     const neMenu = [];
     GRID.forEach((row, r) => { for (let c = 0; c < row.length; c++) neMenu.push({ text: row[c], char: row[c], x: GRID_X + c * 2, y: GRID_Y + r * 2 }); });
@@ -168,18 +375,23 @@
       menu: neMenu,
       start(o) {
         o = o || pending || {}; pending = null;
-        this.key = o.key; this.score = o.score; this.place = o.place;
-        this.entry = store.get(NAME, "") || "";
+        this.mode = o.mode || "score"; // "score" (after a game) | "createArena" (naming a new arena)
+        this.key = o.key || currentKey(); this.score = o.score; this.place = o.place;
+        this.arenaId = o.arenaId || null; this.arenaName = o.arenaName || null; this.arenaPlace = !!o.arenaPlace;
+        this.message = null;
+        this.entry = this.mode === "score" ? store.get(NAME, "") || "" : "";
         if (typeof this.entry !== "string" || !SK.cleanName(this.entry)) this.entry = "";
         this.timer = ENTRY_FRAMES; this.sending = false; this.fc = 0;
         neMenu.selectedItem = (this.entry ? END : 0) + 1; // a remembered name is one press from done
       },
       update() {
         this.fc += 1;
-        if (this.sending) return;
+        if (this.sending || this.mode !== "score") return;
         this.timer -= 1;
-        if (this.timer <= 0) { if (this.entry.trim()) this.submit(); else core.setScene("attract"); }
+        if (this.timer <= 0) { if (this.entry.trim()) this.submit(); else this.leave(); }
       },
+      leave() { core.setScene(this.mode === "createArena" ? "arenas" : ownConfig ? "arena" : "attract"); },
+      summary(width) { return summary(width); },
       add(ch) {
         if (this.entry.length >= NAME_MAX) { neMenu.selectedItem = END + 1; return; }
         if (ch === " " && (!this.entry.length || this.entry.endsWith(" "))) return;
@@ -208,7 +420,7 @@
       },
       keypressed(key) {
         if (this.sending) return;
-        if (key === "escape") { core.setScene("attract"); return; }
+        if (key === "escape") { this.leave(); return; }
         if (key === "backspace") return this.del();
         if (key === "up") return this.move(-1, 0);
         if (key === "down") return this.move(1, 0);
@@ -227,8 +439,10 @@
       async submit() {
         const name = SK.cleanName(this.entry);
         if (!name) return;
-        this.sending = true; sfx("coindrop");
+        this.sending = true; this.message = null; sfx("coindrop");
+        if (this.mode === "createArena") return this.createArena(name);
         store.set(NAME, name);
+        if (this.arenaId) return this.submitArena(name);
         let res = null;
         try { res = await post("", { board: this.key, name, score: this.score }); } catch { res = null; }
         if (res && res.ok && res.data) {
@@ -236,10 +450,42 @@
           core.setScene("leaderboard", { fresh: true, highlight: res.data.rank, message: res.data.rank ? null : "not in the top 10" });
         } else core.setScene("leaderboard", { message: "score could not be saved" });
       },
+      async createArena(name) {
+        let res = null;
+        try { res = await post2(arenaApi, { name, board: this.key }); } catch { res = null; }
+        if (res && res.ok && res.data && res.data.arena) {
+          const a = res.data.arena;
+          clockOffset = res.data.now - Date.now();
+          arenaList.arenas = arenaList.arenas.filter((x) => x.id !== a.id).concat([a]);
+          arenaBoards.set(a.id, { status: "ok", entries: [], at: performance.now() });
+          core.setScene("arena", { arena: a, fresh: true });
+          return;
+        }
+        this.sending = false;
+        this.message = res && res.status === 409 && res.data && res.data.error === "name taken" ? "that name is taken" : "could not create arena";
+      },
+      // a game in an arena: the arena board, and the regular board for these settings too
+      async submitArena(name) {
+        const [ar, gr] = await Promise.all([
+          post2(arenaApi + "/score", { id: this.arenaId, name, score: this.score }).catch(() => null),
+          post("", { board: this.key, name, score: this.score }).catch(() => null),
+        ]);
+        if (gr && gr.ok && gr.data) boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() });
+        const grank = gr && gr.ok && gr.data ? gr.data.rank : null;
+        let rank = null, msg;
+        if (ar && ar.ok && ar.data) {
+          arenaBoards.set(this.arenaId, { status: "ok", entries: ar.data.entries || [], at: performance.now() });
+          if (ar.data.arena) arena = ar.data.arena;
+          rank = ar.data.rank;
+          msg = grank ? "leaderboard rank " + grank : rank ? null : "not in the arena top 10";
+        } else msg = ar && ar.status === 410 ? "the arena has closed" : "score could not be saved";
+        core.setScene("arena", { fresh: !!(ar && ar.ok), highlight: rank, message: msg });
+      },
     };
 
     // ---------------------------------------------------------------- hooks for core
     function afterGameOver(score) {
+      if (ownConfig) return afterArenaGame(score);
       if (!api || !(score > 0)) return null;
       const key = currentKey(); if (!key) return null;
       const b = boards.get(key);
@@ -248,6 +494,42 @@
       if (place < 0) return null;
       pending = { key, score, place: place + 1 };
       return "nameEntry"; // core switches scene; nameEntry.start picks up `pending`
+    }
+    // a game in an arena: name entry if the score places on the arena board or the regular one, else back to the arena
+    function afterArenaGame(score) {
+      if (!(score > 0)) return "arena";
+      const key = currentKey(), gb = boards.get(key), ab = arenaBoards.get(arena.id);
+      const ap = ab && ab.status === "ok" ? SK.placeOf(ab.entries, score) : -1;
+      const gp = gb && gb.status === "ok" ? SK.placeOf(gb.entries, score) : -1;
+      if (ap < 0 && gp < 0) return "arena";
+      pending = { key, score, place: ap >= 0 ? ap + 1 : gp + 1, arenaId: arena.id, arenaName: arena.name, arenaPlace: ap >= 0 };
+      return "nameEntry";
+    }
+    // a shared arena link (?arena=<id>): open its page once it's loaded; unknown / gone -> the arena list
+    async function openArena(id) {
+      if (!arenaApi) return;
+      let d = null;
+      try { const r = await fetchFn(arenaApi + "/board?id=" + encodeURIComponent(id), { cache: "no-store" }); if (r.ok) d = await r.json(); } catch { d = null; }
+      if (g.scene.name !== "attract") return; // the player already went somewhere else
+      if (d && d.arena) {
+        clockOffset = d.now - Date.now();
+        arenaBoards.set(id, { status: "ok", entries: d.entries || [], at: performance.now() });
+        core.setScene("arena", { arena: d.arena, fresh: true });
+      } else core.setScene("arenas");
+    }
+    // admin: delete the arena being viewed (password checked by the server); then back to the list
+    async function deleteArena(password) {
+      if (!arenaApi || !arena) return { ok: false, status: 0 };
+      const id = arena.id;
+      let res;
+      try { res = await post2(arenaApi + "/delete", { id, password }); } catch { return { ok: false, status: 0 }; }
+      if (res.ok || res.status === 404) {
+        arenaList.arenas = arenaList.arenas.filter((a) => a.id !== id);
+        arenaBoards.delete(id);
+        if (g.scene.name === "arena") core.setScene("arenas");
+        return { ok: true, status: 200 };
+      }
+      return res;
     }
     async function reset(password, allBoards) {
       if (!api) return { ok: false, status: 0 };
@@ -264,7 +546,7 @@
     }
 
     const attach = (c) => { core = c; g = c.g; };
-    return { attach, scenes: { leaderboard, nameEntry }, tick, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
+    return { attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene }, tick, inArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
   }
 
   root.BoozeLeaderboard = { create };

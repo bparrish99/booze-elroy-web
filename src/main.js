@@ -17,8 +17,10 @@
     const LB = BoozeLeaderboard.create({
       storage: storage || { getItem: () => null, setItem() {}, removeItem() {} },
       apiBase: /^https?:$/.test(location.protocol) ? "/api/scores" : null,
+      arenaBase: /^https?:$/.test(location.protocol) ? "/api/arenas" : null,
       fetch: (...a) => fetch(...a),
       share: () => shareConfig(),
+      shareArena: (id) => shareConfig("?arena=" + id), // link straight to an arena's page
     });
     // xorshift-free: normal Math.random in the browser
     // intermission 3 plays a short video (with sound); core calls video.play()/stop()
@@ -74,11 +76,11 @@
     try { sharedCfg = SK.configFromCode(new URLSearchParams(location.search).get("cfg")); } catch { /* ignore */ }
     const loadSaved = () => { try { return JSON.parse(localStorage.getItem("booze-elroy-options") || "null"); } catch { return null; } };
     const showToast = (text) => { core.g.toast = { text, until: performance.now() + 2000 }; };
-    function shareLink() {
+    function shareLink(query) {
       // the real site, except when running locally or on a Netlify deploy/branch preview ("name--site.netlify.app")
       const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.hostname.includes("--");
       const base = /^https?:$/.test(location.protocol) && local ? location.origin + "/" : "https://booze-elroy.com/";
-      return base + "?cfg=" + SK.shareCode(core.g.config);
+      return base + (query || "?cfg=" + SK.shareCode(core.g.config));
     }
     function copyText(text) {
       if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
@@ -92,16 +94,45 @@
       ta.remove();
       return ok ? Promise.resolve() : Promise.reject(new Error("copy failed"));
     }
-    function shareConfig() {
-      const url = shareLink();
+    function shareConfig(query) {
+      const url = shareLink(typeof query === "string" ? query : null);
       copyText(url).then(() => showToast("link copied to clipboard"), () => { console.log("share link: " + url); showToast("could not copy link"); });
+    }
+
+    // secret: the intermission 3 film on its own (cheat "mina" on the menu screens)
+    const mina = {
+      name: "mina", captureInput: true,
+      start(from) { this.from = from || "attract"; this.t = 840; }, // same timeline as intermission 3: 840 frames, film at 780
+      update() {
+        this.t -= 1;
+        if (this.t === 780) video.play();
+        if (this.t <= 0) this.end();
+      },
+      end() { video.stop(); core.setScene(this.from, true); },
+      keypressed(k) { if (k === "escape" || k === "return" || k === "space" || k === "backspace") this.end(); },
+      gamepadpressed() { this.end(); },
+    };
+    // cheat codes: letters typed on the menu screens (they do nothing there otherwise)
+    const CHEAT_SCENES = ["attract", "options", "credits", "leaderboard", "arenas"];
+    const CHEATS = {
+      mina: { scenes: CHEAT_SCENES, run() { const from = core.g.scene.name; core.setScene("mina", from); } },
+      reset: { scenes: CHEAT_SCENES, run() { openReset(); } }, // admin: reset high scores (asks for the password)
+      delete: { scenes: ["arena"], run() { openReset("arena"); } }, // admin: delete the arena on screen (asks for the password)
+    };
+    let typed = "";
+    function cheatKey(e) {
+      const sc = core.g.scene.name;
+      if (!(CHEAT_SCENES.includes(sc) || sc === "arena") || sc === "attract" && !core.g.state.showHelperText) { typed = ""; return; }
+      if (!/^[a-z]$/i.test(e.key) || e.ctrlKey || e.metaKey || e.altKey) return;
+      typed = (typed + e.key.toLowerCase()).slice(-16);
+      for (const code of Object.keys(CHEATS)) if (typed.endsWith(code) && CHEATS[code].scenes.includes(sc)) { typed = ""; CHEATS[code].run(); }
     }
 
     const core = BoozeCore.create(A.data, {
       noExit: true, noAutoplay: true, centerMenus: true, creditsInOptions: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      scenes: LB.scenes, afterGameOver: (s) => LB.afterGameOver(s),
+      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s),
       saveHighScore: (s) => LB.saveBest(s),
-      saveConfig: (c) => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
+      saveConfig: (c) => { if (LB.inArena()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
       shareConfig,
       setFullscreen: (on) => { try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ } },
@@ -129,19 +160,36 @@
     window.addEventListener("resize", fit); fit();
 
     core.init();
+    // ?arena=<id>: a shared arena link opens that arena's page
+    {
+      const arenaId = new URLSearchParams(location.search).get("arena");
+      if (arenaId) {
+        try { history.replaceState(null, "", location.pathname + location.hash); } catch { /* ignore */ }
+        if (/^[a-z0-9]{10}$/.test(arenaId)) LB.openArena(arenaId);
+      }
+    }
     if (sharedCfg) {
       // keep the shared settings as the player's own, and drop ?cfg so a reload doesn't undo later changes
       try { localStorage.setItem("booze-elroy-options", JSON.stringify(core.g.config)); } catch { /* ignore */ }
       try { history.replaceState(null, "", location.pathname + location.hash); } catch { /* ignore */ }
     }
 
-    // Reset High Scores: opened by visiting the page with ?resetscores (no menu item); wipes the online boards,
+    // Reset High Scores: opened by the cheat "reset" on a menu screen (no menu item); wipes the online boards,
     // the password is checked by the server
     const rs = document.getElementById("reset"), rsForm = rs.querySelector("form"), rsMsg = rs.querySelector(".msg");
     const resetOpen = () => rs.open;
-    function openReset() {
+    // the same dialog deletes an arena (cheat "delete" on an arena's page): rsMode "reset" | "arena"
+    let rsMode = "reset";
+    function openReset(mode) {
       if (typeof rs.showModal !== "function") return;
       for (const k in down) down[k] = false;
+      rsMode = mode === "arena" ? "arena" : "reset";
+      const arena = rsMode === "arena" ? LB.currentArena() : null;
+      if (rsMode === "arena" && !arena) return;
+      rs.querySelector("h2").textContent = arena ? "DELETE ARENA" : "RESET HIGH SCORES";
+      const what = rs.querySelector(".what"); what.hidden = !arena; what.textContent = arena ? arena.name : "";
+      for (const l of rs.querySelectorAll(".scope")) l.hidden = !!arena;
+      rs.querySelector("button[value=reset]").textContent = arena ? "Delete" : "Reset";
       rsMsg.textContent = ""; rsForm.reset();
       rs.showModal();
     }
@@ -150,19 +198,16 @@
       if (e.submitter && e.submitter.value === "cancel") { rs.close(); return; }
       const pw = rsForm.elements.password.value;
       if (!pw) { rsMsg.textContent = "Enter the password."; return; }
-      rsMsg.textContent = "Resetting…";
-      const res = await LB.reset(pw, rsForm.elements.scope.value === "all");
+      rsMsg.textContent = rsMode === "arena" ? "Deleting…" : "Resetting…";
+      const res = rsMode === "arena" ? await LB.deleteArena(pw) : await LB.reset(pw, rsForm.elements.scope.value === "all");
       if (res.ok) { rsMsg.textContent = "Done."; setTimeout(() => rs.close(), 900); }
       else rsMsg.textContent = res.status === 403 ? "Wrong password." : res.status === 503 ? "Reset isn't set up on the server." : res.status === 0 ? "Can't reach the leaderboard server." : "Reset failed (" + res.status + ").";
     });
     rs.addEventListener("close", () => canvas.focus && canvas.focus());
-    if (new URLSearchParams(location.search).has("resetscores")) {
-      try { history.replaceState(null, "", location.pathname + location.hash); } catch { /* ignore */ }
-      openReset();
-    }
 
     window.addEventListener("keydown", (e) => {
       if (resetOpen()) return; // typing into the reset dialog
+      cheatKey(e);
       // name entry takes typed characters as they are (shifted symbols included)
       if (core.g.scene.name === "nameEntry" && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault(); core.keypressed(e.key); return;
@@ -204,7 +249,7 @@
     });
     canvas.addEventListener("pointerdown", (e) => {
       if (gestureStart(e)) return;
-      { const L = linkAt(e); if (L) { e.preventDefault(); if (L.scene) { core.g.sounds.wakka1.play(); core.setScene(L.scene); } else openUrl(L.url); return; } }
+      { const L = linkAt(e); if (L) { e.preventDefault(); if (L.action) L.action(); else if (L.scene) { core.g.sounds.wakka1.play(); core.setScene(L.scene); } else openUrl(L.url); return; } }
       const row = rowAt(e);
       if (!row) return;
       e.preventDefault();
@@ -214,6 +259,12 @@
       if (row.hasOptions) core.keypressed(e.button === 2 ? "left" : "right");
       else core.keypressed("return");
     });
+    // mouse wheel scrolls scrollable pages (the arena list)
+    canvas.addEventListener("wheel", (e) => {
+      const sc = core.g.scene;
+      if (!sc.scrollBy || !e.deltaY) return;
+      e.preventDefault(); sc.scrollBy(e.deltaY > 0 ? 2 : -2);
+    }, { passive: false });
     let pendingShareTap = null;
     canvas.addEventListener("pointerup", (e) => {
       if (pendingShareTap !== e.pointerId) return;

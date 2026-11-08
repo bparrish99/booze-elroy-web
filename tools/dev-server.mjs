@@ -10,26 +10,30 @@ import { fileURLToPath } from "node:url";
 import { BlobsServer } from "@netlify/blobs/server";
 import { getStore } from "@netlify/blobs";
 import { handle } from "../netlify/lib/scores.mjs";
+import { handleArenas } from "../netlify/lib/arenas.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json" };
 
-export async function startDev({ port = 8888, blobsDir = join(ROOT, ".dev-blobs"), password = "dev", quiet = false } = {}) {
+export async function startDev(opts = {}) {
+  const { port = 8888, blobsDir = join(ROOT, ".dev-blobs"), password = "dev", quiet = false } = opts; // opts.now: fake clock for tests
   mkdirSync(blobsDir, { recursive: true });
   const token = "dev-token";
   const blobs = new BlobsServer({ directory: blobsDir, token });
   const { port: bport } = await blobs.start();
   const url = `http://localhost:${bport}`;
-  const store = getStore({ name: "leaderboard", siteID: "dev-site", token, edgeURL: url, uncachedEdgeURL: url, consistency: "strong" });
+  const mkStore = (name) => getStore({ name, siteID: "dev-site", token, edgeURL: url, uncachedEdgeURL: url, consistency: "strong" });
+  const store = mkStore("leaderboard"), arenaStore = mkStore("arenas");
   const env = { LEADERBOARD_ADMIN_PASSWORD: password };
 
   const server = createServer(async (req, res) => {
     try {
       const u = new URL(req.url, "http://localhost");
-      if (u.pathname.startsWith("/api/scores")) {
+      if (u.pathname.startsWith("/api/scores") || u.pathname.startsWith("/api/arenas")) {
         const chunks = []; for await (const c of req) chunks.push(c);
         const body = chunks.length ? Buffer.concat(chunks) : undefined;
-        const r = await handle(new Request(u, { method: req.method, headers: req.headers, body: req.method === "GET" ? undefined : body }), store, { env });
+        const request = new Request(u, { method: req.method, headers: req.headers, body: req.method === "GET" ? undefined : body });
+        const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now }) : await handle(request, store, { env });
         res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer()));
         if (!quiet) console.log(req.method, u.pathname + u.search, r.status);
         return;
