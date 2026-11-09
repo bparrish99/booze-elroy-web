@@ -704,9 +704,11 @@
       void main(){ vec3 s = texture2D(tex, vuv).rgb; vec3 p = texture2D(prev, vuv).rgb * decay; gl_FragColor = vec4(max(s, p), 1.0); }`);
     // the MAX CRT: heavy barrel, rounded glass, RGB convergence error, horizontal bleed, beam-width scanlines,
     // aperture-grille triads, vignette, mains flicker, rolling hum bar, tracking glitches, static grain, glass glare, plastic bezel
+    // the glint's hidden clock: the hour hand's angle (radians clockwise from 12) in the player's local time
+    const hourAngle = () => { const d = new Date(); return ((d.getHours() % 12) + d.getMinutes() / 60) / 12 * 2 * Math.PI; };
     const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
     const pU = mk(HDR + `
-      uniform vec2 res; uniform float time, dpr;
+      uniform vec2 res; uniform float time, dpr, hourAngle;
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
       vec3 samp(vec2 uv, vec2 off){
@@ -764,8 +766,10 @@
         vec2 wq = (vuv - vec2(0.73, 0.8)) * vec2(1.0, 1.6);
         float win = (1.0 - smoothstep(0.17, 0.2, length(wq))) * smoothstep(-0.12, 0.1, wq.y);
         c += vec3(0.8, 0.86, 1.0) * 0.035 * win;
-        //   small, soft specular point
-        float spec = exp(-pow(length((vuv - vec2(0.845, 0.9)) * vec2(1.0, 1.35)) / 0.045, 2.0));
+        //   small, soft specular point. Secretly the hour hand of a clock (player's local time): straight up at
+        //   12, right at 3, bottom at 6, left at 9, creeping round with the minutes
+        vec2 glint = vec2(0.5) + vec2(sin(hourAngle) * 0.4, cos(hourAngle) * 0.43);
+        float spec = exp(-pow(length((vuv - glint) * vec2(1.0, 1.35)) / 0.045, 2.0));
         c += vec3(0.9, 0.94, 1.0) * 0.09 * spec;
         // plastic bezel outside the glass
         vec3 bez = vec3(0.075, 0.068, 0.058) * (0.55 + 0.6 * vuv.y) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
@@ -832,7 +836,7 @@
           const nxt = 1 - ph;
           pass(pH, PH[nxt], (p) => gl.uniform1f(p.u("decay"), 0.58), srcTex, PH[ph].t);
           ph = nxt;
-          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); }, PH[ph].t);
+          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); }, PH[ph].t);
           pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), 0.72), A.t);
           pass(pB, B2, (p) => { gl.uniform2f(p.u("dir"), 1 / BW, 0); gl.uniform1f(p.u("sigma"), 3.5); }, B1.t);
           pass(pB, B1, (p) => { gl.uniform2f(p.u("dir"), 0, 1 / BH); gl.uniform1f(p.u("sigma"), 3.5); }, B2.t);
