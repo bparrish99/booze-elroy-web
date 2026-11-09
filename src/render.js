@@ -497,7 +497,9 @@
       print("GHOST OPTIONS", 3, 17, 3);
       [["Ghosts", 18], ["Pinky Bug", 19], ["Scatter", 20], ["Unrestricted", 21]].forEach((r) => print(r[0], 3, r[1]));
       print("AUDIO/VIDEO", 3, 23, 3);
-      [["Background", 24], ["Maze Style", 25], ["CRT Effect", 26], ["sfx volume", 27]].forEach((r) => print(r[0], 3, r[1]));
+      // labels follow the menu's own rows (web edition: some rows can go, e.g. CRT Effect is the C key)
+      const AV_LABELS = { background: "Background", mazeColor: "Maze Style", crtEffect: "CRT Effect", volume: "sfx volume" };
+      for (const it of core.optMenu) if (AV_LABELS[it.key]) print(AV_LABELS[it.key], 3, it.y);
       drawMenu(core.optMenu, 18, 5, 1);
       const mc = g.config.mazeColor;
       if (mc > 0 && mc < 99) drawSpriteAtTile("spr8", mc + 2, 21, 25);
@@ -719,9 +721,38 @@
     const hourAngle = () => { const d = new Date(); return ((d.getHours() % 12) + d.getMinutes() / 60) / 12 * 2 * Math.PI; };
     const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
     const pU = mk(HDR + `
-      uniform sampler2D bezTex; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle; // frame: the screen's rect in the canvas (uv)
+      uniform sampler2D bezTex; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
+      // web edition: the C key's third look, a ratty old living-room TV on an RF cable. Brightness stays fairly sharp,
+      // colour smears sideways and drifts (composite video), a ghost trails to the right, crawling interference,
+      // a torn tracking band drifting down (no vertical-hold jumps or rolls: tried, too cheesy)
+      vec3 rfTV(vec2 uv){
+        float px = 2.0 / 448.0;                                           // one game pixel in the source texture
+        // glitches, each a dice roll per tick: a torn block of lines yanked sideways, the colour cutting out
+        float gt = floor(time * 9.0);
+        float blk = step(0.86, hash(vec2(gt, 3.1))) * step(abs(uv.y - hash(vec2(gt, 7.7))), 0.008 + 0.05 * hash(vec2(gt, 9.3)));
+        uv.x += blk * (hash(vec2(gt, 1.3)) - 0.5) * 0.14;
+        float killer = step(0.92, hash(vec2(floor(time * 2.5), 5.5)));    // colour killer: black and white for a moment
+        float line = floor(uv.y * 288.0);
+        uv.x += sin(uv.y * 37.0 + time * 2.3) * 0.0012 + (hash(vec2(line, floor(time * 24.0))) - 0.5) * 0.0016;
+        float band = fract(time * 0.06) * 1.3 - 0.15, inBand = 1.0 - smoothstep(0.0, 0.018, abs(uv.y - band));
+        uv.x += inBand * (0.008 + 0.01 * hash(vec2(line, floor(time * 30.0))));      // tracking: a torn band
+        vec3 soft = vec3(0.0), chroma = vec3(0.0); float ws = 0.0, wc = 0.0;
+        for (int i = -2; i <= 2; i++) { float f = float(i), w = exp(-f * f / 2.5); soft += texture2D(tex, uv + vec2(f * px * 0.5, 0.0)).rgb * w; ws += w; }
+        for (int i = -2; i <= 6; i++) { float f = float(i), w = exp(-(f - 1.5) * (f - 1.5) / 7.0); chroma += texture2D(tex, uv - vec2(f * px * 0.6, 0.0)).rgb * w; wc += w; }
+        soft /= ws; chroma /= wc;
+        float Y = dot(soft, vec3(0.299, 0.587, 0.114));
+        vec2 iq = vec2(dot(chroma, vec3(0.596, -0.274, -0.322)), dot(chroma, vec3(0.211, -0.523, 0.312)));
+        float hue = 0.22 * sin(time * 0.37) + 0.08 * sin(time * 1.9);   // the colour won't sit still
+        iq = mat2(cos(hue), -sin(hue), sin(hue), cos(hue)) * iq * 1.7 * (1.0 - killer) * (1.0 + 0.8 * blk);
+        vec3 c = vec3(Y + 0.956 * iq.x + 0.621 * iq.y, Y - 0.272 * iq.x - 0.647 * iq.y, Y - 1.106 * iq.x + 1.703 * iq.y);
+        c += texture2D(tex, uv - vec2(px * 3.0, 0.0)).rgb * 0.2 + texture2D(tex, uv - vec2(px * 7.0, 0.0)).rgb * 0.07; // RF ghosts
+        vec2 sp = floor(gl_FragCoord.xy / max(dpr, 1.0));
+        c += 0.045 * sin(sp.x * 0.35 + sp.y * 0.9 - time * 23.0);         // crawling interference
+        c *= 0.68;   // a touch dimmer than the arcade CRT, so colours don't blow out (no snow: tried, removed)
+        return max(c, 0.0);
+      }
       vec3 samp(vec2 uv, vec2 off){
         float dx = 1.0 / 448.0;
         vec3 a = texture2D(tex, uv + off + vec2(-dx, 0.0)).rgb;
@@ -744,18 +775,19 @@
           // RGB convergence error grows toward the edges
           float rim = smoothstep(-0.25, 0.0, d);          // 0 in the middle, 1 at the glass edge
           vec2 ca = q * (0.003 + 0.002 * rim);
-          c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b;
+          if (tv > 0.5) c = rfTV(uv);
+          else { c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b; }
           // scanlines: bright beams widen and fill the gap, dim ones leave dark lines
           float lum = dot(c, vec3(0.299, 0.587, 0.114));
           float v = fract(uv.y * 288.0);
           float w = mix(0.22, 0.62, clamp(lum * 1.2, 0.0, 1.0));
           float prof = exp(-pow((v - 0.5) / w, 2.0) * 1.7);
-          c *= 0.12 + 1.05 * prof;
+          c *= tv > 0.5 ? 0.5 + 0.62 * prof : 0.12 + 1.05 * prof;   // the TV's lines are gentler
           // aperture grille triads (in css px)
           float px = floor(gl_FragCoord.x / max(dpr, 1.0));
           float t3 = mod(px, 3.0);
           vec3 m = vec3(step(abs(t3 - 0.0), 0.5), step(abs(t3 - 1.0), 0.5), step(abs(t3 - 2.0), 0.5));
-          c *= 0.62 + 0.62 * m;
+          c *= tv > 0.5 ? 0.86 + 0.2 * m : 0.62 + 0.62 * m;
           // vignette + brightness
           float vg = 1.0 - 0.55 * pow(length(q * vec2(0.82, 0.74)), 2.6);
           c *= clamp(vg, 0.0, 1.0) * 1.4;
@@ -809,7 +841,7 @@
 
     // the bezel's static look (base colour, grain, rim highlight), drawn once per resize into Z; pU reads it back
     const pZ = mk(HDR + `
-      uniform vec4 frame; uniform float dpr;
+      uniform vec4 frame; uniform float dpr, tv;
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
       void main(){
@@ -818,7 +850,9 @@
         q *= ${CRT_ZOOM.toFixed(3)};
         q += (q.yx * q.yx) * q * vec2(0.04, 0.055);
         float d = sdBox(q, vec2(1.0), 0.06);
-        vec3 bez = vec3(0.11, 0.1, 0.086) * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
+        // the CRT's dark plastic; the ratty TV's (C key) is the same, just light grey
+        vec3 col = tv > 0.5 ? vec3(0.46, 0.46, 0.45) : vec3(0.11, 0.1, 0.086);
+        vec3 bez = col * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
         bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));
         gl_FragColor = vec4(bez, 1.0);
       }`);
@@ -861,7 +895,8 @@
         [A, Z, B1, B2, ...(PH || [])].forEach((T) => { if (T) { gl.deleteTexture(T.t); gl.deleteFramebuffer(T.f); } });
         A = mkTarget(w, h); Z = mkTarget(W, H); B1 = mkTarget(BW, BH); B2 = mkTarget(BW, BH); PH = [mkTarget(448, 576), mkTarget(448, 576)];
         zmap = [w / W, h / H, ox / W, oy / H];
-        pass(pZ, Z, (p) => { gl.uniform4f(p.u("frame"), (fr[0] * w + ox) / W, (fr[1] * h + oy) / H, fr[2] * w / W, fr[3] * h / H); gl.uniform1f(p.u("dpr"), dpr); });
+        pass(pZ, Z, (p) => { gl.uniform4f(p.u("frame"), (fr[0] * w + ox) / W, (fr[1] * h + oy) / H, fr[2] * w / W, fr[3] * h / H); gl.uniform1f(p.u("dpr"), dpr);
+          gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); });
         let bg = null;
         if (win) {
           const G = mkTarget(W, H);
@@ -886,7 +921,7 @@
           const nxt = 1 - ph;
           pass(pH, PH[nxt], (p) => gl.uniform1f(p.u("decay"), 0.58), srcTex, PH[ph].t);
           ph = nxt;
-          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); }, PH[ph].t, Z.t);
+          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); }, PH[ph].t, Z.t);
           pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), 0.72), A.t);
           pass(pB, B2, (p) => { gl.uniform2f(p.u("dir"), 1 / BW, 0); gl.uniform1f(p.u("sigma"), 3.5); }, B1.t);
           pass(pB, B1, (p) => { gl.uniform2f(p.u("dir"), 0, 1 / BH); gl.uniform1f(p.u("sigma"), 3.5); }, B2.t);

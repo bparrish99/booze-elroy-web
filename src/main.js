@@ -118,7 +118,18 @@
       mina: { scenes: CHEAT_SCENES, run() { const from = core.g.scene.name; core.setScene("mina", from); } },
       reset: { scenes: CHEAT_SCENES, run() { openReset(); } }, // admin: reset high scores (asks for the password)
       delete: { scenes: ["arena"], run() { openReset("arena"); } }, // admin: delete the arena on screen (asks for the password)
+      xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // a small frame-rate readout, bottom right
     };
+    // the frame-rate readout: off by default, remembered; counted in the frame loop, shown twice a second
+    const fpsEl = document.getElementById("fps");
+    let fpsOn = false, fpsFrames = 0, fpsAt = 0;
+    try { fpsOn = localStorage.getItem("booze-elroy-fps") === "1"; } catch { /* ignore */ }
+    function toggleFps() {
+      fpsOn = !fpsOn; fpsFrames = 0; fpsAt = performance.now(); fpsEl.textContent = "";
+      try { localStorage.setItem("booze-elroy-fps", fpsOn ? "1" : "0"); } catch { /* ignore */ }
+      fpsEl.classList.toggle("on", fpsOn);
+    }
+    fpsEl.classList.toggle("on", fpsOn);
     let typed = "";
     function cheatKey(e) {
       const sc = core.g.scene.name;
@@ -129,10 +140,10 @@
     }
 
     const core = BoozeCore.create(A.data, {
-      noExit: true, noAutoplay: true, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), quitGameTo: () => (LB.inArena() ? "arena" : null),
+      noExit: true, noAutoplay: true, crtKey: true, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
+      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => LB.saveBest(s),
-      saveConfig: (c) => { if (LB.inArena()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
+      saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
       shareConfig,
       setFullscreen: (on) => { try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ } },
@@ -154,14 +165,14 @@
     // scr = the screen's rect inside the canvas, in css px
     const MARGIN = 1.163;
     const bezelCanvas = document.getElementById("bezel");
-    let scr = { x: 0, y: 0, w: 1, h: 1 }, fullBezel = false;
+    let scr = { x: 0, y: 0, w: 1, h: 1 }, fullBezel = false, fitLook = null;
     const wantsFullBezel = () => !!(P.webgl && core.g.config && core.g.config.crtEffect);
     function fit() {
       const dpr = window.devicePixelRatio || 1;
       const st = document.getElementById("stage"); const availH = st.clientHeight, availW = st.clientWidth;
       const scale = Math.min(availH / 288, availW / 224);
       const cssW = Math.floor(224 * scale), cssH = Math.floor(288 * scale);
-      fullBezel = wantsFullBezel();
+      fullBezel = wantsFullBezel(); fitLook = core.g.config && core.g.config.crtEffect; // the bezel is baked per look
       const cw = fullBezel ? Math.min(availW, Math.round(cssW * MARGIN)) : cssW, chh = fullBezel ? Math.min(availH, Math.round(cssH * MARGIN)) : cssH;
       const left = Math.round((availW - cw) / 2), top = Math.round((availH - chh) / 2);
       canvas.style.width = cw + "px"; canvas.style.height = chh + "px";
@@ -348,6 +359,16 @@
       document.addEventListener("webkitfullscreenchange", syncFsButton);
       window.addEventListener("keydown", (e) => { if (!resetOpen() && core.g.scene.name !== "nameEntry" && e.code === "KeyF" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFullscreen(); } });
     }
+    // C cycles the look: CRT (true, the default) -> plain (false) -> 1982 living-room TV ("tv") -> CRT. Not an option on
+    // the Options page (env.crtKey); anywhere but name entry; saved at once, into the player's own settings even while
+    // an arena's / leaderboard's are borrowed
+    window.addEventListener("keydown", (e) => {
+      if (resetOpen() || core.g.scene.name === "nameEntry" || e.code !== "KeyC" || e.ctrlKey || e.metaKey || e.altKey) return;
+      e.preventDefault();
+      const crt = core.g.config.crtEffect;
+      core.g.config.crtEffect = crt === "tv" ? true : crt ? false : "tv";
+      try { localStorage.setItem("booze-elroy-options", JSON.stringify({ ...LB.ownSettings(), crtEffect: core.g.config.crtEffect })); } catch { /* ignore */ }
+    });
     // touch devices have no Esc key: a small button leaves the game / autoplay / sub-screens
     const escBtn = document.getElementById("esc");
     escBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
@@ -386,8 +407,12 @@
       if (!resetOpen()) pollPad();
       while (acc >= step) { core.update(); acc -= step; }
       LB.tick();
-      if (wantsFullBezel() !== fullBezel) fit();
+      if (wantsFullBezel() !== fullBezel || (core.g.config && core.g.config.crtEffect) !== fitLook) fit();
       R.draw(); P.present();
+      if (fpsOn) {
+        fpsFrames += 1;
+        if (now - fpsAt >= 500) { if (fpsAt) fpsEl.textContent = Math.round(fpsFrames * 1000 / (now - fpsAt)) + " fps"; fpsFrames = 0; fpsAt = now; }
+      }
       escBtn.classList.toggle("on", core.g.scene.name !== "attract");
       requestAnimationFrame(frame);
     }

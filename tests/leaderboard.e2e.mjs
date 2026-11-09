@@ -27,7 +27,28 @@ try {
   check(await until("g.highScore === 5000 && g.highScoreName === 'PINBACK'"), "title header shows the online leader for the default settings");
   await shot("1-title");
   check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Options,Leaderboards", "main menu: Play 1P, Arena, Options, Leaderboards");
-  check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Restore Defaults,Share Config,Credits,Back", "Options: Restore Defaults, Share Config, Credits, Back");
+  // C cycles CRT (default) -> plain -> ratty old TV (not on the Options page), saved at once
+  check(await g("g.config.crtEffect === true"), "CRT is on by default");
+  await p.keyboard.press("c");
+  check(await ev(() => window.__core.g.config.crtEffect === false && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === false), "C turns it off, and that's saved");
+  await p.keyboard.press("c");
+  check(await ev(() => window.__core.g.config.crtEffect === "tv" && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === "tv"), "C again: the ratty old TV");
+  await p.keyboard.press("c");
+  check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "and once more: back to the CRT");
+  check(await ev(() => !window.__core.optMenu.some((i) => i.key === "crtEffect") && window.__core.optMenu.find((i) => i.key === "volume").y === 26), "no CRT row on the Options page (sfx volume moved up)");
+  // cheat "xyzzy": a small frame-rate readout, off by default
+  check(await ev(() => !document.getElementById("fps").classList.contains("on")), "fps readout is off by default");
+  await p.keyboard.type("xyzzy"); await p.waitForTimeout(1300);
+  check(await ev(() => { const e = document.getElementById("fps"); return e.classList.contains("on") && / fps$/.test(e.textContent) && window.__core.g.scene.name === "attract"; }), "typing xyzzy shows it (" + await ev(() => document.getElementById("fps").textContent) + "), still on the title");
+  await p.keyboard.type("xyzzy"); await p.waitForTimeout(400);
+  check(await ev(() => !document.getElementById("fps").classList.contains("on") && localStorage.getItem("booze-elroy-fps") === "0"), "typing it again hides it");
+  check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Restore Defaults,Share Config,Create Arena,Credits,Back", "Options: Restore Defaults, Share Config, Create Arena, Credits, Back");
+  await ev(() => { const c = window.__core; c.setScene("options"); c.g.config.ghostCount = 2; c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Create Arena") + 1; });
+  await p.keyboard.press("Enter");
+  check(await g("g.scene.name === 'nameEntry' && g.scene.mode === 'createArena' && g.scene.summary(26).join() === 'ghosts 2'"), "Options > Create Arena names an arena with the current settings");
+  await p.keyboard.press("Escape");
+  check(await g("g.scene.name === 'options'"), "Esc there goes back to Options");
+  await ev(() => { window.__core.g.config.ghostCount = 4; });
   await ev(() => { const c = window.__core; c.setScene("options"); c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Credits") + 1; });
   await p.keyboard.press("Enter");
   check(await g("g.scene.name === 'credits'"), "Options > Credits opens the credits");
@@ -43,8 +64,8 @@ try {
   for (let i = 0; i < 3; i++) await p.keyboard.press("ArrowDown");
   await p.keyboard.press("Enter");
   check(await until("g.scene.name === 'leaderboard' && g.scene.board().entries.length === 1"), "leaderboard page lists the board");
-  check(await ev(() => window.__core.g.scene.menu.map((i) => i.text).join(",")) === "Share Config,Back", "leaderboard page has Share Config and Back");
-  await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+  check(await ev(() => window.__core.g.scene.menu.map((i) => i.text).join(",")) === "Play 1P,Share Config,Back", "leaderboard page has Play 1P, Share Config and Back");
+  await p.keyboard.press("ArrowDown"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
   check(await g("g.scene.name === 'leaderboard' && !!g.toast"), "Share Config on the leaderboard copies (or tries to)");
   await p.keyboard.press("ArrowDown");
   check(await ev(() => { const m = window.__core.g.scene.menu; return m[m.selectedItem - 1].text; }) === "Back", "down moves to Back");
@@ -64,6 +85,35 @@ try {
   check(await g("g.config.mazepack === 'pac'"), "flipping doesn't change the player's settings");
   await p.keyboard.press("Escape");
   check(await until("g.scene.name === 'attract'"), "Esc returns to the title");
+
+  // PLAY 1P on the Leaderboards page: a game with the board's settings (own starting level), for that game only
+  const MSPAC = "mspac.0.f.f.f.3.1.f.0.4.t.f.f";
+  await ev(() => { const c = window.__core; c.g.config.startingLevel = 3; c.setScene("leaderboard"); });
+  await p.keyboard.press("ArrowRight");
+  check(await until(`g.scene.key === '${MSPAC}'`), "on the mspac board");
+  check(await ev(() => { const m = window.__core.g.scene.menu; return m[m.selectedItem - 1].text; }) === "Play 1P", "PLAY 1P is selected first");
+  await p.keyboard.press("Enter");
+  check(await until("g.scene.name === 'game' && g.mode === 'normal' && g.config.mazepack === 'mspac' && g.config.startingLevel === 3", 12000), "PLAY 1P: a game with that board's settings, own starting level");
+  await p.keyboard.press("c"); // CRT toggled while the settings are borrowed: kept and saved as the player's own
+  await p.keyboard.press("Escape");
+  check(await until(`g.scene.name === 'leaderboard' && g.scene.key === '${MSPAC}' && g.config.mazepack === 'mspac'`), "Esc mid-game: back on that board");
+  check(await ev(() => { const s = JSON.parse(localStorage.getItem("booze-elroy-options") || "null"); return !s || s.mazepack !== "mspac"; }), "the borrowed settings are never saved");
+  await p.keyboard.press("Enter");
+  check(await until("g.scene.name === 'game' && g.mode === 'normal'", 12000), "PLAY 1P again");
+  await ev(() => { const c = window.__core; c.g.score = 0; c.mode.setMode("gameover"); });
+  check(await until(`g.scene.name === 'leaderboard' && g.scene.key === '${MSPAC}'`, 12000), "a game over that doesn't place comes back to the board");
+  await ev(() => { window.__core.g.scene.menu.selectedItem = 1; }); await p.keyboard.press("Enter");
+  check(await until("g.scene.name === 'game' && g.mode === 'normal'", 12000), "and once more");
+  await ev(() => { const c = window.__core; c.g.score = 1000; c.mode.setMode("gameover"); });
+  check(await until("g.scene.name === 'nameEntry' && g.scene.place === 1", 12000), "a placing score asks for a name");
+  await ev(() => { window.__core.g.scene.entry = "BORROWER"; window.__core.g.scene.submit(); });
+  check(await until(`g.scene.name === 'leaderboard' && g.scene.key === '${MSPAC}' && g.scene.highlight === 1`), "and lands on that board, highlighted");
+  check((await api("?board=" + MSPAC)).entries[0].name === "BORROWER", "server: the score went on the mspac board");
+  await p.keyboard.press("Escape");
+  check(await until("g.scene.name === 'attract' && g.config.mazepack === 'pac' && g.config.startingLevel === 3"), "leaving the leaderboard gives the player's own settings back");
+  check(await ev(() => { const s = JSON.parse(localStorage.getItem("booze-elroy-options")); return window.__core.g.config.crtEffect === false && s.crtEffect === false && s.mazepack === "pac"; }), "except the CRT toggled with C meanwhile, which stays (and was saved with the own settings)");
+  await ev(() => { window.__core.g.config.crtEffect = true; });
+  await ev(() => { window.__core.g.config.startingLevel = 1; localStorage.removeItem("booze-elroy-name"); }); // name entry below starts blank
 
   // Restore Defaults: gameplay options reset, Audio/Video ones stay
   await ev(() => { const c = window.__core; c.setScene("options"); Object.assign(c.g.config, { ghostCount: 2, crtEffect: false, volume: 9, background: "stars", mazeColor: 5 }); c.optMenu.find((i) => i.text === "Restore Defaults").action(); });

@@ -57,7 +57,7 @@ try {
   const list = await api("/api/arenas");
   check(list.arenas.length === 1 && list.arenas[0].board === SIX, "server has it, with the creator's settings");
   const id = list.arenas[0].id;
-  check(await g("g.scene.menu.map((i) => i.text).join() === 'Play,Share Arena,Back'"), "arena page: Play, Share Arena, Back");
+  check(await g("g.scene.menu.map((i) => i.text).join() === 'Play 1P,Share Arena,Back'"), "arena page: Play 1P, Share Arena, Back");
   await shot("a4-arena");
 
   // Share Arena: the link opens this arena's page for someone else
@@ -96,7 +96,7 @@ try {
   await ev(() => { const c = window.__core.g.config; c.ghostCount = 3; c.startingLevel = 5; });
   await choose("SUNDAY CUP");
   check(await until("g.scene.name === 'arena'"), "picking it opens it");
-  await choose("Play");
+  await choose("Play 1P");
   await gameOver(6000);
   check(await g("g.config.ghostCount === 6 && g.config.startingLevel === 1 && g.config.volume === 2"), "the game used the arena's settings, level 1, own volume");
   check(await until("g.scene.name === 'nameEntry' && g.scene.arenaId"), "a placing score asks for a name");
@@ -111,7 +111,7 @@ try {
   await shot("a7-arena-after");
 
   // a lower score that only places in the arena
-  await choose("Play");
+  await choose("Play 1P");
   await gameOver(100);
   check(await until("g.scene.name === 'nameEntry'"), "second score places too");
   await ev(() => { window.__core.g.scene.entry = "LOW"; window.__core.g.scene.submit(); });
@@ -128,15 +128,15 @@ try {
 
   // quitting an arena game (Esc or the X button) goes back to that arena, still on its settings; leaving it gives them back
   await choose("SUNDAY CUP"); await until("g.scene.name === 'arena'");
-  await choose("Play");
+  await choose("Play 1P");
   check(await until("g.scene.name === 'game' && g.mode === 'normal'", 12000), "game starts");
   await p.keyboard.press("Escape");
   check(await until("g.scene.name === 'arena' && g.scene.title() === 'SUNDAY CUP' && g.config.ghostCount === 6"), "Esc mid-game: back on the arena, still its settings");
-  await choose("Play");
+  await choose("Play 1P");
   check(await until("g.scene.name === 'game' && g.sounds.opening.isPlaying()"), "the opening jingle plays");
   await p.keyboard.press("Escape");
   check(await until("g.scene.name === 'arena' && !Object.values(g.sounds).some((s) => s.isPlaying())"), "Esc during it: back on the arena, jingle cut off");
-  await choose("Play");
+  await choose("Play 1P");
   check(await until("g.scene.name === 'game' && g.mode === 'normal'", 12000), "game starts again");
   await p.click("#esc");
   check(await until("g.scene.name === 'arena' && g.scene.title() === 'SUNDAY CUP'"), "the X button does the same");

@@ -1716,9 +1716,13 @@
     // Share Config takes its row
     if (env.scenes) optMenu.splice(optMenu.findIndex((it) => it.text === "Reset High Score"), 1);
     if (env.shareConfig) optMenu.splice(optMenu.length - 1, 0, shareItem(6, 30));
+    // web edition: the CRT effect is the C key (env.crtKey), not an option; sfx volume moves up into its row
+    if (env.crtKey) { optMenu.splice(optMenu.findIndex((it) => it.key === "crtEffect"), 1); optMenu.find((it) => it.key === "volume").y = 26; }
+    // web edition: Create Arena (an arena with the current settings) under Share Config
+    if (env.createArena) optMenu.splice(optMenu.length - 1, 0, { text: "Create Arena", x: 6, y: 31, action() { env.createArena(); } });
     if (env.creditsInOptions) {
-      optMenu.splice(optMenu.length - 1, 0, { text: "Credits", x: 6, y: 31, action() { setScene("credits", "options"); } });
-      optMenu[optMenu.length - 1].y = 33; // Back
+      optMenu.splice(optMenu.length - 1, 0, { text: "Credits", x: 6, y: env.createArena ? 32 : 31, action() { setScene("credits", "options"); } });
+      optMenu[optMenu.length - 1].y = env.createArena ? 34 : 33; // Back
     }
     // web edition: plain menu items (not option values) centred on the 28-column screen
     if (env.centerMenus) for (const m of [menus.main, optMenu]) for (const it of m) if (it.text && !it.options) it.x = 14 - it.text.length / 2;
