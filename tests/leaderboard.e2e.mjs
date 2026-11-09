@@ -35,7 +35,7 @@ try {
   check(await g("g.scene.name === 'options' && window.__core.optMenu[window.__core.optMenu.selectedItem - 1].text === 'Credits'"), "Esc from those credits goes back to Options");
   await ev(() => window.__core.setScene("attract"));
   await p.waitForTimeout(300);
-  await p.mouse.click(336, 845); // "web edition", bottom row (3x scale)
+  await p.mouse.click(336, 822); // "web edition", bottom row (3x scale, inside the bezel)
   check(await g("g.scene.name === 'credits'"), "clicking WEB EDITION on the title opens the credits");
   await p.keyboard.press("Escape");
   check(await g("g.scene.name === 'attract'"), "and Esc goes back to the title");

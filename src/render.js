@@ -704,6 +704,7 @@
       void main(){ vec3 s = texture2D(tex, vuv).rgb; vec3 p = texture2D(prev, vuv).rgb * decay; gl_FragColor = vec4(max(s, p), 1.0); }`);
     // the MAX CRT: heavy barrel, rounded glass, RGB convergence error, horizontal bleed, beam-width scanlines,
     // aperture-grille triads, vignette, mains flicker, rolling hum bar, tracking glitches, static grain, glass glare, plastic bezel
+    const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
     const pU = mk(HDR + `
       uniform vec2 res; uniform float time, dpr;
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
@@ -717,7 +718,7 @@
       }
       void main(){
         vec2 q = vuv * 2.0 - 1.0;
-        q *= 1.035;
+        q *= ${CRT_ZOOM.toFixed(3)}; // > 1: the glass is smaller than the canvas, leaving a bezel round it
         q += (q.yx * q.yx) * q * vec2(0.04, 0.055);
         float d = sdBox(q, vec2(1.0), 0.06);
         float inside = 1.0 - smoothstep(-0.004, 0.012, d);
@@ -768,6 +769,22 @@
         c += vec3(0.9, 0.94, 1.0) * 0.09 * spec;
         // plastic bezel outside the glass
         vec3 bez = vec3(0.075, 0.068, 0.058) * (0.55 + 0.6 * vuv.y) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
+        // glossy bezel: a soft, fading mirror image of the screen's edge, folded back across the rim
+        if (d > 0.0) {
+          vec2 e = max(abs(q) - vec2(0.94), 0.0);
+          vec2 nrm = sign(q) * (length(e) > 0.0 ? normalize(e) : vec2(0.0));
+          vec2 ruv = (q - nrm * (2.0 * d + 0.01) + 1.0) * 0.5;
+          float side = abs(nrm.x);                              // 1 on the left/right rims, 0 top/bottom
+          vec2 tg = vec2(-nrm.y, nrm.x) * (0.004 + 0.06 * d) * (2.2 - 1.2 * side); // blur along the rim; more top/bottom
+          vec2 nb = nrm * (0.003 + 0.04 * d);
+          vec3 r = texture2D(tex, ruv).rgb * 0.28
+                 + (texture2D(tex, ruv + tg).rgb + texture2D(tex, ruv - tg).rgb) * 0.2
+                 + (texture2D(tex, ruv + tg * 2.0).rgb + texture2D(tex, ruv - tg * 2.0).rgb) * 0.1
+                 + texture2D(tex, ruv - nb).rgb * 0.12;
+          // a dark gap at the rim, then a fade; top/bottom much fainter (text rows sit right against the glass there)
+          float fall = exp(-d / 0.035) * smoothstep(0.008, 0.02, d);
+          bez += r * vec3(0.95, 0.92, 0.88) * 0.42 * fall * (0.3 + 0.7 * side);
+        }
         bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));
         gl_FragColor = vec4(mix(bez, c, inside), 1.0);
       }`);
@@ -796,7 +813,7 @@
     };
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     const api = {
-      webgl: true, ultra: true,
+      webgl: true, ultra: true, zoom: CRT_ZOOM,
       resize(w, h, cssHeight) {
         canvas.width = w; canvas.height = h; cw = w; ch = h; cssH = cssHeight || h; dpr = h / cssH;
         A = mkTarget(w, h); B1 = mkTarget(BW, BH); B2 = mkTarget(BW, BH); PH = [mkTarget(BW, BH), mkTarget(BW, BH)];

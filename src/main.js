@@ -224,7 +224,7 @@
       let sx = ux, sy = uy;
       if (core.g.config.crtEffect) {
         let qx = ux * 2 - 1, qy = uy * 2 - 1;
-        if (P.ultra) { qx *= 1.035; qy *= 1.035; }
+        if (P.ultra) { const z = P.zoom || 1.035; qx *= z; qy *= z; }
         const kx = P.ultra ? 0.04 : 0.03, ky = P.ultra ? 0.055 : 0.04;
         const nx = qx + qy * qy * qx * kx, ny = qy + qx * qx * qy * ky;
         sx = (nx + 1) / 2; sy = (ny + 1) / 2;
