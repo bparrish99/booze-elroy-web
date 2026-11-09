@@ -729,13 +729,9 @@
       // a torn tracking band drifting down (no vertical-hold jumps or rolls: tried, too cheesy)
       vec3 rfTV(vec2 uv){
         float px = 2.0 / 448.0;                                           // one game pixel in the source texture
-        // glitches, each a dice roll per tick: a torn block of lines yanked sideways, the colour cutting out
-        float gt = floor(time * 9.0);
-        float blk = step(0.86, hash(vec2(gt, 3.1))) * step(abs(uv.y - hash(vec2(gt, 7.7))), 0.008 + 0.05 * hash(vec2(gt, 9.3)));
-        uv.x += blk * (hash(vec2(gt, 1.3)) - 0.5) * 0.14;
-        float killer = step(0.92, hash(vec2(floor(time * 2.5), 5.5)));    // colour killer: black and white for a moment
+        // (calm on purpose: random block tears, colour cut-outs and per-line jitter were tried and were too spastic)
         float line = floor(uv.y * 288.0);
-        uv.x += sin(uv.y * 37.0 + time * 2.3) * 0.0012 + (hash(vec2(line, floor(time * 24.0))) - 0.5) * 0.0016;
+        uv.x += sin(uv.y * 37.0 + time * 2.3) * 0.0012;                     // a gentle wave
         float band = fract(time * 0.06) * 1.3 - 0.15, inBand = 1.0 - smoothstep(0.0, 0.018, abs(uv.y - band));
         uv.x += inBand * (0.008 + 0.01 * hash(vec2(line, floor(time * 30.0))));      // tracking: a torn band
         vec3 soft = vec3(0.0), chroma = vec3(0.0); float ws = 0.0, wc = 0.0;
@@ -744,12 +740,12 @@
         soft /= ws; chroma /= wc;
         float Y = dot(soft, vec3(0.299, 0.587, 0.114));
         vec2 iq = vec2(dot(chroma, vec3(0.596, -0.274, -0.322)), dot(chroma, vec3(0.211, -0.523, 0.312)));
-        float hue = 0.22 * sin(time * 0.37) + 0.08 * sin(time * 1.9);   // the colour won't sit still
-        iq = mat2(cos(hue), -sin(hue), sin(hue), cos(hue)) * iq * 1.7 * (1.0 - killer) * (1.0 + 0.8 * blk);
+        float hue = 0.22 * sin(time * 0.37);                              // the colour drifts, slowly
+        iq = mat2(cos(hue), -sin(hue), sin(hue), cos(hue)) * iq * 1.7;
         vec3 c = vec3(Y + 0.956 * iq.x + 0.621 * iq.y, Y - 0.272 * iq.x - 0.647 * iq.y, Y - 1.106 * iq.x + 1.703 * iq.y);
         c += texture2D(tex, uv - vec2(px * 3.0, 0.0)).rgb * 0.2 + texture2D(tex, uv - vec2(px * 7.0, 0.0)).rgb * 0.07; // RF ghosts
         vec2 sp = floor(gl_FragCoord.xy / max(dpr, 1.0));
-        c += 0.045 * sin(sp.x * 0.35 + sp.y * 0.9 - time * 23.0);         // crawling interference
+        c += 0.025 * sin(sp.x * 0.35 + sp.y * 0.9 - time * 6.0);          // faint, slow interference
         c *= 0.68;   // a touch dimmer than the arcade CRT, so colours don't blow out (no snow: tried, removed)
         return max(c, 0.0);
       }
@@ -850,8 +846,8 @@
         q *= ${CRT_ZOOM.toFixed(3)};
         q += (q.yx * q.yx) * q * vec2(0.04, 0.055);
         float d = sdBox(q, vec2(1.0), 0.06);
-        // the CRT's dark plastic; the ratty TV's (C key) is the same, just light grey
-        vec3 col = tv > 0.5 ? vec3(0.46, 0.46, 0.45) : vec3(0.11, 0.1, 0.086);
+        // the CRT's dark plastic; the ratty TV's (C key) is the same, just dark brown
+        vec3 col = tv > 0.5 ? vec3(0.2, 0.12, 0.065) : vec3(0.11, 0.1, 0.086); // TV: 1982 wood-panelling brown
         vec3 bez = col * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
         bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));
         gl_FragColor = vec4(bez, 1.0);
