@@ -725,7 +725,8 @@
         float ty = 1.0 - uv.y;
         float tick = floor(time * 7.0);
         // RGB convergence error grows toward the edges
-        vec2 ca = q * 0.003;
+        float rim = smoothstep(-0.25, 0.0, d);          // 0 in the middle, 1 at the glass edge
+        vec2 ca = q * (0.003 + 0.002 * rim);
         vec3 c;
         c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b;
         // scanlines: bright beams widen and fill the gap, dim ones leave dark lines
@@ -749,11 +750,22 @@
         // static grain + sparse bright speckles
         float n = hash(gl_FragCoord.xy + fract(time) * 91.7);
         c += (n - 0.5) * 0.075;
-        // glass: glare at the top-left, faint dust streak, darkening near the rim
-        float gl1 = exp(-pow(length((vuv - vec2(0.2, 0.84)) * vec2(1.0, 1.25)) / 0.30, 2.0));
-        float gl2 = exp(-pow((vuv.x * 0.9 + vuv.y * 0.55 - 0.78) / 0.05, 2.0)) * 0.5;
+        // glass: glare at the top-right (web edition: moved off the 1UP score), faint dust streak, darkening near the rim
+        float gl1 = exp(-pow(length((vuv - vec2(0.8, 0.84)) * vec2(1.0, 1.25)) / 0.30, 2.0));
+        float gl2 = exp(-pow(((1.0 - vuv.x) * 0.9 + vuv.y * 0.55 - 0.78) / 0.05, 2.0)) * 0.5;
         c += vec3(0.85, 0.9, 1.0) * (0.06 * gl1 + 0.018 * gl2);
         c *= 0.62 + 0.38 * smoothstep(-0.16, 0.0, -d);
+        // glassy: a thick curved faceplate in front of the tube
+        //   broad sheen from a room light, brightest up top and fading down the bulge
+        float sheen = smoothstep(-0.1, 1.0, q.y * 0.85 + q.x * 0.35 + 0.15 * (1.0 - dot(q, q)));
+        c += vec3(0.78, 0.84, 1.0) * 0.045 * sheen * sheen;
+        //   a soft window-shaped reflection with a crisp lower edge, upper right
+        vec2 wq = (vuv - vec2(0.73, 0.8)) * vec2(1.0, 1.6);
+        float win = (1.0 - smoothstep(0.17, 0.2, length(wq))) * smoothstep(-0.12, 0.1, wq.y);
+        c += vec3(0.8, 0.86, 1.0) * 0.035 * win;
+        //   small, soft specular point
+        float spec = exp(-pow(length((vuv - vec2(0.845, 0.9)) * vec2(1.0, 1.35)) / 0.045, 2.0));
+        c += vec3(0.9, 0.94, 1.0) * 0.09 * spec;
         // plastic bezel outside the glass
         vec3 bez = vec3(0.075, 0.068, 0.058) * (0.55 + 0.6 * vuv.y) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
         bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));

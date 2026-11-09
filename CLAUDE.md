@@ -3,8 +3,9 @@
 Pinback's Pac-Man variant "Booze Elroy" (original: Love2D/Lua, not in this repo). This repo is a faithful JS port, live at booze-elroy.com (Netlify, serves `public/`).
 
 ## Rules that matter
-- The original Lua is canon. `src/core.js` mirrors it 1:1 (Lua truthiness helper `T()`, pinned iteration orders). Do not "clean up" logic; behaviour must match the original.
-- Port-only deviations (approved by the author):
+- The game logic is canon: gameplay (movement, ghost AI, timing, scoring, levels, RNG calls) must match the original Lua exactly. `src/core.js` mirrors it 1:1 (Lua truthiness helper `T()`, pinned iteration orders). Do not "clean up" logic.
+- Everything around the game (menus, options UX, online features, presentation) is the web edition's own and can move on freely when the author asks; "the Lua did it differently" is not an objection there. Keep such changes in env hooks / leaderboard.js / main.js / render.js where possible, and list them below.
+- Deviations from the original (approved by the author):
   - `logic.eatOverlappingFrightened`: a second frightened ghost sharing Pac-Man's tile after an ateGhost pause is also eaten.
   - The `large` pack's nonexistent "mega1" maps to "large1" (the original crashes there, likely the cause of old autoplay nil-reference crashes).
   - Online leaderboard (src/leaderboard.js, src/scorekey.js, netlify/): "Leaderboards" main-menu item in the old Exit slot (opens on the current settings' board; left/right or prev/next flip through every board with scores, from GET /api/scores/boards, without touching the player's settings; Share Config there shares the board on show); name entry after a top-10 game over; HIGH SCORE in the header = best for the current gameplay settings (online leader's name scrolls through the HIGH SCORE field); no Reset item in Options: the cheat "reset" (typed on a menu screen) opens a password dialog that resets the online boards (current settings or all). core.js only has small `env` hooks for this (env.scenes, env.afterGameOver, captureInput); without them it behaves like the original.
