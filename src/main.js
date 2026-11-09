@@ -149,15 +149,33 @@
     const R = BoozeRender.createRenderer(core, { sprites: { spr16, spr8, text8 }, banner, backgrounds, video: videoEl });
     const canvas = document.getElementById("screen");
     const P = BoozeRender.createPresenter(canvas, R.screen, () => core.g.config);
+    // CRT on (WebGL): the bezel fills the window. The live canvas is only the screen plus a margin wide enough for the rim
+    // reflections to fade out; the rest of the bezel is a static image on #bezel behind it, drawn once per resize.
+    // scr = the screen's rect inside the canvas, in css px
+    const MARGIN = 1.163;
+    const bezelCanvas = document.getElementById("bezel");
+    let scr = { x: 0, y: 0, w: 1, h: 1 }, fullBezel = false;
+    const wantsFullBezel = () => !!(P.webgl && core.g.config && core.g.config.crtEffect);
     function fit() {
       const dpr = window.devicePixelRatio || 1;
       const st = document.getElementById("stage"); const availH = st.clientHeight, availW = st.clientWidth;
       const scale = Math.min(availH / 288, availW / 224);
       const cssW = Math.floor(224 * scale), cssH = Math.floor(288 * scale);
-      canvas.style.width = cssW + "px"; canvas.style.height = cssH + "px";
-      P.resize(Math.round(cssW * dpr), Math.round(cssH * dpr), cssH);
+      fullBezel = wantsFullBezel();
+      const cw = fullBezel ? Math.min(availW, Math.round(cssW * MARGIN)) : cssW, chh = fullBezel ? Math.min(availH, Math.round(cssH * MARGIN)) : cssH;
+      const left = Math.round((availW - cw) / 2), top = Math.round((availH - chh) / 2);
+      canvas.style.width = cw + "px"; canvas.style.height = chh + "px";
+      canvas.style.position = fullBezel ? "absolute" : ""; canvas.style.left = fullBezel ? left + "px" : ""; canvas.style.top = fullBezel ? top + "px" : "";
+      scr = { x: (cw - cssW) / 2, y: (chh - cssH) / 2, w: cssW, h: cssH };
+      const W = Math.round(availW * dpr), H = Math.round(availH * dpr);
+      const bg = P.resize(Math.round(cw * dpr), Math.round(chh * dpr), chh, { x: scr.x / cw, y: scr.y / chh, w: cssW / cw, h: cssH / chh },
+        fullBezel ? { w: W, h: H, x: Math.round(left * dpr), y: Math.round(top * dpr) } : null);
+      if (bg) { bezelCanvas.width = W; bezelCanvas.height = H; bezelCanvas.getContext("2d").putImageData(bg, 0, 0); }
+      bezelCanvas.style.display = bg ? "block" : "none";
     }
-    window.addEventListener("resize", fit); fit();
+    let fitQueued = false;
+    window.addEventListener("resize", () => { if (!fitQueued) { fitQueued = true; requestAnimationFrame(() => { fitQueued = false; fit(); }); } });
+    fit();
 
     core.init();
     // ?arena=<id>: a shared arena link opens that arena's page
@@ -220,7 +238,7 @@
     // mouse / touch for the menus (pointer position is mapped back through the CRT barrel distortion)
     function toGame(e) {
       const rc = canvas.getBoundingClientRect();
-      const ux = (e.clientX - rc.left) / rc.width, uy = 1 - (e.clientY - rc.top) / rc.height;
+      const ux = (e.clientX - rc.left - scr.x) / scr.w, uy = 1 - (e.clientY - rc.top - scr.y) / scr.h;
       let sx = ux, sy = uy;
       if (core.g.config.crtEffect) {
         let qx = ux * 2 - 1, qy = uy * 2 - 1;
@@ -244,10 +262,14 @@
     canvas.addEventListener("pointermove", (e) => {
       const row = rowAt(e);
       if (linkAt(e)) { canvas.style.cursor = "pointer"; return; }
-      canvas.style.cursor = row ? "pointer" : (core.g.scene.name === "game" ? "none" : "default");
+      canvas.style.cursor = row ? "pointer" : "default";
       if (row && row.menu.selectedItem !== row.index) { row.menu.selectedItem = row.index; core.g.sounds.wakka1.play(); }
     });
+    // easter egg: tapping the "OY" block on the maze plays oy.mp3 (doesn't swallow the tap); the attract demo mutes the game, so use the real volume
+    const oySnd = audio.makeSound("oy");
     canvas.addEventListener("pointerdown", (e) => {
+      { const B = R.oyBlock(), p = toGame(e);
+        if (B && p.x >= B.x0 && p.x < B.x1 && p.y >= B.y0 && p.y < B.y1) { audio.unlock(); oySnd.stop(); oySnd.setVolume((core.g.attract && core.g.originalVolume != null ? core.g.originalVolume : core.g.config.volume) / 10); oySnd.play(); } }
       if (gestureStart(e)) return;
       { const L = linkAt(e); if (L) { e.preventDefault(); if (L.action) L.action(); else if (L.scene) { core.g.sounds.wakka1.play(); core.setScene(L.scene); } else openUrl(L.url); return; } }
       const row = rowAt(e);
@@ -364,9 +386,9 @@
       if (!resetOpen()) pollPad();
       while (acc >= step) { core.update(); acc -= step; }
       LB.tick();
+      if (wantsFullBezel() !== fullBezel) fit();
       R.draw(); P.present();
       escBtn.classList.toggle("on", core.g.scene.name !== "attract");
-      if (core.g.scene.name === "game") canvas.style.cursor = "none";
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);

@@ -135,10 +135,18 @@
 
     // ---- maze
     const decorations = {
-      pac() { print("BO", 3, 6, 3, true); print("OZE", 8, 6, 3, true); print("ELR", 17, 6, 3, true); print("OY", 23, 6, 3, true); },
-      large1() { print("BO", 8, 6, 3, true); print("OZE", 13, 6, 3, true); print("ELR", 22, 6, 3, true); print("OY", 28, 6, 3, true); },
+      pac() { print("BO", 3, 6, 3, true); print("OZE", 8, 6, 3, true); print("ELR", 17, 6, 3, true); print("OY", 23, 6, 3, true); oyAt(23, 6); },
+      large1() { print("BO", 8, 6, 3, true); print("OZE", 13, 6, 3, true); print("ELR", 22, 6, 3, true); print("OY", 28, 6, 3, true); oyAt(28, 6); },
       booze3() { drawSprite("spr16", 91, 88, 55, true); drawSprite("spr16", 15, 103, 56, true); drawSprite("spr16", 2, 120, 57, true); },
     };
+
+    // web edition easter egg: the wall block round "OY" (as drawn this frame, in screen px) plays oy.mp3 when tapped (main.js)
+    let oyBlock = null;
+    function oyAt(tx, ty) { // clipped to the maze area (the large mazes scroll)
+      const B = { x0: Math.max(0, camX() + (tx - 1) * TILE), x1: Math.min(GW, camX() + (tx + 3) * TILE),
+        y0: Math.max(24, camY() + (ty - 1) * TILE), y1: Math.min(272, camY() + (ty + 2) * TILE) };
+      oyBlock = B.x0 < B.x1 && B.y0 < B.y1 ? B : null;
+    }
 
     function drawMaze(cm, color) {
       const ad = g.config.afterDark;
@@ -634,7 +642,7 @@
     }
 
     function draw() {
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = 1; oyBlock = null;
       const scene = g.scene.name;
       if (scene === "game") drawGame();
       else if (scene === "attract") drawAttract();
@@ -660,7 +668,7 @@
       print(tt.text, x / 8 + 1, 15, 0);
     }
 
-    return { screen, draw, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks };
+    return { screen, draw, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock };
   }
 
   // =============================================================== presenter: normal CRT + "MAX" CRT (non-canon)
@@ -699,6 +707,9 @@
     const pF = mk(HDR + `uniform sampler2D glow; uniform vec3 factors; uniform float glowK;
       void main(){ vec3 c = texture2D(tex, vuv).rgb + texture2D(glow, vuv).rgb * glowK; gl_FragColor = vec4(clamp(c * factors, 0.0, 1.0), 1.0); }`);
     const pP = mk(HDR + `void main(){ gl_FragColor = vec4(texture2D(tex, vuv).rgb, 1.0); }`);
+    // the window's static bezel background: Z with the final pass's colour factors, flipped so readPixels comes out top row first
+    const ULTRA_FACTORS = [1.08, 1.08, 1.25];
+    const pG = mk(HDR + `uniform vec3 factors; void main(){ gl_FragColor = vec4(clamp(texture2D(tex, vec2(vuv.x, 1.0 - vuv.y)).rgb * factors, 0.0, 1.0), 1.0); }`);
     // phosphor persistence: new = max(source, previous * decay)
     const pH = mk(HDR + `uniform sampler2D prev; uniform float decay;
       void main(){ vec3 s = texture2D(tex, vuv).rgb; vec3 p = texture2D(prev, vuv).rgb * decay; gl_FragColor = vec4(max(s, p), 1.0); }`);
@@ -708,7 +719,7 @@
     const hourAngle = () => { const d = new Date(); return ((d.getHours() % 12) + d.getMinutes() / 60) / 12 * 2 * Math.PI; };
     const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
     const pU = mk(HDR + `
-      uniform vec2 res; uniform float time, dpr, hourAngle;
+      uniform sampler2D bezTex; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle; // frame: the screen's rect in the canvas (uv)
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
       vec3 samp(vec2 uv, vec2 off){
@@ -719,61 +730,64 @@
         return a * 0.1 + b * 0.8 + c * 0.1;
       }
       void main(){
-        vec2 q = vuv * 2.0 - 1.0;
+        vec2 fuv = (vuv - frame.xy) / frame.zw;          // screen-relative uv (the bezel may fill the whole window)
+        vec2 q = fuv * 2.0 - 1.0;
         q *= ${CRT_ZOOM.toFixed(3)}; // > 1: the glass is smaller than the canvas, leaving a bezel round it
         q += (q.yx * q.yx) * q * vec2(0.04, 0.055);
         float d = sdBox(q, vec2(1.0), 0.06);
         float inside = 1.0 - smoothstep(-0.004, 0.012, d);
         vec2 uv = (q + 1.0) * 0.5;
-        float ty = 1.0 - uv.y;
-        float tick = floor(time * 7.0);
-        // RGB convergence error grows toward the edges
-        float rim = smoothstep(-0.25, 0.0, d);          // 0 in the middle, 1 at the glass edge
-        vec2 ca = q * (0.003 + 0.002 * rim);
-        vec3 c;
-        c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b;
-        // scanlines: bright beams widen and fill the gap, dim ones leave dark lines
-        float lum = dot(c, vec3(0.299, 0.587, 0.114));
-        float v = fract(uv.y * 288.0);
-        float w = mix(0.22, 0.62, clamp(lum * 1.2, 0.0, 1.0));
-        float prof = exp(-pow((v - 0.5) / w, 2.0) * 1.7);
-        c *= 0.12 + 1.05 * prof;
-        // aperture grille triads (in css px)
-        float px = floor(gl_FragCoord.x / max(dpr, 1.0));
-        float t3 = mod(px, 3.0);
-        vec3 m = vec3(step(abs(t3 - 0.0), 0.5), step(abs(t3 - 1.0), 0.5), step(abs(t3 - 2.0), 0.5));
-        c *= 0.62 + 0.62 * m;
-        // vignette + brightness
-        float vg = 1.0 - 0.55 * pow(length(q * vec2(0.82, 0.74)), 2.6);
-        c *= clamp(vg, 0.0, 1.0) * 1.4;
-        c = pow(max(c, 0.0), vec3(0.88, 0.88, 0.8));   // lift shadows, blues most
-        // mains flicker, rolling hum bar
-        c *= 1.0 - 0.05 * hash(vec2(floor(time * 60.0), 1.0));
-        c *= 1.0 + 0.1 * pow(0.5 + 0.5 * sin(6.2832 * (ty * 1.0 - time * 0.09)), 10.0);
-        // static grain + sparse bright speckles
-        float n = hash(gl_FragCoord.xy + fract(time) * 91.7);
-        c += (n - 0.5) * 0.075;
-        // glass: glare at the top-right (web edition: moved off the 1UP score), faint dust streak, darkening near the rim
-        float gl1 = exp(-pow(length((vuv - vec2(0.8, 0.84)) * vec2(1.0, 1.25)) / 0.30, 2.0));
-        float gl2 = exp(-pow(((1.0 - vuv.x) * 0.9 + vuv.y * 0.55 - 0.78) / 0.05, 2.0)) * 0.5;
-        c += vec3(0.85, 0.9, 1.0) * (0.06 * gl1 + 0.018 * gl2);
-        c *= 0.62 + 0.38 * smoothstep(-0.16, 0.0, -d);
-        // glassy: a thick curved faceplate in front of the tube
-        //   broad sheen from a room light, brightest up top and fading down the bulge
-        float sheen = smoothstep(-0.1, 1.0, q.y * 0.85 + q.x * 0.35 + 0.15 * (1.0 - dot(q, q)));
-        c += vec3(0.78, 0.84, 1.0) * 0.045 * sheen * sheen;
-        //   a soft window-shaped reflection with a crisp lower edge, upper right
-        const vec2 WIN = vec2(0.73, 0.8);
-        vec2 wq = (vuv - WIN) * vec2(1.0, 1.6);
-        float win = (1.0 - smoothstep(0.17, 0.2, length(wq))) * smoothstep(-0.12, 0.1, wq.y);
-        c += vec3(0.8, 0.86, 1.0) * 0.035 * win;
-        //   small, soft specular point. Secretly a clock: the window reflection is the face and the glint the hour
-        //   hand's tip (player's local time): top of the window at 12, right at 3, bottom at 6, left at 9
-        vec2 glint = WIN + vec2(sin(hourAngle) * 0.11, cos(hourAngle) * 0.068);
-        float spec = exp(-pow(length((vuv - glint) * vec2(1.0, 1.35)) / 0.045, 2.0));
-        c += vec3(0.9, 0.94, 1.0) * 0.09 * spec;
-        // plastic bezel outside the glass
-        vec3 bez = vec3(0.075, 0.068, 0.058) * (0.55 + 0.6 * vuv.y) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
+        vec3 c = vec3(0.0);
+        if (inside > 0.0) { // the tube's effects only where the glass shows
+          float ty = 1.0 - uv.y;
+          float tick = floor(time * 7.0);
+          // RGB convergence error grows toward the edges
+          float rim = smoothstep(-0.25, 0.0, d);          // 0 in the middle, 1 at the glass edge
+          vec2 ca = q * (0.003 + 0.002 * rim);
+          c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b;
+          // scanlines: bright beams widen and fill the gap, dim ones leave dark lines
+          float lum = dot(c, vec3(0.299, 0.587, 0.114));
+          float v = fract(uv.y * 288.0);
+          float w = mix(0.22, 0.62, clamp(lum * 1.2, 0.0, 1.0));
+          float prof = exp(-pow((v - 0.5) / w, 2.0) * 1.7);
+          c *= 0.12 + 1.05 * prof;
+          // aperture grille triads (in css px)
+          float px = floor(gl_FragCoord.x / max(dpr, 1.0));
+          float t3 = mod(px, 3.0);
+          vec3 m = vec3(step(abs(t3 - 0.0), 0.5), step(abs(t3 - 1.0), 0.5), step(abs(t3 - 2.0), 0.5));
+          c *= 0.62 + 0.62 * m;
+          // vignette + brightness
+          float vg = 1.0 - 0.55 * pow(length(q * vec2(0.82, 0.74)), 2.6);
+          c *= clamp(vg, 0.0, 1.0) * 1.4;
+          c = pow(max(c, 0.0), vec3(0.88, 0.88, 0.8));   // lift shadows, blues most
+          // mains flicker, rolling hum bar
+          c *= 1.0 - 0.05 * hash(vec2(floor(time * 60.0), 1.0));
+          c *= 1.0 + 0.1 * pow(0.5 + 0.5 * sin(6.2832 * (ty * 1.0 - time * 0.09)), 10.0);
+          // static grain + sparse bright speckles
+          float n = hash(gl_FragCoord.xy + fract(time) * 91.7);
+          c += (n - 0.5) * 0.075;
+          // glass: glare at the top-right (web edition: moved off the 1UP score), faint dust streak, darkening near the rim
+          float gl1 = exp(-pow(length((fuv - vec2(0.8, 0.84)) * vec2(1.0, 1.25)) / 0.30, 2.0));
+          float gl2 = exp(-pow(((1.0 - fuv.x) * 0.9 + fuv.y * 0.55 - 0.78) / 0.05, 2.0)) * 0.5;
+          c += vec3(0.85, 0.9, 1.0) * (0.06 * gl1 + 0.018 * gl2);
+          c *= 0.62 + 0.38 * smoothstep(-0.16, 0.0, -d);
+          // glassy: a thick curved faceplate in front of the tube
+          //   broad sheen from a room light, brightest up top and fading down the bulge
+          float sheen = smoothstep(-0.1, 1.0, q.y * 0.85 + q.x * 0.35 + 0.15 * (1.0 - dot(q, q)));
+          c += vec3(0.78, 0.84, 1.0) * 0.045 * sheen * sheen;
+          //   a soft window-shaped reflection with a crisp lower edge, upper right
+          const vec2 WIN = vec2(0.73, 0.8);
+          vec2 wq = (fuv - WIN) * vec2(1.0, 1.6);
+          float win = (1.0 - smoothstep(0.17, 0.2, length(wq))) * smoothstep(-0.12, 0.1, wq.y);
+          c += vec3(0.8, 0.86, 1.0) * 0.035 * win;
+          //   small, soft specular point. Secretly a clock: the window reflection is the face and the glint the hour
+          //   hand's tip (player's local time): top of the window at 12, right at 3, bottom at 6, left at 9
+          vec2 glint = WIN + vec2(sin(hourAngle) * 0.11, cos(hourAngle) * 0.068);
+          float spec = exp(-pow(length((fuv - glint) * vec2(1.0, 1.35)) / 0.045, 2.0));
+          c += vec3(0.9, 0.94, 1.0) * 0.09 * spec;
+        }
+        // plastic bezel outside the glass: static, baked once per resize (pZ below)
+        vec3 bez = texture2D(bezTex, vuv * zmap.xy + zmap.zw).rgb;   // Z may cover the whole window, not just this canvas
         // glossy bezel: a soft, fading mirror image of the screen's edge, folded back across the rim
         if (d > 0.0) {
           vec2 e = max(abs(q) - vec2(0.94), 0.0);
@@ -790,8 +804,62 @@
           float fall = exp(-d / 0.035) * smoothstep(0.008, 0.02, d);
           bez += r * vec3(0.95, 0.92, 0.88) * 0.42 * fall * (0.3 + 0.7 * side);
         }
-        bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));
         gl_FragColor = vec4(mix(bez, c, inside), 1.0);
+      }`);
+
+    // the bezel's static look (base colour, grain, weathering, rim highlight), drawn once per resize into Z; pU reads it back
+    const pZ = mk(HDR + `
+      uniform vec4 frame; uniform float dpr;
+      float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+      float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
+      float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
+      float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
+      // fine scratches: noise stretched along a direction, only its rare peaks survive, gated into short runs
+      float scratches(vec2 p, float ang, float seed, float len){
+        vec2 r = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p;
+        float line = smoothstep(0.84, 0.96, vnoise(vec2(r.x * len + seed, r.y * 0.9)));
+        return line * smoothstep(0.64, 0.76, vnoise(r * 0.01 + seed * 3.1));   // sparse: only here and there
+      }
+      // a scrape: a bundle of parallel gouges dragged across in one go
+      float scrape(vec2 p, float ang, float seed){
+        vec2 r = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p;
+        float lines = smoothstep(0.7, 0.95, vnoise(vec2(r.x * 0.002 + seed, r.y * 0.7)));
+        float band = smoothstep(0.72, 0.84, vnoise(vec2(r.x * 0.004, r.y * 0.025) + seed * 7.7));
+        return lines * band;
+      }
+      void main(){
+        vec2 fuv = (vuv - frame.xy) / frame.zw;
+        vec2 q = fuv * 2.0 - 1.0;
+        q *= ${CRT_ZOOM.toFixed(3)};
+        q += (q.yx * q.yx) * q * vec2(0.04, 0.055);
+        float d = sdBox(q, vec2(1.0), 0.06);
+        vec3 bez = vec3(0.105, 0.102, 0.096) * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
+        // weathered: old scraped metal (static, in css px so it looks the same at any dpr)
+        if (d > 0.0) {
+          vec2 bp = gl_FragCoord.xy / max(dpr, 1.0);
+          bez *= 0.94 + 0.12 * fbm(bp / 90.0);                                         // faintly uneven finish
+          bez *= 0.93 + 0.14 * vnoise(vec2(bp.x * 0.015, bp.y * 1.3));                    // brushed grain, side to side
+          float grime = fbm(bp / 25.0 + 2.1);                                           // grime settled against the rim
+          bez *= 1.0 - 0.35 * smoothstep(0.35, 0.7, grime) * (1.0 - smoothstep(0.0, 0.14, d));
+          // hairline scratches every which way, long and short
+          float sc = 0.0;
+          for (int i = 0; i < 5; i++) {
+            float fi = float(i);
+            sc = max(sc, scratches(bp, fi * 2.39996 + 0.3, fi * 13.7 + 1.0, mix(0.003, 0.012, fract(fi * 0.618))) * (1.0 - 0.07 * fi));
+          }
+          // a few scrapes, bright where the paint/oxide is gone, with dark dirt-filled edges just beside them
+          float sp = max(scrape(bp, 0.42, 3.0), scrape(bp, -0.65, 21.0));
+          float spEdge = max(scrape(bp + vec2(0.0, 1.5), 0.42, 3.0), scrape(bp + vec2(1.2, 0.8), -0.65, 21.0));
+          float away = smoothstep(0.16, 0.4, d);   // none near the glass or on the reflective rim: just the far plastic
+          bez *= 1.0 - 0.18 * max(spEdge - sp, 0.0) * away;
+          bez += (vec3(0.045, 0.045, 0.043) * sp + vec3(0.035, 0.034, 0.032) * sc) * away;
+          float pit = hash(floor(bp) * vec2(0.0731, 0.1129) + 0.37);   // (scaled: the hash repeats on whole-number grids)                                           // pits and specks
+          bez *= 1.0 - 0.5 * step(0.9985, pit);
+          bez += vec3(0.05) * step(pit, 0.0008);
+        }
+        bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));
+        gl_FragColor = vec4(bez, 1.0);
       }`);
 
     const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -804,25 +872,45 @@
     const mkTarget = (w, h) => { const t = newTex(gl.LINEAR); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
       gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); return { t, f, w, h }; };
-    let A = null, B1 = null, B2 = null, PH = null, ph = 0, cw = 0, ch = 0, cssH = 864, dpr = 1;
-    const BW = 448, BH = 576;
+    let zmap = [1, 1, 0, 0], A = null, Z = null, B1 = null, B2 = null, PH = null, ph = 0, cw = 0, ch = 0, cssH = 864, dpr = 1, fr = [0, 0, 1, 1];
+    let BW = 448, BH = 576; // bloom buffers: 448x576 over the screen, more when the canvas is wider than it
     const pass = (prog, target, setup, ...texs) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.f : null);
       gl.viewport(0, 0, target ? target.w : cw, target ? target.h : ch);
       gl.useProgram(prog);
       texs.forEach((t, i) => { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t); });
       gl.uniform1i(prog.u("tex"), 0);
-      if (texs.length > 1) { gl.uniform1i(prog.u("glow"), 1); gl.uniform1i(prog.u("prev"), 1); }
+      if (texs.length > 1) { gl.uniform1i(prog.u("glow"), 1); gl.uniform1i(prog.u("prev"), 1); gl.uniform1i(prog.u("bezTex"), 1); }
       if (setup) setup(prog);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     };
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     const api = {
       webgl: true, ultra: true, zoom: CRT_ZOOM,
-      resize(w, h, cssHeight) {
+      // frame: where the game screen sits in the canvas, as uv fractions {x, y (from the bottom), w, h}; default the whole canvas.
+      // win (CRT on): the window in device px {w, h} and this canvas's top-left in it {x, y}. The bezel is baked once over the
+      // whole window, and the part outside this canvas comes back as ImageData for a static background (never redrawn per frame)
+      resize(w, h, cssHeight, frame, win) {
         canvas.width = w; canvas.height = h; cw = w; ch = h; cssH = cssHeight || h; dpr = h / cssH;
-        A = mkTarget(w, h); B1 = mkTarget(BW, BH); B2 = mkTarget(BW, BH); PH = [mkTarget(BW, BH), mkTarget(BW, BH)];
+        fr = frame ? [frame.x, frame.y, frame.w, frame.h] : [0, 0, 1, 1];
+        BW = Math.min(2048, Math.round(448 / fr[2])); BH = Math.min(2048, Math.round(576 / fr[3]));
+        const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        if (win && (win.w > max || win.h > max)) win = null;
+        const W = win ? win.w : w, H = win ? win.h : h, ox = win ? win.x : 0, oy = win ? win.h - win.y - h : 0; // oy: from the bottom
+        [A, Z, B1, B2, ...(PH || [])].forEach((T) => { if (T) { gl.deleteTexture(T.t); gl.deleteFramebuffer(T.f); } });
+        A = mkTarget(w, h); Z = mkTarget(W, H); B1 = mkTarget(BW, BH); B2 = mkTarget(BW, BH); PH = [mkTarget(448, 576), mkTarget(448, 576)];
+        zmap = [w / W, h / H, ox / W, oy / H];
+        pass(pZ, Z, (p) => { gl.uniform4f(p.u("frame"), (fr[0] * w + ox) / W, (fr[1] * h + oy) / H, fr[2] * w / W, fr[3] * h / H); gl.uniform1f(p.u("dpr"), dpr); });
+        let bg = null;
+        if (win) {
+          const G = mkTarget(W, H);
+          pass(pG, G, (p) => gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS), Z.t);
+          const px = new Uint8ClampedArray(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          bg = new ImageData(px, W, H);
+          gl.deleteTexture(G.t); gl.deleteFramebuffer(G.f);
+        }
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        return bg;
       },
       present() {
         if (!A) return;
@@ -837,11 +925,11 @@
           const nxt = 1 - ph;
           pass(pH, PH[nxt], (p) => gl.uniform1f(p.u("decay"), 0.58), srcTex, PH[ph].t);
           ph = nxt;
-          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); }, PH[ph].t);
+          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); }, PH[ph].t, Z.t);
           pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), 0.72), A.t);
           pass(pB, B2, (p) => { gl.uniform2f(p.u("dir"), 1 / BW, 0); gl.uniform1f(p.u("sigma"), 3.5); }, B1.t);
           pass(pB, B1, (p) => { gl.uniform2f(p.u("dir"), 0, 1 / BH); gl.uniform1f(p.u("sigma"), 3.5); }, B2.t);
-          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), 1.08, 1.08, 1.25); gl.uniform1f(p.u("glowK"), 0.55); }, A.t, B1.t);
+          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS); gl.uniform1f(p.u("glowK"), 0.55); }, A.t, B1.t);
         } else {
           pass(pA, A, (p) => { gl.uniform2f(p.u("distortion"), 1.03, 1.04); gl.uniform1f(p.u("feather"), 0.02);
             gl.uniform1f(p.u("widthPx"), 2); gl.uniform1f(p.u("thickness"), 0.5); gl.uniform1f(p.u("opacity"), 0.4); gl.uniform1f(p.u("screenH"), cssH); }, srcTex);

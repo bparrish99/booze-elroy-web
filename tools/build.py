@@ -11,7 +11,7 @@ assets = {
     "data": json.load(open(f"{A}/data.json")),
     "images": {**{stem(f): uri(rd(f), "image/png") for f in sorted(glob.glob(f"{A}/sprites/*.png"))},
                **{stem(f): uri(rd(f), "image/png") for f in sorted(glob.glob(f"{A}/images/*.png"))}},
-    "sounds": {stem(f): b64(rd(f)) for f in sorted(glob.glob(f"{A}/sounds/*.flac"))},
+    "sounds": {stem(f): b64(rd(f)) for f in sorted(glob.glob(f"{A}/sounds/*.flac") + glob.glob(f"{A}/sounds/*.mp3"))},
     "backgrounds": {stem(f): uri(rd(f), "image/jpeg") for f in sorted(glob.glob(f"{A}/backgrounds/*.jpg"))},
 }
 os.makedirs(f"{ROOT}/build", exist_ok=True); os.makedirs(f"{ROOT}/public", exist_ok=True)
