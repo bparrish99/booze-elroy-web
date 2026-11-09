@@ -59,7 +59,7 @@ html,body{overscroll-behavior:none;margin:0;height:100%;background:#000;color:#f
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
       // web edition: the C key's third look, a ratty old living-room TV on an RF cable. Brightness stays fairly sharp,
-      // colour smears sideways and drifts (composite video), a ghost trails to the right, crawling interference,
+      // colour smears sideways and drifts (composite video), a ghost trails to the right, faint diagonal interference, wonky geometry now and then,
       // a torn tracking band drifting down (no vertical-hold jumps or rolls: tried, too cheesy)
       vec3 rfTV(vec2 uv){
         float px = 2.0 / 448.0;                                           // one game pixel in the source texture
@@ -70,15 +70,25 @@ html,body{overscroll-behavior:none;margin:0;height:100%;background:#000;color:#f
         float band = fract(time * 0.06 + 0.04 * sin(time * 0.7) + 0.03 * sin(time * 0.23 + 1.0)) * 1.3 - 0.15;
         float bw = 0.014 + 0.008 * sin(time * 1.3) * sin(time * 0.41);
         float inBand = 1.0 - smoothstep(0.0, bw, abs(uv.y - band));
-        // and now and then a second, briefer tear somewhere else: fades in, lingers, fades out (a dice roll per 2.3 s)
+        uv.x += inBand * (0.008 + 0.01 * hash(vec2(line, floor(time * 30.0))));
+        // the set losing its grip now and then (dice rolls per time slot; all smooth, nothing flickers):
+        //   a pull: a strip of rows bends sideways (most in its middle), yanked quickly, held, then snapped back
         float slot = floor(time / 2.3), st = time - slot * 2.3;
-        float t0 = hash(vec2(slot, 6.1)), dur = 0.5 + 0.7 * hash(vec2(slot, 2.7));
-        float env = step(0.5, hash(vec2(slot, 4.2))) * smoothstep(t0, t0 + 0.12, st) * (1.0 - smoothstep(t0 + dur - 0.15, t0 + dur, st));
-        float y2 = 0.05 + 0.9 * hash(vec2(slot, 8.3)) + (st - t0) * 0.05, w2 = 0.006 + 0.02 * hash(vec2(slot, 1.9));
-        float in2 = env * (1.0 - smoothstep(0.0, w2, abs(uv.y - y2)));
-        float dir2 = hash(vec2(slot, 5.3)) < 0.5 ? -1.0 : 1.0;
-        uv.x += inBand * (0.008 + 0.01 * hash(vec2(line, floor(time * 30.0))))
-              + in2 * dir2 * (0.005 + 0.012 * hash(vec2(line, floor(time * 30.0) + 7.0)));
+        float k = (st - hash(vec2(slot, 6.1))) / (0.35 + 0.6 * hash(vec2(slot, 2.7)));
+        float pull = step(0.5, hash(vec2(slot, 4.2))) * step(0.0, k) * step(k, 1.0) * smoothstep(0.0, 0.08, k) * (1.0 - smoothstep(0.88, 1.0, k));
+        float dy = (uv.y - (0.05 + 0.9 * hash(vec2(slot, 8.3)))) / (0.015 + 0.04 * hash(vec2(slot, 1.9)));
+        uv.x += pull * (hash(vec2(slot, 5.3)) < 0.5 ? -1.0 : 1.0) * (0.01 + 0.02 * hash(vec2(slot, 3.3))) * exp(-dy * dy * 2.5);
+        //   flagging: the top rows bend sideways like a flag on a pole, waving a little
+        float fs = floor(time / 4.1), fk = (time - fs * 4.1 - 2.0 * hash(vec2(fs, 11.3))) / (0.8 + 1.2 * hash(vec2(fs, 12.9)));
+        float flag = step(0.45, hash(vec2(fs, 13.7))) * step(0.0, fk) * step(fk, 1.0) * smoothstep(0.0, 0.1, fk) * (1.0 - smoothstep(0.85, 1.0, fk));
+        float top = smoothstep(0.88, 1.0, uv.y);                         // uv.y = 1 is the top of the picture
+        uv.x += flag * top * top * (0.03 + 0.015 * sin(time * 6.0 + uv.y * 40.0)) * (hash(vec2(fs, 14.1)) < 0.5 ? -1.0 : 1.0);
+        //   a lean: the whole picture tilts a touch and drifts back
+        float ls = floor(time / 3.7), lt = time - ls * 3.7;
+        float lean = step(0.6, hash(vec2(ls, 21.1))) * smoothstep(0.0, 0.3, lt) * (1.0 - smoothstep(1.0, 1.6, lt));
+        uv.x += lean * (hash(vec2(ls, 22.2)) - 0.5) * 0.024 * (uv.y - 0.5);
+        //   and the width breathes, very slightly (a tired power supply)
+        uv.x = 0.5 + (uv.x - 0.5) * (1.0 + 0.004 * sin(time * 0.8) * sin(time * 0.31));
         vec3 soft = vec3(0.0), chroma = vec3(0.0); float ws = 0.0, wc = 0.0;
         for (int i = -2; i <= 2; i++) { float f = float(i), w = exp(-f * f / 2.5); soft += texture2D(tex, uv + vec2(f * px * 0.5, 0.0)).rgb * w; ws += w; }
         for (int i = -2; i <= 6; i++) { float f = float(i), w = exp(-(f - 1.5) * (f - 1.5) / 7.0); chroma += texture2D(tex, uv - vec2(f * px * 0.6, 0.0)).rgb * w; wc += w; }
@@ -90,7 +100,7 @@ html,body{overscroll-behavior:none;margin:0;height:100%;background:#000;color:#f
         vec3 c = vec3(Y + 0.956 * iq.x + 0.621 * iq.y, Y - 0.272 * iq.x - 0.647 * iq.y, Y - 1.106 * iq.x + 1.703 * iq.y);
         c += texture2D(tex, uv - vec2(px * 3.0, 0.0)).rgb * 0.2 + texture2D(tex, uv - vec2(px * 7.0, 0.0)).rgb * 0.07; // RF ghosts
         vec2 sp = floor(gl_FragCoord.xy / max(dpr, 1.0));
-        c += 0.025 * sin(sp.x * 0.35 + sp.y * 0.9 - time * 6.0);          // faint, slow interference
+        c += 0.025 * sin(sp.x * 0.35 + sp.y * 0.9 - time * 6.0);          // faint diagonal interference, crawling
         c *= 0.68;   // a touch dimmer than the arcade CRT, so colours don't blow out (no snow: tried, removed)
         return max(c, 0.0);
       }
