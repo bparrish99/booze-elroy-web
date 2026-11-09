@@ -35,7 +35,8 @@ try {
   check(await ev(() => window.__core.g.config.crtEffect === "tv" && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === "tv"), "C again: the ratty old TV");
   await p.keyboard.press("c");
   check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "and once more: back to the CRT");
-  check(await ev(() => !window.__core.optMenu.some((i) => i.key === "crtEffect") && window.__core.optMenu.find((i) => i.key === "volume").y === 26), "no CRT row on the Options page (sfx volume moved up)");
+  check(await ev(() => !window.__core.optMenu.some((i) => i.key === "crtEffect" || i.key === "volume")), "no CRT or volume rows on the Options page");
+  check(await g("g.config.volume === 8"), "the game plays at a fixed volume (8)");
   // cheat "xyzzy": a small frame-rate readout, off by default
   check(await ev(() => !document.getElementById("fps").classList.contains("on")), "fps readout is off by default");
   await p.keyboard.type("xyzzy"); await p.waitForTimeout(1300);
@@ -69,6 +70,9 @@ try {
   check(await g("g.scene.name === 'leaderboard' && !!g.toast"), "Share Config on the leaderboard copies (or tries to)");
   await p.keyboard.press("ArrowDown");
   check(await ev(() => { const m = window.__core.g.scene.menu; return m[m.selectedItem - 1].text; }) === "Back", "down moves to Back");
+  await ev(() => { window.__w = []; for (const n of ["wakka1", "wakka2"]) { const snd = window.__core.g.sounds[n], play = snd.play.bind(snd); snd.play = () => { window.__w.push(n); play(); }; } });
+  await p.keyboard.press("ArrowUp"); await p.keyboard.press("ArrowDown");
+  check(await ev(() => window.__w.length === 2 && window.__w[0] !== window.__w[1]), "menu moves alternate the two wakkas: " + await ev(() => window.__w.join()));
   await p.waitForTimeout(300); await shot("2-leaderboard");
   // other boards with scores: left / right flip through them (current settings first), Share Config shares the one on show
   await api("", { board: "mspac.0.f.f.f.3.1.f.0.4.t.f.f", name: "beefart", score: 900 });

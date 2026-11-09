@@ -140,7 +140,7 @@
     }
 
     const core = BoozeCore.create(A.data, {
-      noExit: true, noAutoplay: true, crtKey: true, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
+      noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
       scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
@@ -274,7 +274,7 @@
       const row = rowAt(e);
       if (linkAt(e)) { canvas.style.cursor = "pointer"; return; }
       canvas.style.cursor = row ? "pointer" : "default";
-      if (row && row.menu.selectedItem !== row.index) { row.menu.selectedItem = row.index; core.g.sounds.wakka1.play(); }
+      if (row && row.menu.selectedItem !== row.index) { row.menu.selectedItem = row.index; LB.wakka(); }
     });
     // easter egg: tapping the "OY" block on the maze plays oy.mp3 (doesn't swallow the tap); the attract demo mutes the game, so use the real volume
     const oySnd = audio.makeSound("oy");
@@ -282,7 +282,7 @@
       { const B = R.oyBlock(), p = toGame(e);
         if (B && p.x >= B.x0 && p.x < B.x1 && p.y >= B.y0 && p.y < B.y1) { audio.unlock(); oySnd.stop(); oySnd.setVolume((core.g.attract && core.g.originalVolume != null ? core.g.originalVolume : core.g.config.volume) / 10); oySnd.play(); } }
       if (gestureStart(e)) return;
-      { const L = linkAt(e); if (L) { e.preventDefault(); if (L.action) L.action(); else if (L.scene) { core.g.sounds.wakka1.play(); core.setScene(L.scene); } else openUrl(L.url); return; } }
+      { const L = linkAt(e); if (L) { e.preventDefault(); if (L.action) L.action(); else if (L.scene) { LB.wakka(); core.setScene(L.scene); } else openUrl(L.url); return; } }
       const row = rowAt(e);
       if (!row) return;
       e.preventDefault();

@@ -1718,6 +1718,11 @@
     if (env.shareConfig) optMenu.splice(optMenu.length - 1, 0, shareItem(6, 30));
     // web edition: the CRT effect is the C key (env.crtKey), not an option; sfx volume moves up into its row
     if (env.crtKey) { optMenu.splice(optMenu.findIndex((it) => it.key === "crtEffect"), 1); optMenu.find((it) => it.key === "volume").y = 26; }
+    // web edition: no volume setting (env.fixedVolume; the browser / system volume does the job), the game plays at that level
+    if (env.fixedVolume != null) {
+      optMenu.splice(optMenu.findIndex((it) => it.key === "volume"), 1);
+      optMenu.find((it) => it.text === "Restore Defaults").y = 28; // the freed row: a blank line after Restore Defaults
+    }
     // web edition: Create Arena (an arena with the current settings) under Share Config
     if (env.createArena) optMenu.splice(optMenu.length - 1, 0, { text: "Create Arena", x: 6, y: 31, action() { env.createArena(); } });
     if (env.creditsInOptions) {
@@ -1814,6 +1819,7 @@
       resetConfigs();
       const saved = env.loadConfig ? env.loadConfig() : null;
       if (saved && typeof saved === "object") for (const k of Object.keys(saved)) if (g.defaultConfig[k] !== undefined && k !== "fullscreen") g.config[k] = saved[k];
+      if (env.fixedVolume != null) g.config.volume = g.defaultConfig.volume = env.fixedVolume; // web edition: a saved volume no longer counts
       if (g.config.background === "random") g.currentBackground = BACKGROUND_OPTIONS[rand(2, BACKGROUND_OPTIONS.length) - 1];
       setCurrentMaze(g.config.mazepack);
       applyVolume(); applyMusicVolume();

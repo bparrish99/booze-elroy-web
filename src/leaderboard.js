@@ -200,6 +200,8 @@
 
     // ---------------------------------------------------------------- scenes
     const sfx = (n) => { const s = g.sounds[n]; if (s) { s.stop(); s.play(); } };
+    // menu moves alternate the two wakka sounds, like the core menus (sharing its g.wakka flip-flop)
+    const wakka = () => { if (g.wakka) { sfx("wakka2"); g.wakka = false; } else { sfx("wakka1"); g.wakka = true; } };
 
     // every board that has scores (the Leaderboards page flips through them), from GET /api/scores/boards
     const boardList = { status: api ? "loading" : "error", boards: [], p: null };
@@ -221,7 +223,7 @@
       ...(opts.share ? [{ text: "Share Config", share: true, x: 8, y: 33, action() { opts.share(SK.configFor(leaderboard.key)); } }] : []),
       { text: "Back", x: 12, y: opts.share ? 35 : 33, action() { core.setScene("attract", true); } },
     ], { selectedItem: 1 });
-    const lbMove = (d) => { sfx("wakka1"); lbMenu.selectedItem = ((lbMenu.selectedItem - 1 + d + lbMenu.length) % lbMenu.length) + 1; };
+    const lbMove = (d) => { wakka(); lbMenu.selectedItem = ((lbMenu.selectedItem - 1 + d + lbMenu.length) % lbMenu.length) + 1; };
     const lbBack = () => lbMenu[lbMenu.length - 1].action();
     // Leaderboards: starts on the current settings' board; left / right (or prev / next) flip through every board
     // with scores: the current one first, then the busiest (most entries, then highest top score)
@@ -252,7 +254,7 @@
       flip(d) {
         const ks = this.keys();
         if (ks.length < 2) return;
-        sfx("wakka1");
+        wakka();
         const i = Math.max(0, ks.indexOf(this.key));
         this.key = ks[(i + d + ks.length) % ks.length];
         this.highlight = null; this.message = null;
@@ -267,7 +269,7 @@
       board() { return boardFor(this.key); },
       summary(width) { return summary(width, SK.configFor(this.key)); },
       keypressed(key) {
-        if (key === "return" || key === "space") { const it = lbMenu[lbMenu.selectedItem - 1]; if (it.text !== "Play 1P") sfx("wakka1"); it.action(); }
+        if (key === "return" || key === "space") { const it = lbMenu[lbMenu.selectedItem - 1]; if (it.text !== "Play 1P") wakka(); it.action(); }
         else if (key === "left") this.flip(-1);
         else if (key === "right") this.flip(1);
         else if (key === "up") lbMove(-1);
@@ -284,10 +286,10 @@
     };
 
     // shared menu moves for the arena scenes
-    const menuMove = (menu, d) => { sfx("wakka1"); menu.selectedItem = ((menu.selectedItem - 1 + d + menu.length) % menu.length) + 1; };
+    const menuMove = (menu, d) => { wakka(); menu.selectedItem = ((menu.selectedItem - 1 + d + menu.length) % menu.length) + 1; };
     const menuKeys = (sc, key) => {
       const m = sc.menu;
-      if (key === "return" || key === "space") { sfx("wakka1"); m[m.selectedItem - 1].action(); }
+      if (key === "return" || key === "space") { wakka(); m[m.selectedItem - 1].action(); }
       else if (key === "up" || key === "left") menuMove(m, -1);
       else if (key === "down" || key === "right") menuMove(m, 1);
     };
@@ -409,7 +411,7 @@
       board() { return arenaBoards.get(arena.id) || { status: "loading", entries: [] }; },
       emptyText(b) { return b.status === "loading" ? "loading" : b.status === "gone" ? "arena not found" : b.status === "error" ? "try again soon" : "no scores yet"; },
       keypressed(key) {
-        if (key === "escape" || key === "backspace") { sfx("wakka1"); this.back(); return; }
+        if (key === "escape" || key === "backspace") { wakka(); this.back(); return; }
         menuKeys(this, key);
       },
       gamepadpressed(button) {
@@ -474,7 +476,7 @@
           c = r === SPECIAL_ROW ? (col < 3 ? 0 : col < 7 ? 1 : 2) : Math.min(col, ROW_LEN[r] - 1);
         } else c = (c + dc + ROW_LEN[r]) % ROW_LEN[r];
         neMenu.selectedItem = ROW_START[r] + c + 1;
-        sfx("wakka1");
+        wakka();
       },
       keypressed(key) {
         if (this.sending) return;
@@ -610,7 +612,7 @@
     const attach = (c) => { core = c; g = c.g; };
     // Create Arena on the Options page: names a new arena with the current settings; Esc goes back to Options
     const createArena = (from) => core.setScene("nameEntry", { mode: "createArena", from });
-    return { attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene }, tick, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
+    return { attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
   }
 
   root.BoozeLeaderboard = { create };

@@ -496,7 +496,7 @@
       [["Starting Lives", 12], ["extra life", 13], ["Ability", 14], ["Speed", 15]].forEach((r) => print(r[0], 3, r[1]));
       print("GHOST OPTIONS", 3, 17, 3);
       [["Ghosts", 18], ["Pinky Bug", 19], ["Scatter", 20], ["Unrestricted", 21]].forEach((r) => print(r[0], 3, r[1]));
-      print("AUDIO/VIDEO", 3, 23, 3);
+      print(core.optMenu.some((it) => it.key === "volume") ? "AUDIO/VIDEO" : "VIDEO", 3, 23, 3); // web edition: no volume row
       // labels follow the menu's own rows (web edition: some rows can go, e.g. CRT Effect is the C key)
       const AV_LABELS = { background: "Background", mazeColor: "Maze Style", crtEffect: "CRT Effect", volume: "sfx volume" };
       for (const it of core.optMenu) if (AV_LABELS[it.key]) print(AV_LABELS[it.key], 3, it.y);
@@ -737,18 +737,25 @@
         float bw = 0.014 + 0.008 * sin(time * 1.3) * sin(time * 0.41);
         float inBand = 1.0 - smoothstep(0.0, bw, abs(uv.y - band));
         uv.x += inBand * (0.008 + 0.01 * hash(vec2(line, floor(time * 30.0))));
-        // the set losing its grip now and then (dice rolls per time slot; all smooth, nothing flickers):
-        //   a pull: a strip of rows bends sideways (most in its middle), yanked quickly, held, then snapped back
+        // the set losing its grip now and then (dice rolls per time slot). Pulls and flags are quick and jerky (the
+        // pull jolts in steps), with scratchy interference in the rows they bend:
+        float jt = floor(time * 16.0);                                   // jolt steps
+        //   a pull: a strip of rows bends sideways (most in its middle): yanked, jerking about, snapped back
         float slot = floor(time / 2.3), st = time - slot * 2.3;
-        float k = (st - hash(vec2(slot, 6.1))) / (0.35 + 0.6 * hash(vec2(slot, 2.7)));
-        float pull = step(0.5, hash(vec2(slot, 4.2))) * step(0.0, k) * step(k, 1.0) * smoothstep(0.0, 0.08, k) * (1.0 - smoothstep(0.88, 1.0, k));
+        float k = (st - hash(vec2(slot, 6.1))) / (0.18 + 0.3 * hash(vec2(slot, 2.7)));
+        float pull = step(0.5, hash(vec2(slot, 4.2))) * step(0.0, k) * step(k, 1.0) * smoothstep(0.0, 0.1, k) * (1.0 - smoothstep(0.85, 1.0, k));
+        pull *= 0.35 + 0.65 * hash(vec2(jt, slot + 0.5));
         float dy = (uv.y - (0.05 + 0.9 * hash(vec2(slot, 8.3)))) / (0.015 + 0.04 * hash(vec2(slot, 1.9)));
-        uv.x += pull * (hash(vec2(slot, 5.3)) < 0.5 ? -1.0 : 1.0) * (0.01 + 0.02 * hash(vec2(slot, 3.3))) * exp(-dy * dy * 2.5);
-        //   flagging: the top rows bend sideways like a flag on a pole, waving a little
-        float fs = floor(time / 4.1), fk = (time - fs * 4.1 - 2.0 * hash(vec2(fs, 11.3))) / (0.8 + 1.2 * hash(vec2(fs, 12.9)));
+        float pullW = pull * exp(-dy * dy * 2.5);
+        uv.x += pullW * (hash(vec2(slot, 5.3)) < 0.5 ? -1.0 : 1.0) * (0.012 + 0.022 * hash(vec2(slot, 3.3)));
+        //   flagging: the top rows bend sideways like a flag on a pole, flapping
+        float fs = floor(time / 4.1), fk = (time - fs * 4.1 - 2.0 * hash(vec2(fs, 11.3))) / (0.35 + 0.6 * hash(vec2(fs, 12.9)));
         float flag = step(0.45, hash(vec2(fs, 13.7))) * step(0.0, fk) * step(fk, 1.0) * smoothstep(0.0, 0.1, fk) * (1.0 - smoothstep(0.85, 1.0, fk));
+        flag *= 0.5 + 0.5 * hash(vec2(jt, fs + 0.25));
         float top = smoothstep(0.88, 1.0, uv.y);                         // uv.y = 1 is the top of the picture
-        uv.x += flag * top * top * (0.03 + 0.015 * sin(time * 6.0 + uv.y * 40.0)) * (hash(vec2(fs, 14.1)) < 0.5 ? -1.0 : 1.0);
+        float flagW = flag * top * top;
+        uv.x += flagW * (0.03 + 0.018 * sin(time * 15.0 + uv.y * 40.0)) * (hash(vec2(fs, 14.1)) < 0.5 ? -1.0 : 1.0);
+        float scratch = clamp(pullW * 1.5 + flagW * 1.5, 0.0, 1.0);    // where the picture is being yanked about
         //   a lean: the whole picture tilts a touch and drifts back
         float ls = floor(time / 3.7), lt = time - ls * 3.7;
         float lean = step(0.6, hash(vec2(ls, 21.1))) * smoothstep(0.0, 0.3, lt) * (1.0 - smoothstep(1.0, 1.6, lt));
@@ -767,6 +774,9 @@
         c += texture2D(tex, uv - vec2(px * 3.0, 0.0)).rgb * 0.2 + texture2D(tex, uv - vec2(px * 7.0, 0.0)).rgb * 0.07; // RF ghosts
         vec2 sp = floor(gl_FragCoord.xy / max(dpr, 1.0));
         c += 0.025 * sin(sp.x * 0.35 + sp.y * 0.9 - time * 6.0);          // faint diagonal interference, crawling
+        // scratchy interference in the yanked rows: streaky noise along the lines and the odd bright scratch line
+        float ft = floor(time * 30.0);
+        c += scratch * ((hash(vec2(floor(sp.x / 3.0), line + ft * 7.0)) - 0.5) * 0.35 + step(0.9, hash(vec2(line, ft))) * 0.22);
         c *= 0.68;   // a touch dimmer than the arcade CRT, so colours don't blow out (no snow: tried, removed)
         return max(c, 0.0);
       }
