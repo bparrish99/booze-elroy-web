@@ -37,6 +37,14 @@ try {
   check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "and once more: back to the CRT");
   check(await ev(() => !window.__core.optMenu.some((i) => i.key === "crtEffect" || i.key === "volume")), "no CRT or volume rows on the Options page");
   check(await g("g.config.volume === 8"), "the game plays at a fixed volume (8)");
+  // the mute button (next to fullscreen): mutes the page, remembered; M does it too, but only during gameplay
+  check(await ev(() => !document.getElementById("mute").classList.contains("muted")), "not muted to begin with");
+  await p.click("#mute");
+  check(await ev(() => document.getElementById("mute").classList.contains("muted") && localStorage.getItem("booze-elroy-muted") === "1"), "the mute button mutes, and that's remembered");
+  await p.keyboard.press("m");
+  check(await ev(() => document.getElementById("mute").classList.contains("muted")), "M on a menu does nothing (it's a letter in cheat codes)");
+  await p.click("#mute");
+  check(await ev(() => !document.getElementById("mute").classList.contains("muted") && localStorage.getItem("booze-elroy-muted") === "0"), "clicking again unmutes");
   // cheat "xyzzy": a small frame-rate readout, off by default
   check(await ev(() => !document.getElementById("fps").classList.contains("on")), "fps readout is off by default");
   await p.keyboard.type("xyzzy"); await p.waitForTimeout(1300);

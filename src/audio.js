@@ -5,6 +5,9 @@
     const AC = root.AudioContext || root.webkitAudioContext;
     const ctx = AC ? new AC() : null;
     const buffers = {};
+    // web edition: a master gain for the page's mute button (the game's own volume logic stays per sound)
+    const master = ctx ? ctx.createGain() : null;
+    if (master) master.connect(ctx.destination);
     const ready = ctx ? Promise.all(Object.keys(buffersB64).map(async (name) => {
       try {
         const bin = Uint8Array.from(atob(buffersB64[name]), (c) => c.charCodeAt(0));
@@ -19,7 +22,7 @@
         if (!ctx || !buf) return;
         const src = ctx.createBufferSource(); src.buffer = buf; src.loop = this.loop;
         const gain = ctx.createGain(); gain.gain.value = this.vol;
-        src.connect(gain); gain.connect(ctx.destination);
+        src.connect(gain); gain.connect(master);
         const me = src;
         src.onended = () => { if (this.node === me) { this.playing = false; this.node = null; this.offset = 0; } };
         this.node = src; this.gain = gain; this.playing = true;
@@ -34,7 +37,8 @@
       setVolume(v) { this.vol = v; if (this.gain) this.gain.gain.value = v; }
       setLooping(l) { this.loop = !!l; if (this.node) this.node.loop = this.loop; }
     }
-    return { ctx, ready, makeSound: (name, loop) => new Snd(name, loop), unlock() { if (ctx && ctx.state === "suspended") ctx.resume(); } };
+    return { ctx, ready, makeSound: (name, loop) => new Snd(name, loop), unlock() { if (ctx && ctx.state === "suspended") ctx.resume(); },
+      setMuted(m) { if (master) master.gain.value = m ? 0 : 1; } };
   }
   root.BoozeAudio = { createAudio };
 })(typeof self !== "undefined" ? self : this);

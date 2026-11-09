@@ -12,6 +12,8 @@
   async function start() {
     const down = {};
     const audio = BoozeAudio.createAudio(A.sounds);
+    let muted = false;
+    try { muted = localStorage.getItem("booze-elroy-muted") === "1"; } catch { /* ignore */ }
     // online leaderboard + per-settings high score (only over http(s); a file:// page plays offline)
     let storage = null; try { storage = window.localStorage; } catch { /* ignore */ }
     const LB = BoozeLeaderboard.create({
@@ -62,7 +64,7 @@
       play() {
         if (!videoEl) return;
         try {
-          videoEl.currentTime = 0; videoEl.muted = false;
+          videoEl.currentTime = 0; videoEl.muted = muted;
           videoEl.volume = Math.max(0, Math.min(1, (core.g.config.volume || 0) / 10));
           const pr = videoEl.play();
           if (pr && pr.catch) pr.catch(() => { videoEl.muted = true; const p2 = videoEl.play(); if (p2 && p2.catch) p2.catch(() => {}); });
@@ -343,6 +345,23 @@
     canvas.addEventListener("contextmenu", (e) => { if (core.g.scene.name !== "game") e.preventDefault(); });
     // fullscreen: standard page controls (button + F key); the browser's own Esc/F11 handling stays in charge
     const fsBtn = document.getElementById("fs");
+    // mute button (next to fullscreen; also M during gameplay, where the Lua had it): the whole page, remembered
+    const muteBtn = document.getElementById("mute");
+    function syncMute() {
+      audio.setMuted(muted);
+      if (videoEl) videoEl.muted = muted;
+      muteBtn.classList.toggle("muted", muted);
+      muteBtn.title = muted ? "Unmute" : "Mute";
+      muteBtn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
+    }
+    function toggleMute() { muted = !muted; try { localStorage.setItem("booze-elroy-muted", muted ? "1" : "0"); } catch { /* ignore */ } syncMute(); }
+    muteBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
+    muteBtn.addEventListener("click", (e) => { e.preventDefault(); audio.unlock(); toggleMute(); muteBtn.blur(); });
+    window.addEventListener("keydown", (e) => {
+      if (resetOpen() || core.g.scene.name !== "game" || core.g.attract || e.code !== "KeyM" || e.ctrlKey || e.metaKey || e.altKey) return;
+      e.preventDefault(); toggleMute();
+    });
+    syncMute();
     const root = document.documentElement;
     const fsApi = root.requestFullscreen ? { req: () => root.requestFullscreen(), exit: () => document.exitFullscreen(), el: () => document.fullscreenElement }
       : root.webkitRequestFullscreen ? { req: () => root.webkitRequestFullscreen(), exit: () => document.webkitExitFullscreen(), el: () => document.webkitFullscreenElement } : null;
