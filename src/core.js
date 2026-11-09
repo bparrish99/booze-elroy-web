@@ -1783,7 +1783,10 @@
       if (g.scene.captureInput) { g.scene.keypressed(key); return; } // web-edition scenes handle Esc/Backspace themselves
       if (key === "escape" || key === "backspace") {
         if (g.scene === attract) { if (env.quit) env.quit(); }
-        else if (g.scene === game && !g.attract) setScene((env.quitGameTo && env.quitGameTo()) || "attract"); // web edition: an arena game goes back to its arena
+        else if (g.scene === game && !g.attract) { // web edition: an arena game goes back to its arena, silencing the game like the title does
+          const to = env.quitGameTo && env.quitGameTo();
+          if (to) { for (const k of Object.keys(g.sounds)) g.sounds[k].stop(); setScene(to); } else setScene("attract");
+        }
         else if (g.scene === credits) leaveCredits();
         else setScene("attract", true);
         return;

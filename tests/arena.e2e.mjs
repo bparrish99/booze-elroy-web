@@ -133,6 +133,10 @@ try {
   await p.keyboard.press("Escape");
   check(await until("g.scene.name === 'arena' && g.scene.title() === 'SUNDAY CUP' && g.config.ghostCount === 6"), "Esc mid-game: back on the arena, still its settings");
   await choose("Play");
+  check(await until("g.scene.name === 'game' && g.sounds.opening.isPlaying()"), "the opening jingle plays");
+  await p.keyboard.press("Escape");
+  check(await until("g.scene.name === 'arena' && !Object.values(g.sounds).some((s) => s.isPlaying())"), "Esc during it: back on the arena, jingle cut off");
+  await choose("Play");
   check(await until("g.scene.name === 'game' && g.mode === 'normal'", 12000), "game starts again");
   await p.click("#esc");
   check(await until("g.scene.name === 'arena' && g.scene.title() === 'SUNDAY CUP'"), "the X button does the same");
