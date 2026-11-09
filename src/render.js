@@ -732,8 +732,19 @@
         // (calm on purpose: random block tears, colour cut-outs and per-line jitter were tried and were too spastic)
         float line = floor(uv.y * 288.0);
         uv.x += sin(uv.y * 37.0 + time * 2.3) * 0.0012;                     // a gentle wave
-        float band = fract(time * 0.06) * 1.3 - 0.15, inBand = 1.0 - smoothstep(0.0, 0.018, abs(uv.y - band));
-        uv.x += inBand * (0.008 + 0.01 * hash(vec2(line, floor(time * 30.0))));      // tracking: a torn band
+        // tracking: a torn band drifting down at an uneven pace, swelling and thinning as it goes
+        float band = fract(time * 0.06 + 0.04 * sin(time * 0.7) + 0.03 * sin(time * 0.23 + 1.0)) * 1.3 - 0.15;
+        float bw = 0.014 + 0.008 * sin(time * 1.3) * sin(time * 0.41);
+        float inBand = 1.0 - smoothstep(0.0, bw, abs(uv.y - band));
+        // and now and then a second, briefer tear somewhere else: fades in, lingers, fades out (a dice roll per 2.3 s)
+        float slot = floor(time / 2.3), st = time - slot * 2.3;
+        float t0 = hash(vec2(slot, 6.1)), dur = 0.5 + 0.7 * hash(vec2(slot, 2.7));
+        float env = step(0.5, hash(vec2(slot, 4.2))) * smoothstep(t0, t0 + 0.12, st) * (1.0 - smoothstep(t0 + dur - 0.15, t0 + dur, st));
+        float y2 = 0.05 + 0.9 * hash(vec2(slot, 8.3)) + (st - t0) * 0.05, w2 = 0.006 + 0.02 * hash(vec2(slot, 1.9));
+        float in2 = env * (1.0 - smoothstep(0.0, w2, abs(uv.y - y2)));
+        float dir2 = hash(vec2(slot, 5.3)) < 0.5 ? -1.0 : 1.0;
+        uv.x += inBand * (0.008 + 0.01 * hash(vec2(line, floor(time * 30.0))))
+              + in2 * dir2 * (0.005 + 0.012 * hash(vec2(line, floor(time * 30.0) + 7.0)));
         vec3 soft = vec3(0.0), chroma = vec3(0.0); float ws = 0.0, wc = 0.0;
         for (int i = -2; i <= 2; i++) { float f = float(i), w = exp(-f * f / 2.5); soft += texture2D(tex, uv + vec2(f * px * 0.5, 0.0)).rgb * w; ws += w; }
         for (int i = -2; i <= 6; i++) { float f = float(i), w = exp(-(f - 1.5) * (f - 1.5) / 7.0); chroma += texture2D(tex, uv - vec2(f * px * 0.6, 0.0)).rgb * w; wc += w; }
