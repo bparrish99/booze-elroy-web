@@ -763,12 +763,13 @@
         float sheen = smoothstep(-0.1, 1.0, q.y * 0.85 + q.x * 0.35 + 0.15 * (1.0 - dot(q, q)));
         c += vec3(0.78, 0.84, 1.0) * 0.045 * sheen * sheen;
         //   a soft window-shaped reflection with a crisp lower edge, upper right
-        vec2 wq = (vuv - vec2(0.73, 0.8)) * vec2(1.0, 1.6);
+        const vec2 WIN = vec2(0.73, 0.8);
+        vec2 wq = (vuv - WIN) * vec2(1.0, 1.6);
         float win = (1.0 - smoothstep(0.17, 0.2, length(wq))) * smoothstep(-0.12, 0.1, wq.y);
         c += vec3(0.8, 0.86, 1.0) * 0.035 * win;
-        //   small, soft specular point. Secretly the hour hand of a clock (player's local time): straight up at
-        //   12, right at 3, bottom at 6, left at 9, creeping round with the minutes
-        vec2 glint = vec2(0.5) + vec2(sin(hourAngle) * 0.4, cos(hourAngle) * 0.43);
+        //   small, soft specular point. Secretly a clock: the window reflection is the face and the glint the hour
+        //   hand's tip (player's local time): top of the window at 12, right at 3, bottom at 6, left at 9
+        vec2 glint = WIN + vec2(sin(hourAngle) * 0.11, cos(hourAngle) * 0.068);
         float spec = exp(-pow(length((vuv - glint) * vec2(1.0, 1.35)) / 0.045, 2.0));
         c += vec3(0.9, 0.94, 1.0) * 0.09 * spec;
         // plastic bezel outside the glass
