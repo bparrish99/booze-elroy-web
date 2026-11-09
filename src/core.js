@@ -1783,7 +1783,7 @@
       if (g.scene.captureInput) { g.scene.keypressed(key); return; } // web-edition scenes handle Esc/Backspace themselves
       if (key === "escape" || key === "backspace") {
         if (g.scene === attract) { if (env.quit) env.quit(); }
-        else if (g.scene === game && !g.attract) setScene("attract");
+        else if (g.scene === game && !g.attract) setScene((env.quitGameTo && env.quitGameTo()) || "attract"); // web edition: an arena game goes back to its arena
         else if (g.scene === credits) leaveCredits();
         else setScene("attract", true);
         return;

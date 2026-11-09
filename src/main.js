@@ -130,7 +130,7 @@
 
     const core = BoozeCore.create(A.data, {
       noExit: true, noAutoplay: true, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s),
+      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), quitGameTo: () => (LB.inArena() ? "arena" : null),
       saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { if (LB.inArena()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),

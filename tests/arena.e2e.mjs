@@ -126,12 +126,20 @@ try {
   await ev(() => { const c = window.__core.g.config; c.ghostCount = 3; c.startingLevel = 5; });
   check(await ev(() => { const s = JSON.parse(localStorage.getItem("booze-elroy-options") || "null"); return !s || s.ghostCount !== 6; }), "arena settings were never saved as the player's");
 
-  // quitting a game with Esc also gives the settings back
+  // quitting an arena game (Esc or the X button) goes back to that arena, still on its settings; leaving it gives them back
   await choose("SUNDAY CUP"); await until("g.scene.name === 'arena'");
   await choose("Play");
   check(await until("g.scene.name === 'game' && g.mode === 'normal'", 12000), "game starts");
   await p.keyboard.press("Escape");
-  check(await until("g.scene.name === 'attract' && g.config.ghostCount === 3 && g.config.startingLevel === 5"), "Esc mid-game: title, own settings back");
+  check(await until("g.scene.name === 'arena' && g.scene.title() === 'SUNDAY CUP' && g.config.ghostCount === 6"), "Esc mid-game: back on the arena, still its settings");
+  await choose("Play");
+  check(await until("g.scene.name === 'game' && g.mode === 'normal'", 12000), "game starts again");
+  await p.click("#esc");
+  check(await until("g.scene.name === 'arena' && g.scene.title() === 'SUNDAY CUP'"), "the X button does the same");
+  await choose("Back");
+  check(await until("g.scene.name === 'arenas' && g.config.ghostCount === 3 && g.config.startingLevel === 5"), "then Back: the list, own settings back");
+  await p.keyboard.press("Escape");
+  check(await until("g.scene.name === 'attract'"), "Esc on the list: title");
 
   // 25 hours later: finished, with its winner; 49 hours: gone
   clock += 25 * HOUR;
