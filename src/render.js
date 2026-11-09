@@ -807,57 +807,18 @@
         gl_FragColor = vec4(mix(bez, c, inside), 1.0);
       }`);
 
-    // the bezel's static look (base colour, grain, weathering, rim highlight), drawn once per resize into Z; pU reads it back
+    // the bezel's static look (base colour, grain, rim highlight), drawn once per resize into Z; pU reads it back
     const pZ = mk(HDR + `
       uniform vec4 frame; uniform float dpr;
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
-      float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
-      float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
-      // fine scratches: noise stretched along a direction, only its rare peaks survive, gated into short runs
-      float scratches(vec2 p, float ang, float seed, float len){
-        vec2 r = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p;
-        float line = smoothstep(0.84, 0.96, vnoise(vec2(r.x * len + seed, r.y * 0.9)));
-        return line * smoothstep(0.64, 0.76, vnoise(r * 0.01 + seed * 3.1));   // sparse: only here and there
-      }
-      // a scrape: a bundle of parallel gouges dragged across in one go
-      float scrape(vec2 p, float ang, float seed){
-        vec2 r = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p;
-        float lines = smoothstep(0.7, 0.95, vnoise(vec2(r.x * 0.002 + seed, r.y * 0.7)));
-        float band = smoothstep(0.72, 0.84, vnoise(vec2(r.x * 0.004, r.y * 0.025) + seed * 7.7));
-        return lines * band;
-      }
       void main(){
         vec2 fuv = (vuv - frame.xy) / frame.zw;
         vec2 q = fuv * 2.0 - 1.0;
         q *= ${CRT_ZOOM.toFixed(3)};
         q += (q.yx * q.yx) * q * vec2(0.04, 0.055);
         float d = sdBox(q, vec2(1.0), 0.06);
-        vec3 bez = vec3(0.105, 0.102, 0.096) * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
-        // weathered: old scraped metal (static, in css px so it looks the same at any dpr)
-        if (d > 0.0) {
-          vec2 bp = gl_FragCoord.xy / max(dpr, 1.0);
-          bez *= 0.94 + 0.12 * fbm(bp / 90.0);                                         // faintly uneven finish
-          bez *= 0.93 + 0.14 * vnoise(vec2(bp.x * 0.015, bp.y * 1.3));                    // brushed grain, side to side
-          float grime = fbm(bp / 25.0 + 2.1);                                           // grime settled against the rim
-          bez *= 1.0 - 0.35 * smoothstep(0.35, 0.7, grime) * (1.0 - smoothstep(0.0, 0.14, d));
-          // hairline scratches every which way, long and short
-          float sc = 0.0;
-          for (int i = 0; i < 5; i++) {
-            float fi = float(i);
-            sc = max(sc, scratches(bp, fi * 2.39996 + 0.3, fi * 13.7 + 1.0, mix(0.003, 0.012, fract(fi * 0.618))) * (1.0 - 0.07 * fi));
-          }
-          // a few scrapes, bright where the paint/oxide is gone, with dark dirt-filled edges just beside them
-          float sp = max(scrape(bp, 0.42, 3.0), scrape(bp, -0.65, 21.0));
-          float spEdge = max(scrape(bp + vec2(0.0, 1.5), 0.42, 3.0), scrape(bp + vec2(1.2, 0.8), -0.65, 21.0));
-          float away = smoothstep(0.16, 0.4, d);   // none near the glass or on the reflective rim: just the far plastic
-          bez *= 1.0 - 0.18 * max(spEdge - sp, 0.0) * away;
-          bez += (vec3(0.045, 0.045, 0.043) * sp + vec3(0.035, 0.034, 0.032) * sc) * away;
-          float pit = hash(floor(bp) * vec2(0.0731, 0.1129) + 0.37);   // (scaled: the hash repeats on whole-number grids)                                           // pits and specks
-          bez *= 1.0 - 0.5 * step(0.9985, pit);
-          bez += vec3(0.05) * step(pit, 0.0008);
-        }
+        vec3 bez = vec3(0.11, 0.1, 0.086) * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
         bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));
         gl_FragColor = vec4(bez, 1.0);
       }`);
