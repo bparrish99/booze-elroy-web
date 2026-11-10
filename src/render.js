@@ -56,8 +56,8 @@
         tctx.globalCompositeOperation = "source-over";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "multiply";
-        if (woozy) { // the swirl: one arm's width every 170 ms, a full turn about every half second
-          const phase = performance.now() / 170;
+        if (woozy) { // the swirl: one arm's width every 300 ms, a full turn about every second
+          const phase = performance.now() / 300;
           for (let py = 0; py < s.fh; py++) for (let px = 0; px < s.fw; px++) {
             const v = Math.floor(WOOZY_ARM[py * 16 + px] + phase);
             tctx.fillStyle = WOOZY_TONES[((v % 3) + 3) % 3];
