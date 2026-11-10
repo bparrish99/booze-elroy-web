@@ -3,7 +3,7 @@
 Pinback's Pac-Man variant "Booze Elroy" (original: Love2D/Lua, not in this repo). This repo is a faithful JS port, live at booze-elroy.com (Netlify, serves `public/`).
 
 ## Rules that matter
-- The game logic is canon: gameplay (movement, ghost AI, timing, scoring, levels, RNG calls) must match the original Lua exactly. `src/core.js` mirrors it 1:1 (Lua truthiness helper `T()`, pinned iteration orders). Do not "clean up" logic.
+- The game logic is canon: gameplay (movement, ghost AI, timing, scoring, levels, RNG calls) must match the original Lua exactly. `src/core.js` started as a 1:1 mirror (Lua truthiness helper `T()`, pinned iteration orders). The *code* has no sentimental value (author, 2026-11-09: refactors and efficiency improvements are welcome); what must not change is behaviour: the same gameplay, frame for frame, and the same user-facing results. Refactor only with that verified: `tests/golden.test.mjs` replays the core (seeded RNG, a pathfinding bot, 13 configurations, 3 minutes each) and compares per-frame state fingerprints with `tests/golden.json`, recorded from master's core before any refactor. Re-record (`node tools/golden.mjs --record`) only when gameplay is *meant* to change, and say so in the commit.
 - Everything around the game (menus, options UX, online features, presentation) is the web edition's own and can move on freely when the author asks; "the Lua did it differently" is not an objection there. Keep such changes in env hooks / leaderboard.js / main.js / render.js where possible, and list them below.
 - Deviations from the original (approved by the author):
   - `logic.eatOverlappingFrightened`: a second frightened ghost sharing Pac-Man's tile after an ateGhost pause is also eaten.
