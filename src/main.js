@@ -13,7 +13,14 @@
     const down = {};
     const audio = BoozeAudio.createAudio(A.sounds);
     let muted = false;
-    try { muted = localStorage.getItem("booze-elroy-muted") === "1"; } catch { /* ignore */ }
+    let volume = 100; // the page's volume slider, 0-100 (the game itself plays at a fixed 8: env.fixedVolume)
+    try {
+      muted = localStorage.getItem("booze-elroy-muted") === "1";
+      const v = parseInt(localStorage.getItem("booze-elroy-volume"), 10);
+      if (v >= 0 && v <= 100) volume = v;
+    } catch { /* ignore */ }
+    const masterGain = () => muted ? 0 : (volume / 100) ** 2; // squared: the slider feels even to the ear
+    const filmVolume = () => Math.max(0, Math.min(1, (core.g.config.volume || 0) / 10 * masterGain()));
     // maze editor test play (tools/maze-editor; localhost only): ?testmaze plays the maze the editor left in localStorage,
     // whatever maze pack is chosen, offline
     let testMaze = null;
@@ -74,7 +81,7 @@
         if (!videoEl) return;
         try {
           videoEl.currentTime = 0; videoEl.muted = muted;
-          videoEl.volume = Math.max(0, Math.min(1, (core.g.config.volume || 0) / 10));
+          videoEl.volume = filmVolume();
           const pr = videoEl.play();
           if (pr && pr.catch) pr.catch(() => { videoEl.muted = true; const p2 = videoEl.play(); if (p2 && p2.catch) p2.catch(() => {}); });
         } catch { /* ignore */ }
@@ -356,18 +363,41 @@
     canvas.addEventListener("contextmenu", (e) => { if (core.g.scene.name !== "game") e.preventDefault(); });
     // fullscreen: standard page controls (button + F key); the browser's own Esc/F11 handling stays in charge
     const fsBtn = document.getElementById("fs");
-    // mute button (next to fullscreen; also M during gameplay, where the Lua had it): the whole page, remembered
-    const muteBtn = document.getElementById("mute");
+    // volume (leftmost button): the speaker mutes / unmutes (also M during gameplay, where the Lua had it); a slider
+    // drops down below it on hover, or on a first tap on touch screens (a second tap mutes). The whole page, remembered
+    const volBox = document.getElementById("vol"), muteBtn = document.getElementById("mute"), volSlider = document.getElementById("volume");
     function syncMute() {
-      audio.setMuted(muted);
-      if (videoEl) videoEl.muted = muted;
-      muteBtn.classList.toggle("muted", muted);
-      muteBtn.title = muted ? "Unmute" : "Mute";
-      muteBtn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
+      const gain = masterGain();
+      audio.setMaster(gain);
+      if (videoEl) { videoEl.muted = muted; videoEl.volume = filmVolume(); }
+      const silent = muted || volume === 0;
+      muteBtn.classList.toggle("muted", silent);
+      muteBtn.classList.toggle("low", volume < 50);
+      muteBtn.title = silent ? "Unmute" : "Mute";
+      muteBtn.setAttribute("aria-label", muteBtn.title);
+      volSlider.value = String(volume);
+      volSlider.style.setProperty("--v", (muted ? 0 : volume) + "%");
+      volSlider.title = "Volume " + (muted ? 0 : volume) + "%";
     }
-    function toggleMute() { muted = !muted; try { localStorage.setItem("booze-elroy-muted", muted ? "1" : "0"); } catch { /* ignore */ } syncMute(); }
-    muteBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
-    muteBtn.addEventListener("click", (e) => { e.preventDefault(); audio.unlock(); toggleMute(); muteBtn.blur(); });
+    const saveVolume = () => { try { localStorage.setItem("booze-elroy-muted", muted ? "1" : "0"); localStorage.setItem("booze-elroy-volume", String(volume)); } catch { /* ignore */ } };
+    function toggleMute() {
+      if (muted || volume === 0) { muted = false; if (volume === 0) volume = 50; } else muted = true;
+      saveVolume(); syncMute();
+    }
+    let volTouch = false;
+    const closeVol = () => volBox.classList.remove("open");
+    volBox.addEventListener("pointerdown", (e) => { e.stopPropagation(); audio.unlock(); }, true);
+    muteBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); volTouch = e.pointerType !== "mouse"; }, true);
+    muteBtn.addEventListener("click", (e) => {
+      e.preventDefault(); muteBtn.blur();
+      if (volTouch && !volBox.classList.contains("open")) { volBox.classList.add("open"); return; } // touch: first tap shows the slider
+      toggleMute();
+    });
+    volSlider.addEventListener("input", () => { volume = Math.max(0, Math.min(100, Math.round(+volSlider.value))); muted = false; saveVolume(); syncMute(); });
+    volSlider.addEventListener("keydown", (e) => e.stopPropagation()); // its arrow keys are its own, not Pac-Man's
+    volSlider.addEventListener("change", () => volSlider.blur());
+    volSlider.addEventListener("pointerup", () => volSlider.blur());
+    window.addEventListener("pointerdown", (e) => { if (!volBox.contains(e.target)) closeVol(); }, true);
     window.addEventListener("keydown", (e) => {
       if (resetOpen() || core.g.scene.name !== "game" || core.g.attract || e.code !== "KeyM" || e.ctrlKey || e.metaKey || e.altKey) return;
       e.preventDefault(); toggleMute();
@@ -390,11 +420,11 @@
       window.addEventListener("keydown", (e) => { if (!resetOpen() && core.g.scene.name !== "nameEntry" && e.code === "KeyF" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFullscreen(); } });
     }
     // the look: CRT (true, the default) -> plain (false) -> 1982 living-room TV ("tv") -> CRT. The C key or the TV button
-    // (next to mute; phones have no C). Not an option on the Options page (env.crtKey); saved at once, into the player's
+    // (between mute and fullscreen; phones have no C). Not an option on the Options page (env.crtKey); saved at once, into the player's
     // own settings even while an arena's / leaderboard's are borrowed
     const lookBtn = document.getElementById("look");
     const LOOK_NAMES = { true: "CRT", false: "clean", tv: "retro TV" };
-    const syncLook = () => { lookBtn.title = "Look: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title); };
+    const syncLook = () => { lookBtn.title = "Style: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title); };
     function cycleLook() {
       const crt = core.g.config.crtEffect;
       core.g.config.crtEffect = crt === "tv" ? true : crt ? false : "tv";

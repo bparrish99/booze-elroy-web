@@ -134,7 +134,7 @@
         if (ab === 1) {
           if (phased >= 0) setColor(Math.random(), Math.random(), Math.random()); else setHollow();
         } else if (ab === 2) {
-          if (phased >= 0) setColor(0, 1, 0); else setHollow();
+          if (phased < 0) setHollow(); // web edition: plain yellow while boosting (the Lua tinted him green)
         } else if (ab === 3) {
           if (phased > 40) {
             const pac = g.chars.pac;

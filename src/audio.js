@@ -5,7 +5,7 @@
     const AC = root.AudioContext || root.webkitAudioContext;
     const ctx = AC ? new AC() : null;
     const buffers = {};
-    // web edition: a master gain for the page's mute button (the game's own volume logic stays per sound)
+    // web edition: a master gain for the page's volume slider and mute button (the game's own volume logic stays per sound)
     const master = ctx ? ctx.createGain() : null;
     if (master) master.connect(ctx.destination);
     const ready = ctx ? Promise.all(Object.keys(buffersB64).map(async (name) => {
@@ -38,7 +38,7 @@
       setLooping(l) { this.loop = !!l; if (this.node) this.node.loop = this.loop; }
     }
     return { ctx, ready, makeSound: (name, loop) => new Snd(name, loop), unlock() { if (ctx && ctx.state === "suspended") ctx.resume(); },
-      setMuted(m) { if (master) master.gain.value = m ? 0 : 1; } };
+      setMaster(v) { if (master) master.gain.value = v; } };
   }
   root.BoozeAudio = { createAudio };
 })(typeof self !== "undefined" ? self : this);

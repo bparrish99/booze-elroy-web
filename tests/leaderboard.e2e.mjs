@@ -37,7 +37,7 @@ try {
   check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "and once more: back to the CRT");
   check(await ev(() => !window.__core.optMenu.some((i) => i.key === "crtEffect" || i.key === "volume")), "no CRT or volume rows on the Options page");
   await p.click("#look");
-  check(await ev(() => window.__core.g.config.crtEffect === false && document.getElementById("look").title.startsWith("Look: clean")), "the TV button changes the look too (for phones)");
+  check(await ev(() => window.__core.g.config.crtEffect === false && document.getElementById("look").title.startsWith("Style: clean")), "the TV button changes the look too (for phones)");
   await p.click("#look"); await p.click("#look");
   check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "round the three looks and back to CRT, saved");
   check(await g("g.config.volume === 8"), "the game plays at a fixed volume (8)");
@@ -49,6 +49,21 @@ try {
   check(await ev(() => document.getElementById("mute").classList.contains("muted")), "M on a menu does nothing (it's a letter in cheat codes)");
   await p.click("#mute");
   check(await ev(() => !document.getElementById("mute").classList.contains("muted") && localStorage.getItem("booze-elroy-muted") === "0"), "clicking again unmutes");
+  // the volume slider drops down below the speaker on hover; remembered; moving it unmutes
+  await p.mouse.move(600, 400);
+  check(await ev(() => getComputedStyle(document.getElementById("volPanel")).display === "none"), "the volume slider is hidden at first");
+  await p.hover("#mute");
+  check(await ev(() => getComputedStyle(document.getElementById("volPanel")).display !== "none"), "hovering the speaker shows the volume slider");
+  await p.click("#mute");
+  const setVol = (v) => ev((v) => { const s = document.getElementById("volume"); s.value = String(v); s.dispatchEvent(new Event("input")); }, v);
+  await setVol(30);
+  check(await ev(() => localStorage.getItem("booze-elroy-volume") === "30" && localStorage.getItem("booze-elroy-muted") === "0" && !document.getElementById("mute").classList.contains("muted")), "the slider sets the volume (remembered) and unmutes");
+  await setVol(0);
+  check(await ev(() => document.getElementById("mute").classList.contains("muted")), "volume 0 shows as muted");
+  await p.click("#mute");
+  check(await ev(() => localStorage.getItem("booze-elroy-volume") === "50" && !document.getElementById("mute").classList.contains("muted")), "unmuting from volume 0 comes back at 50");
+  await setVol(100);
+  await p.mouse.move(600, 400);
   // cheat "xyzzy": a small frame-rate readout, off by default
   check(await ev(() => !document.getElementById("fps").classList.contains("on")), "fps readout is off by default");
   await p.keyboard.type("xyzzy"); await p.waitForTimeout(1300);
