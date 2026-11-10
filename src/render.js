@@ -30,13 +30,7 @@
 
     // ---- love.graphics.setColor emulation (persists until changed, like LOVE)
     let col = [1, 1, 1, 1];
-    const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; woozy = false; };
-    // web edition: Pac-Man "out of gas" (an ability not ready): instead of one flat tint, a slow static of paler and darker
-    // yellows flickers inside him, each pixel on its own staggered clock (crisp pixel art, still Pac-Man yellow, gone off)
-    let woozy = false;
-    const setWoozy = () => { col = [0.65, 0.62, 0, 1]; woozy = true; };
-    const WOOZY_TONES = ["rgb(200,186,12)", "rgb(176,163,8)", "rgb(152,141,4)"]; // darker yellows, still saturated, close together
-    const woozyHash = (a, b) => { let h = Math.imul(a, 374761393) + Math.imul(b, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; };
+    const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; };
     const tmp = document.createElement("canvas"); tmp.width = 16; tmp.height = 16;
     const tctx = tmp.getContext("2d");
     tctx.imageSmoothingEnabled = false;
@@ -46,24 +40,14 @@
     function blit(s, i, x, y, angle, ox, oy) {
       const sx = (i % s.cols) * s.fw, sy = Math.floor(i / s.cols) * s.fh;
       let src = s.img, ssx = sx, ssy = sy;
-      const tinted = woozy || col[0] !== 1 || col[1] !== 1 || col[2] !== 1;
+      const tinted = col[0] !== 1 || col[1] !== 1 || col[2] !== 1;
       if (tinted) {
         tctx.clearRect(0, 0, 16, 16);
         tctx.globalCompositeOperation = "source-over";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "multiply";
-        if (woozy) { // the static: each pixel picks a new tone about every 250 ms, on its own offset clock (painted, not
-          tctx.globalCompositeOperation = "source-over"; //  multiplied: a multiply can't make yellow paler)
-          const t = performance.now() / 250;
-          for (let py = 0; py < s.fh; py++) for (let px = 0; px < s.fw; px++) {
-            const p = py * 16 + px, tick = Math.floor(t + (woozyHash(p, 7) % 1000) / 1000);
-            tctx.fillStyle = WOOZY_TONES[woozyHash(p, tick) % 3];
-            tctx.fillRect(px, py, 1, 1);
-          }
-        } else {
-          tctx.fillStyle = `rgb(${Math.round(col[0] * 255)},${Math.round(col[1] * 255)},${Math.round(col[2] * 255)})`;
-          tctx.fillRect(0, 0, s.fw, s.fh);
-        }
+        tctx.fillStyle = `rgb(${Math.round(col[0] * 255)},${Math.round(col[1] * 255)},${Math.round(col[2] * 255)})`;
+        tctx.fillRect(0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "destination-in";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "source-over";
@@ -115,9 +99,9 @@
       if (T(phased)) {
         const ab = g.config.ability;
         if (ab === 1) {
-          if (phased >= 0) setColor(Math.random(), Math.random(), Math.random()); else setWoozy();
+          if (phased >= 0) setColor(Math.random(), Math.random(), Math.random()); else setColor(0.5, 0.5, 0);
         } else if (ab === 2) {
-          if (phased >= 0) setColor(0, 1, 0); else setWoozy();
+          if (phased >= 0) setColor(0, 1, 0); else setColor(0.5, 0.5, 0);
         } else if (ab === 3) {
           if (phased > 40) {
             const pac = g.chars.pac;
@@ -132,11 +116,11 @@
             ctx.closePath(); ctx.fill(); ctx.restore();
             setColor(1, 1, 1);
           }
-          setWoozy();
+          setColor(0.5, 0.5, 0);
         }
       }
-      // web edition: the Rewind ability's charge shows the abilities' way: full yellow when ready, woozy once used
-      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent) setWoozy();
+      // web edition: the Rewind ability's charge shows the abilities' way: full yellow when ready, this tint once used
+      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent) setColor(0.5, 0.5, 0);
       let angle = 0;
       if (T(o.stunned)) angle = (o.stunned * 6 * (o.spinDirection > 0.5 ? 1 : -1)) * Math.PI / 180;
       blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0), angle, 8, 8);
