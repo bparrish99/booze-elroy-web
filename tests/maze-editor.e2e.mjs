@@ -87,6 +87,19 @@ try {
   await p.selectOption("#punky", rowOpt);
   check(await ed("E.doc.punky") === Number(rowOpt), "Punky's row (from the middle-corridor rows)");
 
+  // scatter targets: pick one on the maze, type one in, presets
+  await p.click("#sc-inky-pick"); await p.mouse.move(...at(20, 20)); await p.mouse.down(); await p.mouse.up();
+  check(await ed("JSON.stringify(E.doc.scatter.inky)") === '{"x":20,"y":20}' && await ed("E.doc.cells[20][20]") === JSON.parse(readFileSync(join(root, "assets/data.json"), "utf8")).mazes.booze1.map[20][20].replace(/[^ .`_;:]/, "#"), "pick sets Inky's scatter target (and doesn't paint)");
+  check(await p.inputValue("#scatter") === "custom", "the preset shows custom");
+  await p.fill("#sc-clyde-y", "-3"); await p.press("#sc-clyde-y", "Tab");
+  check(await ed("E.doc.scatter.clyde.y") === -3, "a target typed in (off the maze)");
+  await p.keyboard.press("Control+z");
+  check(await ed("E.doc.scatter.clyde.y") === 30, "undo");
+  await p.selectOption("#scatter", "inside");
+  check(await ed("JSON.stringify(E.doc.scatter)") === JSON.stringify({ blinky: { x: 20, y: 3 }, pinky: { x: 4, y: 3 }, inky: { x: 23, y: 22 }, clyde: { x: 4, y: 22 } }), "a preset sets all four");
+  await p.click("#sc-blinky-pick"); await p.mouse.move(...at(24, 5)); await p.mouse.down(); await p.mouse.up();
+  await shot("me-scatter");
+
   // save, test play, add to the game, remove
   await p.keyboard.press("Control+s"); await p.waitForTimeout(300);
   check(existsSync(join(root, "mazes", "booze5.json")) && JSON.parse(readFileSync(join(root, "mazes", "booze5.json"), "utf8")).color === 5, "Ctrl+S saves mazes/booze5.json");
@@ -102,6 +115,7 @@ try {
   await p.click("#add"); await p.waitForFunction(() => /in the game/.test(document.getElementById("msg").textContent), null, { timeout: 10000 });
   const data = JSON.parse(readFileSync(join(root, "assets/data.json"), "utf8"));
   check(data.mazeNames.at(-1) === "booze5" && data.mazes.booze5.map.length === 31 && data.mazes.booze5.punkyStart.y === Number(rowOpt), "Add to game writes booze5 into data.json");
+  check(JSON.stringify(data.mazes.booze5.scatterPositions.blinky) === '{"x":24,"y":5}' && JSON.stringify(data.mazes.booze5.scatterTiles[0]) === '{"x":24,"y":5}', "with its scatter targets");
   check(/Booze pack has 5 mazes/.test(await p.textContent("#msg")), "and says the Booze pack has 5 mazes");
   await p.click("#new");
   check(await ed("E.doc.name") === "booze6", "the next new maze is booze6");

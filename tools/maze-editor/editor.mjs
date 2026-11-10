@@ -13,6 +13,8 @@ const AUTOSAVE = "booze-maze-editor-autosave";
 let data, table, spr8, spr16, doc, gen, chk;
 let tool = "#", scale = 3, hover = null, stroke = null, rect = null, flash = null, savedJSON = "", gameNames = [], drafts = [];
 const undoStack = [], redoStack = [];
+const GHOSTS = [["blinky", "Blinky", "#ff3b3b"], ["pinky", "Pinky", "#ffb8ff"], ["inky", "Inky", "#00e5ff"], ["clyde", "Clyde", "#ffb852"]];
+let picking = null; // a ghost whose scatter target the next click on the maze sets
 
 const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 
@@ -119,6 +121,17 @@ function render() {
     ctx.strokeStyle = "rgba(255,255,255,.12)"; ctx.beginPath(); ctx.moveTo(px(14) + .5, 0); ctx.lineTo(px(14) + .5, cv.height); ctx.stroke();
     ctx.setLineDash([]);
   }
+  // scatter targets (off the maze: drawn at the edge, hollow)
+  if (markers || picking) for (const [id, , colr] of GHOSTS) {
+    const t = doc.scatter && doc.scatter[id]; if (!t) continue;
+    const inside = t.x >= 0 && t.y >= 0 && t.x < M.W && t.y < M.H;
+    const x = Math.min(M.W - 1, Math.max(0, t.x)), y = Math.min(M.H - 1, Math.max(0, t.y)), cx = px(x) + T / 2, cy = px(y) + T / 2;
+    ctx.strokeStyle = colr; ctx.fillStyle = colr; ctx.lineWidth = Math.max(1.5, scale * 0.6);
+    ctx.globalAlpha = picking && picking !== id ? 0.35 : 1;
+    ctx.beginPath(); ctx.arc(cx, cy, T * 0.42, 0, Math.PI * 2); ctx.stroke();
+    if (inside) { ctx.beginPath(); ctx.moveTo(cx - T * 0.6, cy); ctx.lineTo(cx + T * 0.6, cy); ctx.moveTo(cx, cy - T * 0.6); ctx.lineTo(cx, cy + T * 0.6); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
   // problems: errors outlined red; the one picked in the list flashes
   for (const p of chk.problems) if (p.level === "error") for (const [x, y] of p.tiles) { ctx.strokeStyle = "rgba(255,90,90,.85)"; ctx.lineWidth = Math.max(1, scale / 2); ctx.strokeRect(px(x) + 1, px(y) + 1, T - 2, T - 2); }
   if (flash && performance.now() < flash.until) {
@@ -161,6 +174,7 @@ cv.addEventListener("contextmenu", (e) => e.preventDefault());
 cv.addEventListener("mousedown", (e) => {
   const c = cellAt(e); if (!c) return;
   hidePicker();
+  if (picking) { if (e.button === 0) setScatter(picking, c[0], c[1]); picking = null; msg(""); refreshPanel(); render(); return; }
   if (tool === "glyph") { if (e.button === 2) resetGlyph(c); else openPicker(c, e); return; }
   if (tool === "dark") { if (e.button === 0) toggleDark(c); return; }
   const kind = paintKind(e.button);
@@ -284,9 +298,12 @@ function refreshPanel() {
   const gr = [...new Set(tun.concat(mid))].sort((a, b) => a - b);
   fillRowSelect($("gronky"), gr, gronkyRow(), (r) => "row " + r + (tun.includes(r) ? " (side tunnel)" : mid.includes(r) ? " (middle)" : " (blocked!)"));
   const sc = $("scatter"), scName = Object.keys(M.SCATTER).find((k) => JSON.stringify(M.SCATTER[k]) === JSON.stringify(sortScatter(doc.scatter)));
-  [...sc.options].filter((o) => o.value === "custom").forEach((o) => o.remove());
-  if (!scName) { const o = document.createElement("option"); o.value = "custom"; o.textContent = "custom (kept)"; sc.append(o); }
-  sc.value = scName || "custom";
+    sc.value = scName || "custom";
+  for (const [id] of GHOSTS) {
+    const t = (doc.scatter || {})[id] || { x: 0, y: 0 };
+    for (const k of ["x", "y"]) { const inp = $("sc-" + id + "-" + k); if (inp !== document.activeElement) inp.value = t[k]; }
+    $("sc-" + id + "-pick").classList.toggle("on", picking === id);
+  }
   if ($("fruit") !== document.activeElement) $("fruit").value = doc.fruitTriggers.join(", ");
   if ($("siren") !== document.activeElement) $("siren").value = doc.sirenTriggers.join(", ");
   const ul = $("problems"); ul.innerHTML = "";
@@ -306,7 +323,19 @@ $("name").addEventListener("input", (e) => { const v = e.target.value.toLowerCas
 $("name").addEventListener("change", () => changed());
 for (const id of ["punky", "gunky", "gronky"]) $(id).addEventListener("change", (e) => { pushUndo(); doc[id] = Number(e.target.value); changed(); });
 const sortScatter = (sc) => sc ? { blinky: sc.blinky, pinky: sc.pinky, inky: sc.inky, clyde: sc.clyde } : M.SCATTER.standard;
-$("scatter").addEventListener("change", (e) => { if (!M.SCATTER[e.target.value]) return; pushUndo(); doc.scatter = JSON.parse(JSON.stringify(M.SCATTER[e.target.value])); changed(); });
+function setScatter(id, x, y) {
+  if (!Number.isInteger(x) || !Number.isInteger(y)) { refreshPanel(); return; }
+  const t = doc.scatter[id]; if (t && t.x === x && t.y === y) return;
+  pushUndo(); doc.scatter = { ...sortScatter(doc.scatter), [id]: { x, y } }; changed();
+}
+for (const [id, label, colr] of GHOSTS) {
+  const row = document.createElement("div"); row.className = "sct";
+  row.innerHTML = `<b style="color:${colr}">${label}</b>x <input id="sc-${id}-x" type="number" step="1"> y <input id="sc-${id}-y" type="number" step="1"> <button id="sc-${id}-pick" title="Click a tile on the maze for ${label}'s target (Esc cancels)">pick</button>`;
+  $("scatterRows").append(row);
+  for (const k of ["x", "y"]) row.querySelector("#sc-" + id + "-" + k).addEventListener("change", (e) => { const t = doc.scatter[id], v = Number(e.target.value); setScatter(id, k === "x" ? v : t.x, k === "y" ? v : t.y); });
+  row.querySelector("#sc-" + id + "-pick").onclick = () => { picking = picking === id ? null : id; hidePicker(); refreshPanel(); render(); msg(picking ? "Click a tile for " + label + "'s scatter target (Esc cancels)." : ""); };
+}
+$("scatter").addEventListener("change", (e) => { if (!M.SCATTER[e.target.value]) { refreshPanel(); return; } pushUndo(); doc.scatter = JSON.parse(JSON.stringify(M.SCATTER[e.target.value])); changed(); });
 const numList = (s) => s.split(/[\s,]+/).filter(Boolean).map(Number).filter((n) => Number.isInteger(n) && n > 0);
 $("fruit").addEventListener("change", (e) => { const v = numList(e.target.value); if (v.length) { pushUndo(); doc.fruitTriggers = v; } changed(); });
 $("siren").addEventListener("change", (e) => { const v = numList(e.target.value); if (v.length) { pushUndo(); doc.sirenTriggers = v; } changed(); });
@@ -386,7 +415,7 @@ window.addEventListener("keydown", (e) => {
   if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
   if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); save(); return; }
   if (mod && e.key === "Enter") { e.preventDefault(); testPlay(); return; }
-  if (e.key === "Escape") hidePicker();
+  if (e.key === "Escape") { hidePicker(); if (picking) { picking = null; refreshPanel(); render(); msg(""); } }
   if (!mod && e.key >= "1" && e.key <= "9") setTool(TOOLS[Number(e.key) - 1].id);
 });
 window.addEventListener("resize", fitCanvas);
