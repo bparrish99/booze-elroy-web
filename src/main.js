@@ -159,8 +159,8 @@
 
     let rwd = null; // the Rewind ability (rewind.js), made once the core exists
     const core = BoozeCore.create(A.data, {
-      testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), rewind: () => rwd && rwd.trigger(), skipIntro: () => fpsOn /* test mode (xyzzy): no opening jingle */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, proMode: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
+      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), rewind: () => rwd && rwd.trigger(), testMode: () => fpsOn /* test mode (xyzzy): Pro Mode always */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
@@ -424,7 +424,7 @@
     // own settings even while an arena's / leaderboard's are borrowed
     const lookBtn = document.getElementById("look");
     const LOOK_NAMES = { true: "CRT", false: "clean", tv: "retro TV" };
-    const syncLook = () => { lookBtn.title = "Style: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title); };
+    const syncLook = () => { lookBtn.title = "Visuals: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title); };
     function cycleLook() {
       const crt = core.g.config.crtEffect;
       core.g.config.crtEffect = crt === "tv" ? true : crt ? false : "tv";

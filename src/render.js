@@ -565,9 +565,9 @@
       [["Starting Lives", 12], ["extra life", 13], ["Ability", 14], ["Speed", 15]].forEach((r) => print(r[0], 3, r[1]));
       print("GHOST OPTIONS", 3, 17, 3);
       [["Ghosts", 18], ["Pinky Bug", 19], ["Scatter", 20], ["Unrestricted", 21]].forEach((r) => print(r[0], 3, r[1]));
-      print(core.optMenu.some((it) => it.key === "volume") ? "AUDIO/VIDEO" : "VIDEO", 3, 23, 3); // web edition: no volume row
+      print(core.optMenu.some((it) => it.key === "volume") ? "AUDIO/VIDEO" : core.optMenu.some((it) => it.key === "proMode") ? "STYLE" : "VIDEO", 3, 23, 3); // web edition: no volume row; "STYLE" with Pro Mode
       // labels follow the menu's own rows (web edition: some rows can go, e.g. CRT Effect is the C key)
-      const AV_LABELS = { background: "Background", mazeColor: "Maze Style", crtEffect: "CRT Effect", volume: "sfx volume" };
+      const AV_LABELS = { background: "Background", mazeColor: "Maze Style", crtEffect: "CRT Effect", volume: "sfx volume", proMode: "Pro Mode" };
       for (const it of core.optMenu) if (AV_LABELS[it.key]) print(AV_LABELS[it.key], 3, it.y);
       drawMenu(core.optMenu, 18, 5, 1);
       const mc = g.config.mazeColor;

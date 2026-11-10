@@ -98,7 +98,7 @@
         startingLives: 3, startingLevel: 1, freeGuy: 1, difficulty: 0, afterDark: false, pinkyBug: true,
         scatterOption: false, freeGhost: false, movement: 0, ability: false, phased: false, ghostCount: 4,
         background: "none", mazeColor: 99, fullscreen: false, crtEffect: true, volume: 4, musicVolume: 8,
-        mazepack: "pac", plusMode: false, radar: false,
+        mazepack: "pac", plusMode: false, radar: false, proMode: false,
       },
       config: {},
       particles: [],
@@ -118,6 +118,11 @@
     // only the ability button behaves differently
     const REWIND = 4;
     function ability() { return g.config.ability === REWIND ? false : g.config.ability; }
+    // web edition: Pro Mode (Options > Style, env.proMode; also always on in test mode, env.testMode): real games skip
+    // the opening jingle, the death animation, the board-complete flashing and the intermissions, and READY is short.
+    // Not the attract demo; no gameplay changes (none of it runs during play)
+    const PRO_READY = 45, PRO_BOARD_DONE = 45;
+    const pro = () => !g.attract && ((!!env.proMode && g.config.proMode === true) || !!(env.testMode && env.testMode()));
 
     for (const name of SOUND_NAMES) g.sounds[name] = makeSound(name, LOOPING.has(name));
     ["world0", "world1", "world2", "world3", "world4", "world5", "bossfight"].forEach((n) => { g.music[n] = new StubSound(true); });
@@ -889,7 +894,7 @@
             if (!g.attract) { for (const k of Object.keys(g.music)) if (g.music[k].isPlaying()) g.music[k].stop(); if (g.fever.isPlaying()) g.fever.stop(); }
           },
           frames: 30, state: { running: false, showPac: false, showGhosts: false, hideMaze: true }, nextMode: "playerUp",
-          endFunc() { if (env.skipIntro && env.skipIntro()) mode.setMode("ready"); }, // web edition: test mode skips the jingle
+          endFunc() { if (pro()) mode.setMode("ready"); }, // web edition: Pro Mode skips the jingle
         },
         playerUp: {
           frames: 135, state: { running: false, showPac: false, showGhosts: false }, nextMode: "ready",
@@ -904,6 +909,7 @@
             if (g.newLevel) g.newLevel = false; else g.lives = g.lives - 1;
             if (g.lives < 0) mode.setMode("gameover");
             else {
+              if (pro()) g.modeTimer = PRO_READY;
               g.fruitTimer = false; g.fruitScoreTimer = false;
               g.state = { showPac: true, showGhosts: true, showReady: true };
               g.starvation = 0;
@@ -928,6 +934,7 @@
         },
         caught: {
           state: { running: false, showPac: true, showGhosts: true }, frames: 60, nextMode: "dying",
+          endFunc() { if (pro()) mode.setMode("ready"); }, // web edition: Pro Mode has no death animation
           startFunc() {
             g.sounds.thrust.stop();
             if (!g.attract) for (const k of Object.keys(g.music)) if (g.music[k].isPlaying()) g.music[k].stop();
@@ -939,6 +946,7 @@
         },
         destroyed: {
           state: { running: false, showPac: false, showGhosts: true }, frames: 60, nextMode: "dying",
+          endFunc() { if (pro()) mode.setMode("ready"); },
           startFunc() {
             g.sounds.crash.play(); g.sounds.thrust.stop();
             if (!g.attract) for (const k of Object.keys(g.music)) if (g.music[k].isPlaying()) g.music[k].stop();
@@ -965,8 +973,13 @@
         },
         levelComplete: {
           state: { running: false, showPac: true, showGhosts: true }, frames: 120,
-          startFunc() { g.fadeTimer = g.fadeLength(); g.particles = []; stopSiren(); g.sounds.dead.stop(); g.sounds.scared.stop(); g.sounds.thrust.stop(); },
+          startFunc() {
+            g.fadeTimer = g.fadeLength(); g.particles = []; stopSiren(); g.sounds.dead.stop(); g.sounds.scared.stop(); g.sounds.thrust.stop();
+            if (pro()) g.modeTimer = PRO_BOARD_DONE;
+          },
           nextMode: "levelAnimation",
+          // web edition: Pro Mode: a brief pause, then the next board (no flashing maze, so no intermissions either)
+          endFunc() { if (pro()) mode.setMode("pause"); },
         },
         placeholderIntermission: {
           startFunc() { stopMusic(); g.startX = 0; g.startY = 0; },
@@ -1703,7 +1716,7 @@
     const PACK_TEXTS = PACKS.map((p) => p === "random" ? "all"
       : p + "-" + (MAZE_PACKS[p].list.length + (p === "booze" || p === "normal" ? extraBooze(DATA).length : 0)));
     const saveConfig = () => { if (env.saveConfig) env.saveConfig(g.config); };
-    const AV_KEYS = ["background", "mazeColor", "crtEffect", "volume", "musicVolume"]; // the Audio/Video section
+    const AV_KEYS = ["background", "mazeColor", "crtEffect", "volume", "musicVolume", "proMode"]; // the Audio/Video section
     const MAZE_COLORS = [99].concat(range(1, 26), [0]);
     const optMenu = Object.assign([
       Object.assign(opt("mazepack", PACKS, PACK_TEXTS, (v) => { g.currentMaze = setCurrentMaze(v); }), { y: 4 }),
@@ -1744,6 +1757,8 @@
       optMenu.splice(optMenu.findIndex((it) => it.key === "volume"), 1);
       optMenu.find((it) => it.text === "Restore Defaults").y = 28; // the freed row: a blank line after Restore Defaults
     }
+    // web edition: Pro Mode in the Style section (the freed row under Maze Style)
+    if (env.proMode) optMenu.splice(optMenu.findIndex((it) => it.text === "Restore Defaults"), 0, Object.assign(opt("proMode", [false, true], ["Off", "On"]), { y: 26 }));
     // web edition: Create Arena (an arena with the current settings) under Share Config
     if (env.createArena) optMenu.splice(optMenu.length - 1, 0, { text: "Create Arena", x: 6, y: 31, action() { env.createArena(); } });
     if (env.creditsInOptions) {
@@ -1758,7 +1773,7 @@
       afterDark: [false, 1, 2, 3, 4, 5], radar: [false, 30, 60, 90, 120], startingLives: [1, 3, 5], freeGuy: [1, 2, 3, 4, 5],
       ability: [false, 1, 2, 3, 4], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
       scatterOption: [false, 1, 2, 3], freeGhost: [true, false], background: bgNames, mazeColor: MAZE_COLORS,
-      crtEffect: [true, false], volume: range(0, 10),
+      crtEffect: [true, false], volume: range(0, 10), proMode: [false, true],
     };
     function selectFromConfig() {
       for (const it of optMenu) {
