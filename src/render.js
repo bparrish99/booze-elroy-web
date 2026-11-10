@@ -31,11 +31,11 @@
     // ---- love.graphics.setColor emulation (persists until changed, like LOVE)
     let col = [1, 1, 1, 1];
     const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; woozy = false; };
-    // web edition: Pac-Man "out of gas" (an ability not ready): instead of one flat tint, a dark, reddish "no-go" swirl
-    // spins on him: three spiral arms of sickly tones, palette-cycled per pixel (crisp pixel art, obvious even on the run)
+    // web edition: Pac-Man "out of gas" (an ability not ready): instead of one flat tint, a swirl of decayed yellows spins
+    // on him: three spiral arms, palette-cycled per pixel (crisp pixel art, still Pac-Man yellow, just gone off)
     let woozy = false;
-    const setWoozy = () => { col = [0.6, 0.3, 0.05, 1]; woozy = true; };
-    const WOOZY_TONES = ["rgb(178,72,10)", "rgb(122,104,10)", "rgb(140,38,18)"]; // rust red, muddy olive, dark red
+    const setWoozy = () => { col = [0.65, 0.62, 0, 1]; woozy = true; };
+    const WOOZY_TONES = ["rgb(214,202,0)", "rgb(160,150,0)", "rgb(112,104,0)"]; // decayed yellows: faded, dull, dark
     const WOOZY_ARM = new Float32Array(256); // each pixel's place in the spiral: its angle (3 arms) plus a twist with distance
     for (let py = 0; py < 16; py++) for (let px = 0; px < 16; px++) {
       const dx = px - 7.5, dy = py - 7.5;
@@ -56,8 +56,8 @@
         tctx.globalCompositeOperation = "source-over";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "multiply";
-        if (woozy) { // the swirl: one arm's width every 110 ms, a full turn about every third of a second
-          const phase = performance.now() / 110;
+        if (woozy) { // the swirl: one arm's width every 170 ms, a full turn about every half second
+          const phase = performance.now() / 170;
           for (let py = 0; py < s.fh; py++) for (let px = 0; px < s.fw; px++) {
             const v = Math.floor(WOOZY_ARM[py * 16 + px] + phase);
             tctx.fillStyle = WOOZY_TONES[((v % 3) + 3) % 3];
