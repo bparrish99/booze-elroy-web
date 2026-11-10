@@ -77,6 +77,7 @@ try {
     check(await q.waitForFunction(() => { const g = window.__core.g; return g.scene.name === "game" && g.config.ghostCount === 6 && g.config.startingLevel === 1; }, null, { timeout: 8000 }).then(() => true, () => false), "and Play uses the arena's settings");
     await q.goto(dev.url + "/?arena=zzzzzzzzzz");
     check(await q.waitForFunction(() => window.__core && window.__core.g.scene.name === "arenas", null, { timeout: 8000 }).then(() => true, () => false), "an unknown arena link shows the arena list");
+    check(await q.evaluate(() => { const t = window.__core.g.toast; return !!t && t.text === "that arena has ended"; }), "and says the arena has ended");
     await other.close();
   }
 

@@ -570,16 +570,23 @@
       return "nameEntry";
     }
     // a shared arena link (?arena=<id>): open its page once it's loaded; unknown / gone -> the arena list
+    // (a 404 also says so in a toast; a network failure doesn't, since the arena may well still exist)
     async function openArena(id) {
       if (!arenaApi) return;
-      let d = null;
-      try { const r = await fetchFn(arenaApi + "/board?id=" + encodeURIComponent(id), { cache: "no-store" }); if (r.ok) d = await r.json(); } catch { d = null; }
+      let d = null, gone = false;
+      try {
+        const r = await fetchFn(arenaApi + "/board?id=" + encodeURIComponent(id), { cache: "no-store" });
+        if (r.ok) d = await r.json(); else gone = r.status === 404;
+      } catch { d = null; }
       if (g.scene.name !== "attract") return; // the player already went somewhere else
       if (d && d.arena) {
         clockOffset = d.now - Date.now();
         arenaBoards.set(id, { status: "ok", entries: d.entries || [], at: performance.now() });
         core.setScene("arena", { arena: d.arena, fresh: true });
-      } else core.setScene("arenas");
+      } else {
+        core.setScene("arenas");
+        if (gone) g.toast = { text: "that arena has ended", until: performance.now() + 3000 };
+      }
     }
     // admin: delete the arena being viewed (password checked by the server); then back to the list
     async function deleteArena(password) {
