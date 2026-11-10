@@ -380,16 +380,25 @@
       document.addEventListener("webkitfullscreenchange", syncFsButton);
       window.addEventListener("keydown", (e) => { if (!resetOpen() && core.g.scene.name !== "nameEntry" && e.code === "KeyF" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFullscreen(); } });
     }
-    // C cycles the look: CRT (true, the default) -> plain (false) -> 1982 living-room TV ("tv") -> CRT. Not an option on
-    // the Options page (env.crtKey); anywhere but name entry; saved at once, into the player's own settings even while
-    // an arena's / leaderboard's are borrowed
-    window.addEventListener("keydown", (e) => {
-      if (resetOpen() || core.g.scene.name === "nameEntry" || e.code !== "KeyC" || e.ctrlKey || e.metaKey || e.altKey) return;
-      e.preventDefault();
+    // the look: CRT (true, the default) -> plain (false) -> 1982 living-room TV ("tv") -> CRT. The C key or the TV button
+    // (next to mute; phones have no C). Not an option on the Options page (env.crtKey); saved at once, into the player's
+    // own settings even while an arena's / leaderboard's are borrowed
+    const lookBtn = document.getElementById("look");
+    const LOOK_NAMES = { true: "CRT", false: "plain", tv: "old TV" };
+    const syncLook = () => { lookBtn.title = "Look: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title); };
+    function cycleLook() {
       const crt = core.g.config.crtEffect;
       core.g.config.crtEffect = crt === "tv" ? true : crt ? false : "tv";
       try { localStorage.setItem("booze-elroy-options", JSON.stringify({ ...LB.ownSettings(), crtEffect: core.g.config.crtEffect })); } catch { /* ignore */ }
+      syncLook();
+    }
+    window.addEventListener("keydown", (e) => {
+      if (resetOpen() || core.g.scene.name === "nameEntry" || e.code !== "KeyC" || e.ctrlKey || e.metaKey || e.altKey) return;
+      e.preventDefault(); cycleLook();
     });
+    lookBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
+    lookBtn.addEventListener("click", (e) => { e.preventDefault(); cycleLook(); lookBtn.blur(); });
+    syncLook();
     // touch devices have no Esc key: a small button leaves the game / autoplay / sub-screens
     const escBtn = document.getElementById("esc");
     escBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);

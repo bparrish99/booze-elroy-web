@@ -36,6 +36,10 @@ try {
   await p.keyboard.press("c");
   check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "and once more: back to the CRT");
   check(await ev(() => !window.__core.optMenu.some((i) => i.key === "crtEffect" || i.key === "volume")), "no CRT or volume rows on the Options page");
+  await p.click("#look");
+  check(await ev(() => window.__core.g.config.crtEffect === false && document.getElementById("look").title.startsWith("Look: plain")), "the TV button changes the look too (for phones)");
+  await p.click("#look"); await p.click("#look");
+  check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "round the three looks and back to CRT, saved");
   check(await g("g.config.volume === 8"), "the game plays at a fixed volume (8)");
   // the mute button (next to fullscreen): mutes the page, remembered; M does it too, but only during gameplay
   check(await ev(() => !document.getElementById("mute").classList.contains("muted")), "not muted to begin with");
