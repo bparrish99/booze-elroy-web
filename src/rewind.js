@@ -1,5 +1,5 @@
 /* Booze Elroy - the Rewind ability (web-edition addition, not in the Lua original).
- * Ability button: the last 3 seconds of play run backwards on screen at 3x speed (VCR style), then play resumes from
+ * Ability button: the last 3 seconds of play run backwards on screen at 2x speed (VCR style), then play resumes from
  * there. One charge, refilled by every new life and every new board. Death can't be undone: snapshots are only taken in
  * normal play, and the history is dropped whenever play stops (caught, level complete, ...), so a rewind never reaches
  * back across a life or a board.
@@ -12,7 +12,7 @@
 (function (root) {
   "use strict";
   const HISTORY = 180;  // frames kept: 3 seconds
-  const SPEED = 3;      // playback: 3 frames of history per screen frame (3 s back in about 1 s)
+  const SPEED = 2;      // playback: 2 frames of history per screen frame (3 s back in 1.5 s, slow enough to follow)
   // plain values on g that aren't part of the play to rewind (settings, scene and mode bookkeeping, presentation)
   const SKIP = new Set(["scaleOption", "autoplay", "currentMaze", "mode", "attract", "muted", "levelNumber", "paused",
     "currentMazeColor", "currentBackground", "modeTimer", "diedSoundPlayed", "newLevel", "rewindSpent", "rewinding"]);
