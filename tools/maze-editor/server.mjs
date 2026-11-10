@@ -3,7 +3,7 @@
 //   GET  /editor/api/list            drafts (mazes/*.json) and the game's mazes
 //   GET  /editor/api/draft?name=     a saved draft
 //   POST /editor/api/draft           save a draft  { doc }
-//   POST /editor/api/add             put a maze in the game  { doc, maze }: assets/data.json + mazes/<name>.json, then npm run build
+//   POST /editor/api/add             put a maze in the game, or update one already in it  { doc, maze }: assets/data.json + mazes/<name>.json, then npm run build
 //   POST /editor/api/remove          take an editor maze (booze5+) out of the game  { name }
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
@@ -56,13 +56,14 @@ export async function handleEditor(req, res, u, opts = {}) {
     }
     if (rel === "api/add" && req.method === "POST") {
       const { doc, maze } = await body(req);
-      if (!doc || !maze || !GAME_NAME.test(doc.name || "")) return json(res, 400, { error: "a maze joins the game as booze5, booze6, ... (booze1-4 are the originals)" }), true;
+      const data = JSON.parse(await readFile(DATA, "utf8"));
+      const isNew = !data.mazeNames.includes(doc && doc.name);
+      // new mazes join as booze5, booze6, ...; any maze already in the game can be updated
+      if (!doc || !maze || (isNew && !GAME_NAME.test(doc.name || ""))) return json(res, 400, { error: "a new maze joins the game as booze5, booze6, ..." }), true;
       if (!Array.isArray(maze.map) || maze.map.length !== 31 || maze.map.some((r) => typeof r !== "string" || r.length !== 28)) return json(res, 400, { error: "bad map" }), true;
       await mkdir(DRAFTS, { recursive: true });
       await writeFile(join(DRAFTS, doc.name + ".json"), JSON.stringify(doc, null, 1) + "\n");
-      const data = JSON.parse(await readFile(DATA, "utf8"));
-      const isNew = !data.mazeNames.includes(doc.name);
-      data.mazes[doc.name] = maze;
+      data.mazes[doc.name] = { ...(data.mazes[doc.name] || {}), ...maze }; // (an update keeps any field the editor doesn't write)
       if (isNew) data.mazeNames.push(doc.name);
       await writeFile(DATA, JSON.stringify(data));
       const b = await rebuild();

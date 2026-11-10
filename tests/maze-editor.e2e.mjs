@@ -125,8 +125,25 @@ try {
   check(await ed("E.doc.name") === "booze6", "the next new maze is booze6");
   const r = await fetch(dev.url + "/editor/api/remove", { method: "POST", body: JSON.stringify({ name: "booze5" }) }).then((x) => x.json());
   check(r.ok && !JSON.parse(readFileSync(join(root, "assets/data.json"), "utf8")).mazeNames.includes("booze5"), "remove takes it out again");
-  const bad = await fetch(dev.url + "/editor/api/add", { method: "POST", body: JSON.stringify({ doc: { name: "booze2" }, maze: data.mazes.booze2 }) });
-  check(bad.status === 400, "the original booze1-4 can't be overwritten");
+  const bad = await fetch(dev.url + "/editor/api/add", { method: "POST", body: JSON.stringify({ doc: { name: "mymaze" }, maze: data.mazes.booze2 }) });
+  check(bad.status === 400, "a new maze has to be booze5, booze6, ...");
+  // editing a game maze itself: booze1's colour, no questions asked; the rest of it unchanged
+  const before = JSON.parse(readFileSync(join(root, "assets/data.json"), "utf8")).mazes.booze1;
+  let asked = 0; p.removeAllListeners("dialog"); p.on("dialog", (d) => { asked++; d.accept(); });
+  await p.click("#open"); await p.waitForSelector("#gamesEdit button");
+  await p.click("#gamesEdit button:text-is('booze1')");
+  asked = 0; // (opening it asked about the unsaved maze before)
+  check(await ed("E.doc.name") === "booze1" && await p.textContent("#add") === "Update in game", "Edit opens booze1 itself (Update in game)");
+  await p.locator("#colors canvas").nth(8).click();
+  await p.click("#add"); await p.waitForFunction(() => /updated in the game/.test(document.getElementById("msg").textContent), null, { timeout: 10000 });
+  const after = JSON.parse(readFileSync(join(root, "assets/data.json"), "utf8"));
+  check(after.mazes.booze1.defaultColor === 9 && JSON.stringify({ ...after.mazes.booze1, defaultColor: 0 }) === JSON.stringify({ ...before, defaultColor: 0 }) && asked === 0, "a new colour for booze1: just the colour changes, no questions" + ` (colour ${before.defaultColor} -> ${after.mazes.booze1.defaultColor}, asked ${asked})`);
+  check(after.mazeNames.filter((n) => n === "booze1").length === 1, "and booze1 is still in the game once");
+  // a layout change asks first
+  await p.keyboard.press("1"); await p.mouse.move(...at(2, 29)); await p.mouse.down(); await p.mouse.move(...at(3, 29), { steps: 3 }); await p.mouse.up();
+  p.removeAllListeners("dialog"); p.on("dialog", (d) => { asked++; d.dismiss(); });
+  await p.click("#add"); await p.waitForTimeout(400);
+  check(asked === 1 && JSON.parse(readFileSync(join(root, "assets/data.json"), "utf8")).mazes.booze1.map.join() === before.map.join(), "a layout change asks first (and No leaves booze1 alone)");
   await shot("me2-end");
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join("; ") : ""));
 } finally {

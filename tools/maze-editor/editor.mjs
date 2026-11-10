@@ -316,6 +316,7 @@ function refreshPanel() {
   }
   $("stats").innerHTML = `<b>${chk.dots}</b> dots · <b>${chk.powers}</b> energizers · tunnels: <b>${tun.length ? "rows " + tun.join(", ") : "none"}</b>`;
   $("add").disabled = chk.problems.some((p) => p.level === "error");
+  $("add").textContent = gameNames.includes(doc.name) ? "Update in game" : "Add to game";
   $("undo").disabled = !undoStack.length; $("redo").disabled = !redoStack.length;
 }
 
@@ -366,11 +367,20 @@ function testPlay() {
   msg("Test play: any maze pack plays this maze. Leaderboards are off in test play.");
 }
 async function addToGame() {
-  if (!GAME_NAME.test(doc.name)) { msg(`To join the game a maze is named booze5, booze6, ... ("${nextFreeName()}" is free).`, "err"); return; }
-  if (gameNames.includes(doc.name) && !confirm(doc.name + " is already in the game. Replace it with this version?")) return;
-  msg("Adding " + doc.name + " and rebuilding…");
+  const update = gameNames.includes(doc.name);
+  if (!update && !GAME_NAME.test(doc.name)) { msg(`To join the game a new maze is named booze5, booze6, ... ("${nextFreeName()}" is free).`, "err"); return; }
+  const maze = M.toMazeData(doc, gen);
+  if (update) { // only the colour changed: just do it; anything else changes how the maze plays, so ask
+    let cur = null;
+    try { cur = (await fetch("data.json", { cache: "no-store" }).then((r) => r.json())).mazes[doc.name]; } catch { /* ask anyway */ }
+    const changed = Object.keys(maze).filter((k) => k !== "defaultColor" && (!cur || JSON.stringify(maze[k]) !== JSON.stringify(cur[k])));
+    const layout = changed.includes("map") && cur && cur.map.some((r, y) => [...r].some((c, x) => M.isWallChar(c) !== M.isWallChar(maze.map[y][x]) || (!M.isWallChar(c) && c !== maze.map[y][x])));
+    const what = layout ? "layout" : changed.filter((k) => k !== "map").length ? "settings (ghost starts, scatter targets, fruit or siren triggers)" : "";
+    if (what && !confirm(`This changes ${doc.name}'s ${what}, so ${doc.name} will play differently from now on, and the scores already on the leaderboards were set on the old version.\n\nUpdate ${doc.name} in the game?`)) return;
+  }
+  msg((update ? "Updating " : "Adding ") + doc.name + " and rebuilding…");
   try {
-    const r = await api("add", { doc, maze: M.toMazeData(doc, gen) });
+    const r = await api("add", { doc, maze });
     savedJSON = JSON.stringify(doc); await refreshLists(); refreshPanel();
     const n = gameNames.filter((g) => /^booze\d+$/.test(g)).length;
     msg((r.isNew ? `${doc.name} is in the game: the Booze pack has ${n} mazes now (Normal and All play it too).` : `${doc.name} updated in the game.`) +
@@ -386,14 +396,20 @@ async function openDialog() {
   const btn = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.onclick = () => { dl.close(); fn(); }; return b; };
   if (!drafts.length) dbox.textContent = "(none yet)";
   for (const d of drafts) dbox.append(btn(d, async () => { if (!confirmDiscard()) return; try { setDoc(M.applyLocks(await api("draft?name=" + d)), true); msg("Opened draft " + d); } catch (e) { msg("Couldn't open " + d + ": " + e.message, "err"); } }));
+  const ebox = $("gamesEdit"); ebox.innerHTML = "";
+  let fresh = data;
+  try { fresh = await fetch("data.json", { cache: "no-store" }).then((r) => r.json()); data = fresh; } catch { /* the copy loaded at start */ }
   for (const g of gameNames) {
-    const m = data.mazes[g];
+    const m = fresh.mazes[g];
     if (!m || !M.editable(m)) continue;
-    gbox.append(btn(g, () => {
+    ebox.append(btn(g, () => { // the maze itself: "Update in game" changes it
       if (!confirmDiscard()) return;
-      const d = M.fromMazeData(g, m, table);
-      if (!GAME_NAME.test(g)) d.name = nextFreeName();
-      setDoc(d, false); msg(`Started from ${g}` + (d.name !== g ? `, as ${d.name}` : "") + ".");
+      setDoc(M.fromMazeData(g, m, table), false); msg(`Editing ${g} itself: "Update in game" changes it in the game.`);
+    }));
+    gbox.append(btn(g, () => { // a copy, as a new maze
+      if (!confirmDiscard()) return;
+      const d = M.fromMazeData(g, m, table); d.name = nextFreeName();
+      setDoc(d, false); msg(`Started from ${g}, as ${d.name}.`);
     }));
   }
   dl.showModal();
