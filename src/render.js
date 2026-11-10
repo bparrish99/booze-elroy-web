@@ -229,7 +229,7 @@
       BUBBLE_SPRITES[R] = c;
     }
     const seenBubbles = new WeakSet(), bubbles = [];
-    let bubbleCount = 0, bubbleT = 0;
+    let bubbleCount = 0, bubbleT = 0, bubbleSource = null;
     function updateBubbles() {
       const now = performance.now(), dt = bubbleT ? Math.min(3, (now - bubbleT) / 16.67) : 1; bubbleT = now;
       for (let i = bubbles.length - 1; i >= 0; i--) {
@@ -258,6 +258,9 @@
       ctx.globalAlpha = 1;
     }
     function drawParticles() {
+      // the core clears its particles with a fresh list (a new game, a death, the board done): the bubbles from the old one
+      // go too, or the title's / demo's bubbles would float on into a new game
+      if (g.particles !== bubbleSource) { bubbleSource = g.particles; bubbles.length = 0; }
       updateBubbles();
       for (const p of g.particles) {
         if (p.bubble) {
