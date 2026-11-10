@@ -69,18 +69,21 @@ test("checks: thin walls, unreachable dots, one-sided vertical tunnels, missing 
 });
 
 test("the core: editor mazes join the booze and normal packs, the menu counts them, random shows as all", () => {
-  const plain = BoozeCore.create(DATA, {});
+  const editorMaze = (n) => /^booze([5-9]|[1-9]\d+)$/.test(n);
+  assert.deepEqual(BoozeCore.create(DATA, {}).g.mazes.booze.list, DATA.mazeNames.filter((n) => /^booze\d+$/.test(n)), "the game's own data: booze1-4 and the editor mazes");
+  const ORIG = { ...DATA, mazeNames: DATA.mazeNames.filter((n) => !editorMaze(n)), mazes: Object.fromEntries(Object.entries(DATA.mazes).filter(([n]) => !editorMaze(n))) }; // as before any editor maze
+  const plain = BoozeCore.create(ORIG, {});
   assert.deepEqual(plain.g.mazes.booze.list, ["booze1", "booze2", "booze3", "booze4"]);
   assert.deepEqual(plain.optMenu[0].options.map((o) => o.text), ["pac-1", "booze-4", "mspac-4", "junior-7", "ultra-5", "arrange-3", "mega-1", "normal-17", "large-8", "all"]);
   const doc = M.fromMazeData("booze6", DATA.mazes.booze2, table), maze = M.toMazeData(doc, M.generate(doc, table));
-  const data = { ...DATA, mazes: { ...DATA.mazes, booze6: maze, booze5: maze }, mazeNames: DATA.mazeNames.concat(["booze6", "booze5"]) };
+  const data = { ...ORIG, mazes: { ...ORIG.mazes, booze6: maze, booze5: maze }, mazeNames: ORIG.mazeNames.concat(["booze6", "booze5"]) };
   const core = BoozeCore.create(data, {});
   assert.deepEqual(core.g.mazes.booze.list, ["booze1", "booze2", "booze3", "booze4", "booze5", "booze6"]);
   assert.deepEqual(core.g.mazes.normal.list.slice(5, 11), ["booze1", "booze2", "booze3", "booze4", "booze5", "booze6"]);
   assert.equal(core.g.mazes.normal.list.length, 19);
   const texts = core.optMenu[0].options.map((o) => o.text);
   assert.equal(texts[1], "booze-6"); assert.equal(texts[7], "normal-19"); assert.equal(texts[9], "all");
-  assert.deepEqual(BoozeCore.create(DATA, {}).g.mazes.booze.list, ["booze1", "booze2", "booze3", "booze4"], "packs aren't shared between cores");
+  assert.deepEqual(BoozeCore.create(ORIG, {}).g.mazes.booze.list, ["booze1", "booze2", "booze3", "booze4"], "packs aren't shared between cores");
 });
 
 test("the core: test play (env.testMaze) plays that maze whatever the pack", () => {

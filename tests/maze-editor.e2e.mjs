@@ -1,6 +1,6 @@
 // End-to-end: the maze editor page (tools/maze-editor) against the dev server, with a scratch copy of assets/data.json
 // (the repo's own files are never touched).   node tests/maze-editor.e2e.mjs   (SHOTS=dir to save screenshots)
-import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright";
@@ -8,7 +8,11 @@ import { startDev } from "../tools/dev-server.mjs";
 
 const root = mkdtempSync(join(tmpdir(), "booze-maze-editor-e2e-"));
 mkdirSync(join(root, "assets"));
-copyFileSync(new URL("../assets/data.json", import.meta.url), join(root, "assets", "data.json"));
+{ // the game's data as it was before any editor maze (booze5, ...), so the test starts the same whatever mazes have been added
+  const d = JSON.parse(readFileSync(new URL("../assets/data.json", import.meta.url), "utf8")), ed = (n) => /^booze([5-9]|[1-9]\d+)$/.test(n);
+  d.mazeNames = d.mazeNames.filter((n) => !ed(n)); for (const n of Object.keys(d.mazes)) if (ed(n)) delete d.mazes[n];
+  writeFileSync(join(root, "assets", "data.json"), JSON.stringify(d));
+}
 const dev = await startDev({ port: 0, blobsDir: join(root, "blobs"), quiet: true, editorRoot: root });
 let failed = false;
 const check = (ok, msg) => { console.log((ok ? "PASS " : "FAIL ") + msg); if (!ok) { failed = true; process.exitCode = 1; } };
