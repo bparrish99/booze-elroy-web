@@ -153,7 +153,7 @@
         }
       }
       // web edition: the Rewind ability's charge shows the abilities' way: solid when ready, hollow once used
-      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent) setHollow();
+      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent && !g.rewinding) setHollow(); // full while it plays back; spent once it's done
       let angle = 0;
       if (T(o.stunned)) angle = (o.stunned * 6 * (o.spinDirection > 0.5 ? 1 : -1)) * Math.PI / 180;
       blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0), angle, 8, 8);
