@@ -216,6 +216,14 @@ try {
     check(await r.evaluate(() => location.search === "" && JSON.parse(localStorage.getItem("booze-elroy-options")).ghostCount === 2), "settings saved, ?cfg removed from the address");
     await r.goto(dev.url + "/?cfg=garbage"); await r.waitForTimeout(800);
     check(await r.evaluate(() => window.__core.g.config.ghostCount === 2), "a bad ?cfg is ignored");
+    // Rewind (a value added later) shares as a 7-character code, and the server takes its boards
+    const rwCode = await r.evaluate(() => window.BoozeScoreKey.shareCode({ ...window.__core.g.config, ability: 4 }));
+    check(/^[0-9a-z]{7}$/.test(rwCode), "a Rewind config shares as a 7-character code: " + rwCode);
+    await r.goto(dev.url + "/?cfg=" + rwCode); await r.waitForTimeout(1000);
+    check(await r.evaluate(() => window.__core.g.config.ability === 4 && window.__core.g.config.ghostCount === 2), "opening it selects Rewind");
+    const rwKey = await r.evaluate(() => window.BoozeScoreKey.keyFor(window.__core.g.config));
+    const posted = await api("", { board: rwKey, name: "rewinder", score: 1234 });
+    check(posted && posted.rank === 1 && rwKey.split(".")[7] === "4", "the server takes a Rewind board: " + rwKey);
     await ctx2.close();
   }
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join(" | ") : ""));

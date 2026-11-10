@@ -141,9 +141,10 @@
       for (const code of Object.keys(CHEATS)) if (typed.endsWith(code) && CHEATS[code].scenes.includes(sc)) { typed = ""; CHEATS[code].run(); }
     }
 
+    let rwd = null; // the Rewind ability (rewind.js), made once the core exists
     const core = BoozeCore.create(A.data, {
       noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), rewind: () => rwd && rwd.trigger(), quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
@@ -151,6 +152,7 @@
       setFullscreen: (on) => { try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ } },
     });
     core.T = BoozeCore.T;
+    rwd = BoozeRewind.create(core);
     LB.attach(core);
     window.__core = core;
 
@@ -424,7 +426,7 @@
       const step = core.FIXED_DT;
       if (touchDir && ["playerUp", "ready", "dying", "caught", "gameover", "levelAnimation", "intermission1", "intermission2", "intermission3", "destroyed"].includes(core.g.mode)) setTouchDir(null);
       if (!resetOpen()) pollPad();
-      while (acc >= step) { core.update(); acc -= step; }
+      while (acc >= step) { if (!rwd.update()) core.update(); rwd.record(); acc -= step; } // a rewind playing back takes the frame
       LB.tick();
       if (wantsFullBezel() !== fullBezel || (core.g.config && core.g.config.crtEffect) !== fitLook) fit();
       R.draw(); P.present();

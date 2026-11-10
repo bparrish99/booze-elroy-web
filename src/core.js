@@ -103,6 +103,10 @@
       g.config.fullscreen = fullscreen;
     }
     resetConfigs();
+    // web edition: the Rewind ability (env.rewind does the work, see rewind.js). Every gameplay check sees it as "Off":
+    // only the ability button behaves differently
+    const REWIND = 4;
+    function ability() { return g.config.ability === REWIND ? false : g.config.ability; }
 
     for (const name of SOUND_NAMES) g.sounds[name] = makeSound(name, LOOPING.has(name));
     ["world0", "world1", "world2", "world3", "world4", "world5", "bossfight"].forEach((n) => { g.music[n] = new StubSound(true); });
@@ -315,7 +319,7 @@
         else {
           g.ghostScore = false;
           const pac = g.chars.pac;
-          if (g.config.movement === 0 && ((!T(g.config.ability) || g.config.ability === 1) || (!T(pac.phased) || pac.phased <= 0))) pac.speed = g.level.pacFrightenedSpeed;
+          if (g.config.movement === 0 && ((!T(ability()) || ability() === 1) || (!T(pac.phased) || pac.phased <= 0))) pac.speed = g.level.pacFrightenedSpeed;
           if (!g.sounds.scared.isPlaying()) { g.sounds.scared.play(); stopSiren(); }
           let immuneChar;
           if (g.config.plusMode && !byFruit) {
@@ -574,7 +578,7 @@
     // ------------------------------------------------------------------ logic
     const logic = {};
     const THRUSTER_SPEED = 0.008, MAX_THRUST = 1.6, STUN_DISTANCE = 6;
-    const phaseActive = () => (g.config.ability && g.config.ability === 1 && T(g.chars.pac.phased) && g.chars.pac.phased >= 0);
+    const phaseActive = () => (ability() && ability() === 1 && T(g.chars.pac.phased) && g.chars.pac.phased >= 0);
 
     const checkCollisions = (collectibles, xTile, yTile) => {
       if (phaseActive()) return;
@@ -753,7 +757,7 @@
 
           const fl = getCurrentMaze().fruitLoc;
           if (T(g.fruitTimer) && g.chars.pac.x === fl.x && g.chars.pac.y === fl.y &&
-            (!T(g.config.ability) || g.config.ability >= 2 || (!T(g.chars.pac.phased) || g.chars.pac.phased <= 0))) {
+            (!T(ability()) || ability() >= 2 || (!T(g.chars.pac.phased) || g.chars.pac.phased <= 0))) {
             score(g.level.fruit.score);
             g.fruitTimer = false;
             g.fruitScoreTimer = 120;
@@ -1201,8 +1205,8 @@
       g.chars.pac.phased = 60;
       if (g.sounds.phase.isPlaying()) g.sounds.phase.stop();
       g.sounds.phase.play();
-      if ((g.config.movement === 0 || g.config.movement === 1) && g.config.ability === 2) g.chars.pac.speed = 1.6;
-      if (g.config.ability === 3) {
+      if ((g.config.movement === 0 || g.config.movement === 1) && ability() === 2) g.chars.pac.speed = 1.6;
+      if (ability() === 3) {
         for (const name of charKeys()) {
           const ch = g.chars[name];
           if (ch.target && !ch.dead) {
@@ -1232,7 +1236,7 @@
         if (isScaryMonster(xTile, yTile, pac.dir, 1) || isScaryMonster(xTile, yTile, pac.dir, 2) ||
           isScaryMonster(oneAhead.xTile, oneAhead.yTile, (pac.dir + 1) % 4, 1) ||
           isScaryMonster(oneAhead.xTile, oneAhead.yTile, mod(pac.dir - 1, 4), 1)) {
-          if (T(g.config.ability) && !T(pac.phased)) phasePac();
+          if (T(ability()) && !T(pac.phased)) phasePac();
           if (!T(pac.phased)) {
             pac.iDir = (pac.dir + 2) % 4;
             return;
@@ -1356,7 +1360,7 @@
           g.fruitFrightened = false;
           g.frightened = false;
           if (g.mazeFrightened) { g.mazeFrightened = false; if (g.config.afterDark === 5) g.fadeTimer = g.fadeLength(); }
-          if (g.config.movement === 0 && (!T(g.config.ability) || g.config.ability === 1)) g.chars.pac.speed = g.level.pacSpeed;
+          if (g.config.movement === 0 && (!T(ability()) || ability() === 1)) g.chars.pac.speed = g.level.pacSpeed;
           for (const name of charKeys()) {
             const c = g.chars[name];
             if (c.target && c.frightened) { c.speed = logic.getGhostSpeed(c); c.frightened = false; }
@@ -1543,7 +1547,7 @@
           if (T(pac.phased)) {
             pac.phased -= 1;
             if (pac.phased === -60) { pac.phased = false; g.sounds.reload.play(); }
-            if (pac.phased === 0 && (g.config.movement === 0 || g.config.movement === 1) && g.config.ability === 2) pac.speed = logic.getPacSpeed();
+            if (pac.phased === 0 && (g.config.movement === 0 || g.config.movement === 1) && ability() === 2) pac.speed = logic.getPacSpeed();
           }
           if (g.fadeTimer > 0) g.fadeTimer -= 1;
 
@@ -1649,11 +1653,13 @@
           g.muted = !g.muted;
           return;
         }
-        if (g.state.running && (key === "space" || key === "lalt") && !T(g.chars.pac.phased) && T(g.config.ability)) phasePac();
+        if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === REWIND && env.rewind) env.rewind();
+        if (g.state.running && (key === "space" || key === "lalt") && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (key === "tab" || key === "p") togglePause();
       },
       gamepadpressed(button) {
-        if (g.state.running && button === "a" && !T(g.chars.pac.phased) && T(g.config.ability)) phasePac();
+        if (g.state.running && button === "a" && g.config.ability === REWIND && env.rewind) env.rewind();
+        if (g.state.running && button === "a" && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (button === "x") togglePause();
       },
     };
@@ -1693,7 +1699,7 @@
       Object.assign(opt("radar", [false, 30, 60, 90, 120], ["Off", "Tame", "Tricky", "Tough", "Terror"]), { y: 9 }),
       Object.assign(opt("startingLives", [1, 3, 5]), { y: 12 }),
       Object.assign(opt("freeGuy", [1, 2, 3, 4, 5], ["10000", "20000", "every 10k", "every 5k", "none"]), { y: 13 }),
-      Object.assign(opt("ability", [false, 1, 2, 3], ["Off", "Phase", "Boost", "Stun"]), { y: 14 }),
+      Object.assign(opt("ability", [false, 1, 2, 3, 4], ["Off", "Phase", "Boost", "Stun", "Rewind"]), { y: 14 }),
       Object.assign(opt("movement", [0, 1, 2, 3], ["Normal", "Faster", "Fastest", "Jetpack"]), { y: 15 }),
       Object.assign(opt("ghostCount", range(0, 7)), { y: 18 }),
       Object.assign(ON_OFF("pinkyBug"), { y: 19 }),
@@ -1735,7 +1741,7 @@
     const OPT_VALUES = {
       mazepack: PACKS, startingLevel: range(1, 21), difficulty: [0, 1, 2], plusMode: [false, true],
       afterDark: [false, 1, 2, 3, 4, 5], radar: [false, 30, 60, 90, 120], startingLives: [1, 3, 5], freeGuy: [1, 2, 3, 4, 5],
-      ability: [false, 1, 2, 3], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
+      ability: [false, 1, 2, 3, 4], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
       scatterOption: [false, 1, 2, 3], freeGhost: [true, false], background: bgNames, mazeColor: MAZE_COLORS,
       crtEffect: [true, false], volume: range(0, 10),
     };
@@ -1828,7 +1834,15 @@
 
     return {
       g, init, setScene, keypressed, update: () => g.scene.update(FIXED_DT),
-      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand,
+      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND,
+      // web edition (rewind.js): put the looping sounds back in line with the game state, the way the game itself picks
+      // them: eyes heading home -> "dead", any ghost frightened -> "scared", otherwise the siren for the dots left
+      resyncLoops() {
+        stopSiren(); g.sounds.dead.stop(); g.sounds.scared.stop(); g.sounds.thrust.stop();
+        let anyDead = false, anyFrightened = false;
+        for (const name of charKeys()) { const c = g.chars[name]; if (c.dead) anyDead = true; if (c.frightened) anyFrightened = true; }
+        if (anyDead) g.sounds.dead.play(); else if (anyFrightened) g.sounds.scared.play(); else playSiren();
+      },
       formatScore, constants: { TILE, CENTER, DELTAS, JOY_DIRS, MAX_THRUST, STUN_DISTANCE }, charKeys, animations, fruits,
       gamepadpressed, gameFc: () => gameFc, attractFc: () => attractFc, attractMenu,
       intermissions, MAX_COLORS: DATA.maxColors, INDEXES, optMenu, creditsMenu, creditsBooze,

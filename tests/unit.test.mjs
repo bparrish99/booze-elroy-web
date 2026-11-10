@@ -59,7 +59,7 @@ test("share codes: short, reversible for every option value, reject junk", () =>
   const seen = new Set();
   for (const [k, vals] of SK.FIELDS) for (const v of vals) {
     const cfg = { ...def, [k]: v }, code = SK.shareCode(cfg);
-    assert.match(code, /^[0-9a-z]{6}$/);
+    assert.match(code, k === "ability" && v === 4 ? /^[0-9a-z]{7}$/ : /^[0-9a-z]{6}$/); // Rewind needs the 7-character format
     assert.equal(SK.keyFor(SK.configFromCode(code)), SK.keyFor(cfg), k + "=" + v);
     seen.add(code);
   }
@@ -72,7 +72,25 @@ test("share codes: short, reversible for every option value, reject junk", () =>
   assert.equal(SK.configFromCode(code.toUpperCase()) !== null, true);
   const typo = code.slice(0, 2) + (code[2] === "a" ? "b" : "a") + code.slice(3);
   assert.equal(SK.configFromCode(typo), null);
-  for (const bad of [null, "", "zzzzzz", "abc", "pac.0.f.f.f.3.1.f.0.4.t.f.f", "!!!!!!"]) assert.equal(SK.configFromCode(bad), null, String(bad));
+  for (const bad of [null, "", "zzzzzz", "abc", "pac.0.f.f.f.3.1.f.0.4.t.f.f", "!!!!!!", "zzzzzzz", "12345678"]) assert.equal(SK.configFromCode(bad), null, String(bad));
+});
+
+test("share codes: links shared before Rewind existed still mean the same settings", () => {
+  // codes made by the original 6-character format (before the Rewind ability was appended), with what they stand for
+  const def = { mazepack: "pac", difficulty: 0, plusMode: false, afterDark: false, radar: false, startingLives: 3, freeGuy: 1, ability: false, movement: 0, ghostCount: 4, pinkyBug: true, scatterOption: false, freeGhost: false };
+  const FIXTURES = [[{}, "1y8ir9"], [{ ability: 1 }, "0v4wzu"], [{ ability: 3, ghostCount: 7 }, "viger3"], [{ mazepack: "random", afterDark: 5, radar: 120 }, "vgalfv"],
+    [{ movement: 3, freeGuy: 5, scatterOption: 3 }, "go1b5n"], [{ plusMode: true, difficulty: 2, startingLives: 1, pinkyBug: false, freeGhost: true }, "9xvlif"]];
+  for (const [over, code] of FIXTURES) {
+    const cfg = { ...def, ...over };
+    assert.equal(SK.shareCode(cfg), code, JSON.stringify(over));
+    assert.deepEqual(SK.configFromCode(code), cfg, code);
+  }
+  // Rewind: 7 characters, round-trips; board keys of the old values are unchanged ("pac...f..." keeps its form)
+  const rw = { ...def, ability: 4 }, code = SK.shareCode(rw);
+  assert.match(code, /^[0-9a-z]{7}$/);
+  assert.deepEqual(SK.configFromCode(code), rw);
+  assert.equal(SK.keyFor(def), "pac.0.f.f.f.3.1.f.0.4.t.f.f");
+  assert.equal(SK.keyFor(rw), "pac.0.f.f.f.3.1.4.0.4.t.f.f");
 });
 
 test("cleanName", () => {

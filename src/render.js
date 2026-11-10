@@ -119,6 +119,8 @@
           setColor(0.5, 0.5, 0);
         }
       }
+      // web edition: the Rewind ability's charge shows the abilities' way: full yellow when ready, this tint once used
+      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent) setColor(0.5, 0.5, 0);
       let angle = 0;
       if (T(o.stunned)) angle = (o.stunned * 6 * (o.spinDirection > 0.5 ? 1 : -1)) * Math.PI / 180;
       blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0), angle, 8, 8);
@@ -430,6 +432,37 @@
       if (g.mode === "intermission1") drawIntermission1();
       else if (g.mode === "intermission2") drawIntermission2();
       else if (g.mode === "intermission3") drawIntermission3();
+      if (g.rewinding) drawRewindTape();
+    }
+
+    // web edition: the Rewind ability plays back like a VCR rewinding: the picture tears sideways in bands, a noise bar
+    // rolls through, streaks of static, and a blinking rewind sign in the corner. Drawn over the game picture, so it shows
+    // in every look (plain, CRT, TV); render-only randomness (Math.random), nothing the game itself depends on
+    function drawRewindTape() {
+      const cv = ctx.canvas;
+      ctx.save();
+      ctx.globalAlpha = 1;
+      for (let i = 0; i < 4; i++) { // torn bands, yanked sideways
+        const y = 24 + Math.floor(Math.random() * 236), h = 2 + Math.floor(Math.random() * 12), dx = Math.round((Math.random() - 0.5) * 20);
+        ctx.drawImage(cv, 0, y, GW, h, dx, y, GW, h);
+      }
+      const t = performance.now();
+      const by = 24 + Math.floor((t / 3) % 260) - 12; // a noise bar rolling up the picture
+      ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.fillRect(0, GH - by, GW, 12);
+      for (let i = 0; i < 16; i++) { // streaks of static
+        ctx.fillStyle = "rgba(255,255,255," + (0.15 + Math.random() * 0.4).toFixed(2) + ")";
+        ctx.fillRect(Math.floor(Math.random() * GW), 24 + Math.floor(Math.random() * 248), 3 + Math.floor(Math.random() * 28), 1);
+      }
+      if (Math.floor(t / 250) % 2 === 0) { // the rewind sign, two pixel triangles pointing left, top right of the maze
+        ctx.fillStyle = "#fff";
+        const ox = GW - 26, oy = 30;
+        for (let r = 0; r < 9; r++) {
+          const w = 2 * (5 - Math.abs(4 - r)) - 1; // 1, 3, 5, 7, 9, 7, 5, 3, 1 ... as widths of a left-pointing triangle
+          ctx.fillRect(ox + 9 - w, oy + r, w, 1);
+          ctx.fillRect(ox + 19 - w, oy + r, w, 1);
+        }
+      }
+      ctx.restore();
     }
 
     function dialogue(text, x, y) { print(text, x, y, 3); print("\\", x + 9, y + 2, 3); }
