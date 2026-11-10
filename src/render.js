@@ -30,7 +30,14 @@
 
     // ---- love.graphics.setColor emulation (persists until changed, like LOVE)
     let col = [1, 1, 1, 1];
-    const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; };
+    const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; hollow = false; };
+    // web edition: an ability not ready ("out of gas") draws Pac-Man hollow, just his 1-pixel outline (a pixel is outline
+    // if any of its four neighbours is empty), instead of the original flat dark tint
+    let hollow = false;
+    const setHollow = () => { col = [1, 1, 1, 1]; hollow = true; };
+    const inner = document.createElement("canvas"); inner.width = 16; inner.height = 16;
+    const ictx = inner.getContext("2d");
+    ictx.imageSmoothingEnabled = false;
     const tmp = document.createElement("canvas"); tmp.width = 16; tmp.height = 16;
     const tctx = tmp.getContext("2d");
     tctx.imageSmoothingEnabled = false;
@@ -41,7 +48,20 @@
       const sx = (i % s.cols) * s.fw, sy = Math.floor(i / s.cols) * s.fh;
       let src = s.img, ssx = sx, ssy = sy;
       const tinted = col[0] !== 1 || col[1] !== 1 || col[2] !== 1;
-      if (tinted) {
+      if (hollow) {
+        // the sprite, minus its inside: the inside is where the sprite and its four 1-pixel shifts all overlap
+        tctx.clearRect(0, 0, 16, 16); tctx.globalCompositeOperation = "source-over";
+        tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
+        ictx.clearRect(0, 0, 16, 16); ictx.globalCompositeOperation = "source-over";
+        ictx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
+        ictx.globalCompositeOperation = "destination-in";
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) ictx.drawImage(s.img, sx, sy, s.fw, s.fh, dx, dy, s.fw, s.fh);
+        ictx.globalCompositeOperation = "source-over";
+        tctx.globalCompositeOperation = "destination-out";
+        tctx.drawImage(inner, 0, 0);
+        tctx.globalCompositeOperation = "source-over";
+        src = tmp; ssx = 0; ssy = 0;
+      } else if (tinted) {
         tctx.clearRect(0, 0, 16, 16);
         tctx.globalCompositeOperation = "source-over";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
@@ -99,9 +119,9 @@
       if (T(phased)) {
         const ab = g.config.ability;
         if (ab === 1) {
-          if (phased >= 0) setColor(Math.random(), Math.random(), Math.random()); else setColor(0.5, 0.5, 0);
+          if (phased >= 0) setColor(Math.random(), Math.random(), Math.random()); else setHollow();
         } else if (ab === 2) {
-          if (phased >= 0) setColor(0, 1, 0); else setColor(0.5, 0.5, 0);
+          if (phased >= 0) setColor(0, 1, 0); else setHollow();
         } else if (ab === 3) {
           if (phased > 40) {
             const pac = g.chars.pac;
@@ -116,11 +136,11 @@
             ctx.closePath(); ctx.fill(); ctx.restore();
             setColor(1, 1, 1);
           }
-          setColor(0.5, 0.5, 0);
+          setHollow();
         }
       }
-      // web edition: the Rewind ability's charge shows the abilities' way: full yellow when ready, this tint once used
-      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent) setColor(0.5, 0.5, 0);
+      // web edition: the Rewind ability's charge shows the abilities' way: solid when ready, hollow once used
+      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent) setHollow();
       let angle = 0;
       if (T(o.stunned)) angle = (o.stunned * 6 * (o.spinDirection > 0.5 ? 1 : -1)) * Math.PI / 180;
       blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0), angle, 8, 8);
