@@ -11,7 +11,7 @@ const GAME_NAME = /^booze([5-9]|[1-9]\d+)$/;
 const AUTOSAVE = "booze-maze-editor-autosave";
 
 let data, table, spr8, spr16, doc, gen, chk;
-let tool = "#", scale = 3, hover = null, stroke = null, rect = null, flash = null, savedJSON = "", gameNames = [], drafts = [];
+let tool = ".", scale = 3, hover = null, stroke = null, rect = null, flash = null, savedJSON = "", gameNames = [], drafts = [];
 const undoStack = [], redoStack = [];
 
 const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -154,7 +154,7 @@ function lineCells(a, b) { // Bresenham, so fast drags don't leave gaps
   for (;;) { out.push([x0, y0]); if (x0 === x1 && y0 === y1) break; const e2 = 2 * err; if (e2 >= dy) { err += dy; x0 += sx; } if (e2 <= dx) { err += dx; y0 += sy; } }
   return out;
 }
-const paintKind = (button) => button === 2 ? "." : tool;
+const paintKind = (button) => button !== 2 ? tool : tool === "#" ? "." : "#"; // right button: wall (or dots, with the Wall tool)
 function paint(cells, kind) { let ch = false; for (const [x, y] of cells) if (M.setCell(doc, x, y, kind)) ch = true; return ch; }
 
 cv.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -371,7 +371,7 @@ async function openDialog() {
 }
 function confirmDiscard() { return JSON.stringify(doc) === savedJSON || confirm("Discard the unsaved changes to " + (doc.name || "this maze") + "?"); }
 
-$("new").onclick = () => { if (!confirmDiscard()) return; setDoc(M.blankDoc(nextFreeName()), false); msg("New maze. Paint walls, open tunnels, then test play."); };
+$("new").onclick = () => { if (!confirmDiscard()) return; setDoc(M.blankDoc(nextFreeName()), false); msg("New maze: solid wall. Carve paths with Dots (right-click puts wall back), open tunnels, then test play."); };
 $("open").onclick = openDialog;
 $("save").onclick = save;
 $("play").onclick = testPlay;

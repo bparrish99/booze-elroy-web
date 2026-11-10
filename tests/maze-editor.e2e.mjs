@@ -25,6 +25,8 @@ try {
   await p.goto(dev.url + "/editor/");
   await p.waitForFunction(() => window.__editor && window.__editor.gen);
   check(await ed("E.doc.name") === "booze5", "a new maze is called booze5 (the first free name)");
+  check(await ed("E.doc.cells[5].slice(1, 27)") === "#".repeat(26), "a new maze is solid wall");
+  check(await p.getAttribute("#tools .tool.on", "data-tool") === ".", "Dots is the default tool");
   check(await ed("E.chk.problems.some((p) => /Gronky/.test(p.text))"), "a blank maze asks for a side tunnel for Gronky");
 
   await p.click("#open"); await p.waitForSelector("#games button");
@@ -37,6 +39,10 @@ try {
   // paint a 2x2 wall block over dots in the bottom-left corridor; it mirrors
   const box = await p.locator("#maze").boundingBox(), T = box.width / 28;
   const at = (x, y) => [box.x + (x + 0.5) * T, box.y + (y + 0.5) * T];
+  // with Dots, the right button paints wall back
+  await p.mouse.move(...at(2, 29)); await p.mouse.down({ button: "right" }); await p.mouse.up({ button: "right" });
+  check(await ed("E.doc.cells[29][2] + E.doc.cells[29][25]") === "##", "with Dots, right-click paints wall (mirrored)");
+  await p.keyboard.press("Control+z");
   await p.keyboard.press("1");
   await p.mouse.move(...at(2, 29)); await p.mouse.down(); await p.mouse.move(...at(3, 29), { steps: 3 }); await p.mouse.up();
   check(await ed("E.doc.cells[29].slice(2,4) + E.doc.cells[29].slice(24,26)") === "####", "a wall stroke paints both halves");

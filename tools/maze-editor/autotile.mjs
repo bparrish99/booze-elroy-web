@@ -117,13 +117,9 @@ export function candidates(table, rk) {
 }
 
 // ---------------------------------------------------------------------------------------------- documents
+// a new maze is solid wall (apart from the fixed pen area): you carve the paths
 export function blankDoc(name = "booze5") {
-  const cells = [];
-  for (let y = 0; y < H; y++) {
-    let r = "";
-    for (let x = 0; x < W; x++) r += (x === 0 || y === 0 || x === W - 1 || y === H - 1) ? "#" : ".";
-    cells.push(r);
-  }
+  const cells = Array.from({ length: H }, () => "#".repeat(W));
   const doc = { name, color: 17, cells, glyphs: {}, visible: {}, punky: 8, gunky: 29, gronky: null, scatter: SCATTER.standard, fruitTriggers: [170, 70], sirenTriggers: [20, 40, 100, 150] };
   return applyLocks(doc);
 }

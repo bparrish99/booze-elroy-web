@@ -31,10 +31,11 @@ test("the auto-tiler alone draws pac, booze1 and ultra1 exactly as their author 
   }
 });
 
-test("painting mirrors, keeps the fixed area, and drops glyph choices that no longer fit", () => {
+test("a new maze is solid wall; painting mirrors, keeps the fixed area, and drops glyph choices that no longer fit", () => {
   const doc = M.blankDoc("booze5");
-  assert.equal(M.setCell(doc, 3, 5, "#"), true);
-  assert.equal(doc.cells[5][3], "#"); assert.equal(doc.cells[5][24], "#");
+  for (let y = 0; y < M.H; y++) for (let x = 0; x < M.W; x++) if (!M.isLocked(x, y)) assert.equal(doc.cells[y][x], "#", `wall at ${x},${y}`);
+  assert.equal(M.setCell(doc, 3, 5, "."), true);
+  assert.equal(doc.cells[5][3], "."); assert.equal(doc.cells[5][24], ".");
   assert.equal(M.setCell(doc, 12, 14, "#"), false, "the pen ring is fixed");
   assert.equal(M.setCell(doc, 13, 23, "."), false, "Pac-Man's start is fixed");
   const gen = M.generate(doc, table);
@@ -47,19 +48,24 @@ test("painting mirrors, keeps the fixed area, and drops glyph choices that no lo
 test("checks: thin walls, unreachable dots, one-sided vertical tunnels, missing ghost starts", () => {
   const doc = M.blankDoc("booze5");
   const has = (d, re) => M.check(d, M.generate(d, table)).problems.some((p) => re.test(p.text));
+  const carve = (x0, y0, x1, y1, k = ".") => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) M.setCell(doc, x, y, k); };
   assert.ok(has(doc, /Gronky/), "no side tunnel for Gronky");
-  M.setCell(doc, 0, 14, "_"); M.setCell(doc, 1, 14, "_");
+  carve(0, 14, 1, 14, "_"); carve(2, 14, 8, 14);
+  assert.ok(has(doc, /Gronky/), "a side tunnel Pac-Man can't get to doesn't count");
+  carve(2, 14, 2, 23); carve(2, 23, 12, 23);
   assert.ok(!has(doc, /Gronky/), "a side tunnel fixes it");
-  M.setCell(doc, 5, 5, "#");
+  carve(2, 2, 5, 5);
+  assert.ok(has(doc, /can't reach/), "a room Pac-Man can't get to");
+  carve(2, 5, 2, 14);
+  assert.ok(!has(doc, /can't reach/), "a corridor to it");
+  M.setCell(doc, 3, 3, "#");
   assert.ok(has(doc, /2 tiles thick/), "a lone wall tile can't be drawn");
-  M.setCell(doc, 6, 5, "#"); M.setCell(doc, 5, 6, "#"); M.setCell(doc, 6, 6, "#");
+  M.setCell(doc, 4, 3, "#"); M.setCell(doc, 3, 4, "#"); M.setCell(doc, 4, 4, "#");
   assert.ok(!has(doc, /2 tiles thick/), "a 2x2 block can");
-  M.setCell(doc, 5, 0, ".");
+  carve(5, 0, 5, 1);
   assert.ok(has(doc, /top\/bottom edge/), "a hole in the top with no hole in the bottom");
-  M.setCell(doc, 5, 30, ".");
+  carve(5, 29, 5, 30);
   assert.ok(!has(doc, /top\/bottom edge/), "a vertical tunnel");
-  for (const [x, y] of [[2, 1], [3, 1], [1, 2], [1, 3], [2, 4], [3, 4], [4, 2], [4, 3]]) M.setCell(doc, x, y, "#");
-  assert.ok(has(doc, /can't reach/), "dots walled in");
 });
 
 test("the core: editor mazes join the booze and normal packs, the menu counts them, random shows as all", () => {
@@ -78,7 +84,9 @@ test("the core: editor mazes join the booze and normal packs, the menu counts th
 });
 
 test("the core: test play (env.testMaze) plays that maze whatever the pack", () => {
-  const doc = M.blankDoc("x"); M.setCell(doc, 0, 14, "_");
+  const doc = M.blankDoc("x");
+  for (let x = 0; x < 13; x++) { M.setCell(doc, x, 14, x < 2 ? "_" : "."); M.setCell(doc, x, 23, "."); }
+  for (let y = 14; y < 23; y++) M.setCell(doc, 2, y, ".");
   const data = { ...DATA, mazes: { ...DATA.mazes, editortest: M.toMazeData(doc, M.generate(doc, table)) }, mazeNames: DATA.mazeNames.concat(["editortest"]) };
   const core = BoozeCore.create(data, { testMaze: "editortest" });
   core.init();
