@@ -31,16 +31,12 @@
     // ---- love.graphics.setColor emulation (persists until changed, like LOVE)
     let col = [1, 1, 1, 1];
     const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; woozy = false; };
-    // web edition: Pac-Man "out of gas" (an ability not ready): instead of one flat tint, a swirl of decayed yellows spins
-    // on him: three spiral arms, palette-cycled per pixel (crisp pixel art, still Pac-Man yellow, just gone off)
+    // web edition: Pac-Man "out of gas" (an ability not ready): instead of one flat tint, a slow static of paler and darker
+    // yellows flickers inside him, each pixel on its own staggered clock (crisp pixel art, still Pac-Man yellow, gone off)
     let woozy = false;
     const setWoozy = () => { col = [0.65, 0.62, 0, 1]; woozy = true; };
     const WOOZY_TONES = ["rgb(214,202,0)", "rgb(160,150,0)", "rgb(112,104,0)"]; // decayed yellows: faded, dull, dark
-    const WOOZY_ARM = new Float32Array(256); // each pixel's place in the spiral: its angle (3 arms) plus a twist with distance
-    for (let py = 0; py < 16; py++) for (let px = 0; px < 16; px++) {
-      const dx = px - 7.5, dy = py - 7.5;
-      WOOZY_ARM[py * 16 + px] = (Math.atan2(dy, dx) / (2 * Math.PI)) * 3 + Math.hypot(dx, dy) * 0.22;
-    }
+    const woozyHash = (a, b) => { let h = Math.imul(a, 374761393) + Math.imul(b, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; };
     const tmp = document.createElement("canvas"); tmp.width = 16; tmp.height = 16;
     const tctx = tmp.getContext("2d");
     tctx.imageSmoothingEnabled = false;
@@ -56,11 +52,11 @@
         tctx.globalCompositeOperation = "source-over";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "multiply";
-        if (woozy) { // the swirl: one arm's width every 300 ms, a full turn about every second
-          const phase = performance.now() / 300;
+        if (woozy) { // the static: each pixel picks a new tone about every 250 ms, on its own offset clock
+          const t = performance.now() / 250;
           for (let py = 0; py < s.fh; py++) for (let px = 0; px < s.fw; px++) {
-            const v = Math.floor(WOOZY_ARM[py * 16 + px] + phase);
-            tctx.fillStyle = WOOZY_TONES[((v % 3) + 3) % 3];
+            const p = py * 16 + px, tick = Math.floor(t + (woozyHash(p, 7) % 1000) / 1000);
+            tctx.fillStyle = WOOZY_TONES[woozyHash(p, tick) % 3];
             tctx.fillRect(px, py, 1, 1);
           }
         } else {
