@@ -101,7 +101,21 @@ test("rewind: once per life, refilled by a new life or board; nothing to rewind 
   assert.equal(g.rewindSpent, false, "READY refills it");
 });
 
-test("rewind: other abilities and the demo never touch it", () => {
+test("rewind: the autoplayer uses it when a ghost gets too close (once per life)", () => {
+  let s = 99, rw = null, rewinds = 0;
+  const rng = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  const core = create(DATA, { rng, rewind: () => { const was = rw.active(); rw.trigger(); if (!was && rw.active()) rewinds++; } });
+  core.init(); core.g.config.ability = 4; core.g.autoplay = true; core.g.attract = false; core.setScene("game");
+  rw = RW.create(core);
+  for (let f = 0; f < 20000 && rewinds < 2; f++) {
+    if (core.g.scene.name !== "game") core.setScene("game");
+    if (!rw.update()) core.update();
+    rw.record();
+  }
+  assert.ok(rewinds >= 2, "the autoplayer rewound " + rewinds + " times");
+});
+
+test("rewind: other abilities never call it", () => {
   const core = create(DATA, { rng: () => 0.3, rewind: () => { throw new Error("rewind called"); } });
   core.init(); core.g.config.ability = 1; core.g.autoplay = false; core.g.attract = false; core.setScene("game");
   for (let i = 0; i < 400; i++) { core.update(); if (core.g.mode === "normal") core.keypressed("space"); }

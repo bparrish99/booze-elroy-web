@@ -30,7 +30,12 @@
 
     // ---- love.graphics.setColor emulation (persists until changed, like LOVE)
     let col = [1, 1, 1, 1];
-    const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; };
+    const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; woozy = false; };
+    // web edition: Pac-Man "out of gas" (an ability not ready): instead of one flat tint, three sickly tones in diagonal
+    // bands slide slowly across him, the old palette-cycling trick (an oily, queasy shimmer, still crisp pixel art)
+    let woozy = false;
+    const setWoozy = () => { col = [0.62, 0.62, 0.05, 1]; woozy = true; };
+    const WOOZY_TONES = ["rgb(158,158,13)", "rgb(199,219,77)", "rgb(168,148,31)"];
     const tmp = document.createElement("canvas"); tmp.width = 16; tmp.height = 16;
     const tctx = tmp.getContext("2d");
     tctx.imageSmoothingEnabled = false;
@@ -40,14 +45,22 @@
     function blit(s, i, x, y, angle, ox, oy) {
       const sx = (i % s.cols) * s.fw, sy = Math.floor(i / s.cols) * s.fh;
       let src = s.img, ssx = sx, ssy = sy;
-      const tinted = col[0] !== 1 || col[1] !== 1 || col[2] !== 1;
+      const tinted = woozy || col[0] !== 1 || col[1] !== 1 || col[2] !== 1;
       if (tinted) {
         tctx.clearRect(0, 0, 16, 16);
         tctx.globalCompositeOperation = "source-over";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "multiply";
-        tctx.fillStyle = `rgb(${Math.round(col[0] * 255)},${Math.round(col[1] * 255)},${Math.round(col[2] * 255)})`;
-        tctx.fillRect(0, 0, s.fw, s.fh);
+        if (woozy) { // the bands: 3 px wide, diagonal, moving along at a leisurely 6 px a second
+          const phase = Math.floor(performance.now() / 160);
+          for (let py = 0; py < s.fh; py++) for (let px = 0; px < s.fw; px++) {
+            tctx.fillStyle = WOOZY_TONES[Math.floor((px + py + phase) / 3) % 3];
+            tctx.fillRect(px, py, 1, 1);
+          }
+        } else {
+          tctx.fillStyle = `rgb(${Math.round(col[0] * 255)},${Math.round(col[1] * 255)},${Math.round(col[2] * 255)})`;
+          tctx.fillRect(0, 0, s.fw, s.fh);
+        }
         tctx.globalCompositeOperation = "destination-in";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "source-over";
@@ -99,9 +112,9 @@
       if (T(phased)) {
         const ab = g.config.ability;
         if (ab === 1) {
-          if (phased >= 0) setColor(Math.random(), Math.random(), Math.random()); else setColor(0.5, 0.5, 0);
+          if (phased >= 0) setColor(Math.random(), Math.random(), Math.random()); else setWoozy();
         } else if (ab === 2) {
-          if (phased >= 0) setColor(0, 1, 0); else setColor(0.5, 0.5, 0);
+          if (phased >= 0) setColor(0, 1, 0); else setWoozy();
         } else if (ab === 3) {
           if (phased > 40) {
             const pac = g.chars.pac;
@@ -116,11 +129,11 @@
             ctx.closePath(); ctx.fill(); ctx.restore();
             setColor(1, 1, 1);
           }
-          setColor(0.5, 0.5, 0);
+          setWoozy();
         }
       }
-      // web edition: the Rewind ability's charge shows the abilities' way: full yellow when ready, this tint once used
-      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent) setColor(0.5, 0.5, 0);
+      // web edition: the Rewind ability's charge shows the abilities' way: full yellow when ready, woozy once used
+      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent) setWoozy();
       let angle = 0;
       if (T(o.stunned)) angle = (o.stunned * 6 * (o.spinDirection > 0.5 ? 1 : -1)) * Math.PI / 180;
       blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0), angle, 8, 8);

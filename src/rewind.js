@@ -61,7 +61,8 @@
     let playback = null;       // { i } while the rewind plays on screen
     let lastMode = null;
     g.rewindSpent = false; g.rewinding = false;
-    const enabled = () => g.scene.name === "game" && !g.attract && !g.autoplay && g.config.ability === core.REWIND;
+    // the attract demo and autoplay use it too (the autoplayer rewinds when a ghost gets too close, like the other abilities)
+    const enabled = () => g.scene.name === "game" && g.config.ability === core.REWIND;
 
     /** after every game frame: keep the history, refill the charge on a new life / board */
     function record() {
