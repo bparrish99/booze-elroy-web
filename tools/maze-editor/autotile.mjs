@@ -117,10 +117,62 @@ export function candidates(table, rk) {
 }
 
 // ---------------------------------------------------------------------------------------------- documents
-// a new maze is solid wall (apart from the fixed pen area): you carve the paths
+// The dot grid ("connect the dots"): with walls 2 thick, paths can run every third row and column. These are the ones
+// that fit the fixed parts: the ring's sides (columns 9, 18; rows 11, 17), the tunnel row 14 and Pac-Man's row 23.
+// Nodes are where grid lines cross; segments are the 2-tile gaps between nodes (and the runs out to the edges, for
+// tunnels). A new maze is 2x2 wall blocks with every grid path open and dotted: filling a segment joins two blocks.
+export const GRID = { cols: [3, 6, 9, 12, 15, 18, 21, 24], rows: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29] };
+const GCOL = new Set(GRID.cols), GROW = new Set(GRID.rows);
+export const onGrid = (x, y) => GCOL.has(x) || GROW.has(y);
+export const isNode = (x, y) => GCOL.has(x) && GROW.has(y);
+const inner = (x, y) => x >= GRID.cols[0] && x <= GRID.cols.at(-1) && y >= GRID.rows[0] && y <= GRID.rows.at(-1);
+// the segment a grid tile belongs to (null for a node or a tile off the grid)
+export function segmentOf(x, y) {
+  if (isNode(x, y) || !onGrid(x, y)) return null;
+  const out = [];
+  if (GCOL.has(x)) { let a = y; while (a - 1 >= 0 && !GROW.has(a - 1)) a--; for (let yy = a; yy < H && !GROW.has(yy); yy++) out.push([x, yy]); }
+  else { let a = x; while (a - 1 >= 0 && !GCOL.has(a - 1)) a--; for (let xx = a; xx < W && !GCOL.has(xx); xx++) out.push([xx, y]); }
+  return out;
+}
+// does a document keep to the grid? (everything off it is wall)
+export function fitsGrid(doc) {
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!onGrid(x, y) && !isLocked(x, y) && doc.cells[y][x] !== "#") return false;
+  return true;
+}
+// nodes follow their segments: wall when every way out is wall, open (dotted) as soon as one is
+export function settleNodes(doc) {
+  let changed = false;
+  for (const y of GRID.rows) for (const x of GRID.cols) {
+    if (isLocked(x, y)) continue;
+    const ns = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].filter(([a, b]) => a >= 0 && b >= 0 && a < W && b < H).map(([a, b]) => doc.cells[b][a]);
+    const open = ns.filter((c) => c !== "#"), c = doc.cells[y][x];
+    if (!open.length && c !== "#") changed = setCell(doc, x, y, "#") || changed;
+    if (open.length && c === "#") changed = setCell(doc, x, y, open.some((k) => k === "." || k === "`" || k === ":") ? "." : " ") || changed;
+  }
+  return changed;
+}
+// paint on the grid: walls fill (or open) a whole segment; path kinds change one open tile; nodes look after themselves
+const OPEN_WITH = { "`": ".", ":": ".", ";": " " }; // opening a segment with an energizer / no-up tile: the rest of it
+export function paintGrid(doc, x, y, kind) {
+  if (!onGrid(x, y) || isLocked(x, y)) return false;
+  const seg = segmentOf(x, y);
+  let changed = false;
+  if (kind === "#") { if (seg) for (const [a, b] of seg) changed = setCell(doc, a, b, "#") || changed; }
+  else if (doc.cells[y][x] !== "#") changed = setCell(doc, x, y, kind);
+  else if (seg) for (const [a, b] of seg) changed = setCell(doc, a, b, a === x && b === y ? kind : OPEN_WITH[kind] || kind) || changed;
+  if (changed) settleNodes(doc);
+  return changed;
+}
+
 export function blankDoc(name = "booze5") {
-  const cells = Array.from({ length: H }, () => "#".repeat(W));
-  const doc = { name, color: 17, cells, glyphs: {}, visible: {}, punky: 8, gunky: 29, gronky: null, scatter: SCATTER.standard, fruitTriggers: [170, 70], sirenTriggers: [20, 40, 100, 150] };
+  const cells = [];
+  for (let y = 0; y < H; y++) {
+    let r = "";
+    for (let x = 0; x < W; x++) r += onGrid(x, y) && inner(x, y) ? "." : y === 14 && (x < 3 || x > 24) ? "_" : "#";
+    cells.push(r);
+  }
+  for (const [x, y] of [[3, 5], [24, 5], [3, 23], [24, 23]]) cells[y] = cells[y].slice(0, x) + "`" + cells[y].slice(x + 1);
+  const doc = { name, grid: true, color: 17, cells, glyphs: {}, visible: {}, punky: 8, gunky: 29, gronky: null, scatter: SCATTER.standard, fruitTriggers: [170, 70], sirenTriggers: [20, 40, 100, 150] };
   return applyLocks(doc);
 }
 
@@ -142,8 +194,25 @@ export function setCell(doc, x, y, kind) {
 }
 
 // Work out every tile's map character. Returns { map: [31 strings], info: per-tile { cands, glyph, outer } , cls }
+// grid mazes: wall deep in the border (no path next to it, even diagonally, and connected to the map edge) is the
+// outside void, as in the arcade mazes, so the outer wall is one tile (the double line) whatever the margin
+export function outerVoid(cells) {
+  const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H && cells[y][x] !== "#";
+  const deep = (x, y) => cells[y][x] === "#" && ![-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => open(x + dx, y + dy)));
+  const out = cells.map((r) => [...r]), seen = new Set(), st = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (x === 0 || y === 0 || x === W - 1 || y === H - 1) st.push([x, y]);
+  while (st.length) {
+    const [x, y] = st.pop();
+    if (x < 0 || y < 0 || x >= W || y >= H || seen.has(key(x, y)) || !deep(x, y)) continue;
+    seen.add(key(x, y)); out[y][x] = " ";
+    st.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+  return out.map((r) => r.join(""));
+}
+
 export function generate(doc, table) {
-  const cls = classify(doc.cells), hf = halfFill(cls);
+  const cells = doc.grid ? outerVoid(doc.cells) : doc.cells;
+  const cls = classify(cells), hf = halfFill(cls);
   // wall regions (4-connected) that touch the map edge or the outside void stay visible in After Dark ("outer")
   const outside = Array.from({ length: H }, () => Array(W).fill(false)); // void connected to the map edge
   const st = [];
@@ -167,7 +236,7 @@ export function generate(doc, table) {
   for (let y = 0; y < H; y++) {
     let row = ""; const irow = [];
     for (let x = 0; x < W; x++) {
-      const c = doc.cells[y][x];
+      const c = cells[y][x];
       if (inPen(x, y)) { const p = PEN.rows[y - PEN.y][x - PEN.x]; row += p; irow.push(p === " " ? null : { glyph: p, cands: [p], outer: true, fixed: true }); continue; }
       if (cls(x, y) !== "W") { row += c === "#" ? " " : c; irow.push(null); continue; }
       const cands = candidates(table, ringKey(hf, x, y));

@@ -11,7 +11,7 @@ const GAME_NAME = /^booze([5-9]|[1-9]\d+)$/;
 const AUTOSAVE = "booze-maze-editor-autosave";
 
 let data, table, spr8, spr16, doc, gen, chk;
-let tool = ".", scale = 3, hover = null, stroke = null, rect = null, flash = null, savedJSON = "", gameNames = [], drafts = [];
+let tool = "#", scale = 3, hover = null, stroke = null, rect = null, flash = null, savedJSON = "", gameNames = [], drafts = [];
 const undoStack = [], redoStack = [];
 
 const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -110,6 +110,7 @@ function render() {
         ctx.fillStyle = "#ff4d6d"; ctx.fillRect(px(x) + 1, px(y), T - 2, Math.max(2, scale));
         ctx.beginPath(); ctx.moveTo(px(x) + T / 2, px(y) + T * 0.28); ctx.lineTo(px(x) + T * 0.3, px(y) + T * 0.5); ctx.lineTo(px(x) + T * 0.7, px(y) + T * 0.5); ctx.fill();
       }
+      if (snapping() && i && c === "#" && M.onGrid(x, y) && !M.isLocked(x, y)) { ctx.fillStyle = "rgba(255,255,255,.22)"; ctx.fillRect(px(x) + T / 2 - scale, px(y) + T / 2 - scale, scale * 2, scale * 2); }
       if (i && !i.fixed && !i.auto) { ctx.fillStyle = "#ffb8ff"; ctx.fillRect(px(x) + T - scale * 2, px(y), scale * 2, scale * 2); }
     }
     // the fixed area, and the mirror line
@@ -127,7 +128,7 @@ function render() {
     requestAnimationFrame(render);
   }
   // brush preview
-  const cells = rect ? rectCells(rect.a, rect.b) : hover && !stroke ? [hover] : [];
+  const cells = rect ? rectCells(rect.a, rect.b) : hover && !stroke ? brushCells(hover) : [];
   ctx.lineWidth = Math.max(1, scale / 2);
   for (const [x, y] of cells) for (const xx of new Set([x, M.mirrorX(x)])) {
     ctx.strokeStyle = xx === x ? "rgba(255,212,0,.95)" : "rgba(255,212,0,.4)";
@@ -155,7 +156,15 @@ function lineCells(a, b) { // Bresenham, so fast drags don't leave gaps
   return out;
 }
 const paintKind = (button) => button !== 2 ? tool : tool === "#" ? "." : "#"; // right button: wall (or dots, with the Wall tool)
-function paint(cells, kind) { let ch = false; for (const [x, y] of cells) if (M.setCell(doc, x, y, kind)) ch = true; return ch; }
+const snapping = () => doc.grid && $("snap").checked; // grid mazes: paths only on the dot grid, walls fill whole gaps
+function paint(cells, kind) { let ch = false; for (const [x, y] of cells) if (snapping() ? M.paintGrid(doc, x, y, kind) : M.setCell(doc, x, y, kind)) ch = true; return ch; }
+// what a click on a cell paints (for the brush preview): on the grid, a wall fills the whole gap between two blocks
+function brushCells([x, y]) {
+  if (!snapping() || tool === "glyph" || tool === "dark") return [[x, y]];
+  if (!M.onGrid(x, y) || M.isLocked(x, y)) return [];
+  const seg = M.segmentOf(x, y);
+  return seg && (tool === "#" || doc.cells[y][x] === "#") ? seg : M.isNode(x, y) && doc.cells[y][x] === "#" ? [] : [[x, y]];
+}
 
 cv.addEventListener("contextmenu", (e) => e.preventDefault());
 cv.addEventListener("mousedown", (e) => {
@@ -275,6 +284,7 @@ function fillRowSelect(sel, rows, value, labelOf) {
 function refreshPanel() {
   if ($("name") !== document.activeElement) $("name").value = doc.name;
   $("dirty").textContent = JSON.stringify(doc) === savedJSON ? "" : "● unsaved";
+  $("snapRow").style.display = doc.grid ? "" : "none";
   for (const c of $("colors").children) c.classList.toggle("on", Number(c.dataset.c) === doc.color);
   const mid = []; for (let y = 0; y < M.H; y++) if (gen.cls(13, y) === "p" && gen.cls(14, y) === "p") mid.push(y);
   const tun = M.tunnelRows(gen);
@@ -311,6 +321,7 @@ const numList = (s) => s.split(/[\s,]+/).filter(Boolean).map(Number).filter((n) 
 $("fruit").addEventListener("change", (e) => { const v = numList(e.target.value); if (v.length) { pushUndo(); doc.fruitTriggers = v; } changed(); });
 $("siren").addEventListener("change", (e) => { const v = numList(e.target.value); if (v.length) { pushUndo(); doc.sirenTriggers = v; } changed(); });
 $("markers").addEventListener("change", render);
+$("snap").addEventListener("change", render);
 $("dark").addEventListener("change", render);
 $("undo").onclick = undo; $("redo").onclick = redo;
 
@@ -371,7 +382,7 @@ async function openDialog() {
 }
 function confirmDiscard() { return JSON.stringify(doc) === savedJSON || confirm("Discard the unsaved changes to " + (doc.name || "this maze") + "?"); }
 
-$("new").onclick = () => { if (!confirmDiscard()) return; setDoc(M.blankDoc(nextFreeName()), false); msg("New maze: solid wall. Carve paths with Dots (right-click puts wall back), open tunnels, then test play."); };
+$("new").onclick = () => { if (!confirmDiscard()) return; setDoc(M.blankDoc(nextFreeName()), false); msg("New maze: wall dots on a dotted grid. Connect the dots with Wall (right-click opens a gap again), then test play."); };
 $("open").onclick = openDialog;
 $("save").onclick = save;
 $("play").onclick = testPlay;

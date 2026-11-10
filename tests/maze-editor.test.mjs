@@ -31,22 +31,39 @@ test("the auto-tiler alone draws pac, booze1 and ultra1 exactly as their author 
   }
 });
 
-test("a new maze is solid wall; painting mirrors, keeps the fixed area, and drops glyph choices that no longer fit", () => {
-  const doc = M.blankDoc("booze5");
-  for (let y = 0; y < M.H; y++) for (let x = 0; x < M.W; x++) if (!M.isLocked(x, y)) assert.equal(doc.cells[y][x], "#", `wall at ${x},${y}`);
-  assert.equal(M.setCell(doc, 3, 5, "."), true);
-  assert.equal(doc.cells[5][3], "."); assert.equal(doc.cells[5][24], ".");
-  assert.equal(M.setCell(doc, 12, 14, "#"), false, "the pen ring is fixed");
-  assert.equal(M.setCell(doc, 13, 23, "."), false, "Pac-Man's start is fixed");
-  const gen = M.generate(doc, table);
+test("a new maze is connect-the-dots: 2x2 wall blocks on a dotted grid, with no problems", () => {
+  const doc = M.blankDoc("booze5"), gen = M.generate(doc, table);
+  assert.ok(M.fitsGrid(doc));
+  assert.equal(doc.cells[2].slice(3, 25), ".".repeat(22), "a dotted grid row");
+  assert.equal(doc.cells[3].slice(4, 6) + doc.cells[4].slice(4, 6), "####", "a 2x2 wall block");
+  assert.deepEqual(M.check(doc, gen).problems, []);
+  assert.equal(gen.map[1].slice(2, 26), "1" + "2".repeat(22) + "5", "the outer wall is the one-tile double line");
+  assert.equal(gen.map[5][0] + gen.map[5][1], "  ", "outside it, void");
   for (let y = 0; y < M.H; y++) for (let x = 0; x < M.W; x++) {
     const a = gen.info[y][x], b = gen.info[y][M.mirrorX(x)];
     if (a && a.glyph && !a.fixed) assert.equal(M.MIRROR[a.glyph], b.glyph, `mirror at ${x},${y}`);
   }
 });
 
-test("checks: thin walls, unreachable dots, one-sided vertical tunnels, missing ghost starts", () => {
+test("connecting the dots: a wall fills the gap between two blocks (mirrored); crossings follow their gaps", () => {
   const doc = M.blankDoc("booze5");
+  assert.equal(M.paintGrid(doc, 4, 2, "#"), true, "the gap above the first block");
+  assert.equal(doc.cells[2].slice(4, 6), "##"); assert.equal(doc.cells[2].slice(22, 24), "##", "mirrored");
+  assert.equal(M.paintGrid(doc, 4, 3, "."), false, "off the grid (inside a block): no paths");
+  assert.equal(M.paintGrid(doc, 12, 14, "#"), false, "the pen ring is fixed");
+  assert.equal(doc.cells[2][3], ".", "the corner crossing at 3,2 still has a way out (down)");
+  M.paintGrid(doc, 3, 3, "#");
+  assert.equal(doc.cells[2][3], "#", "with every way out walled it becomes wall");
+  M.paintGrid(doc, 3, 4, ".");
+  assert.equal(doc.cells[2][3] + doc.cells[3][3] + doc.cells[4][3], "...", "opening a gap reopens its crossing");
+  M.paintGrid(doc, 3, 3, "`");
+  assert.equal(doc.cells[3][3], "`", "path tools change one open tile");
+  assert.ok(M.fitsGrid(doc));
+  assert.deepEqual(M.check(doc, M.generate(doc, table)).problems.filter((p) => p.level === "error"), []);
+});
+
+test("checks: thin walls, unreachable dots, one-sided vertical tunnels, missing ghost starts", () => {
+  const doc = M.applyLocks({ ...M.blankDoc("booze5"), grid: false, cells: Array(M.H).fill("#".repeat(M.W)) }); // solid wall
   const has = (d, re) => M.check(d, M.generate(d, table)).problems.some((p) => re.test(p.text));
   const carve = (x0, y0, x1, y1, k = ".") => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) M.setCell(doc, x, y, k); };
   assert.ok(has(doc, /Gronky/), "no side tunnel for Gronky");
@@ -85,8 +102,6 @@ test("the core: editor mazes join the booze and normal packs, the menu counts th
 
 test("the core: test play (env.testMaze) plays that maze whatever the pack", () => {
   const doc = M.blankDoc("x");
-  for (let x = 0; x < 13; x++) { M.setCell(doc, x, 14, x < 2 ? "_" : "."); M.setCell(doc, x, 23, "."); }
-  for (let y = 14; y < 23; y++) M.setCell(doc, 2, y, ".");
   const data = { ...DATA, mazes: { ...DATA.mazes, editortest: M.toMazeData(doc, M.generate(doc, table)) }, mazeNames: DATA.mazeNames.concat(["editortest"]) };
   const core = BoozeCore.create(data, { testMaze: "editortest" });
   core.init();

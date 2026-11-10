@@ -25,9 +25,17 @@ try {
   await p.goto(dev.url + "/editor/");
   await p.waitForFunction(() => window.__editor && window.__editor.gen);
   check(await ed("E.doc.name") === "booze5", "a new maze is called booze5 (the first free name)");
-  check(await ed("E.doc.cells[5].slice(1, 27)") === "#".repeat(26), "a new maze is solid wall");
-  check(await p.getAttribute("#tools .tool.on", "data-tool") === ".", "Dots is the default tool");
-  check(await ed("E.chk.problems.some((p) => /Gronky/.test(p.text))"), "a blank maze asks for a side tunnel for Gronky");
+  check(await ed("E.doc.grid && E.M.fitsGrid(E.doc) && E.chk.problems.length === 0"), "a new maze is connect-the-dots, with no problems");
+  check(await p.getAttribute("#tools .tool.on", "data-tool") === "#", "Wall is the default tool");
+  {
+    const box = await p.locator("#maze").boundingBox(), T = box.width / 28, at = (x, y) => [box.x + (x + 0.5) * T, box.y + (y + 0.5) * T];
+    await p.mouse.move(...at(4, 2)); await p.mouse.down(); await p.mouse.up();
+    check(await ed("E.doc.cells[2].slice(4, 6) + E.doc.cells[2].slice(22, 24)") === "####", "a click between two blocks connects them (mirrored)");
+    await p.mouse.move(...at(1, 8)); await p.mouse.down(); await p.mouse.up();
+    await p.mouse.move(...at(5, 2)); await p.mouse.down({ button: "right" }); await p.mouse.up({ button: "right" });
+    check(await ed("E.doc.cells[2].slice(4, 6)") === "..", "right-click opens the gap again");
+    await shot("me0-grid");
+  }
 
   await p.click("#open"); await p.waitForSelector("#games button");
   check((await p.locator("#games button").allTextContents()).join(",") === "pac,mspac1,mspac2,mspac3,mspac4,booze1,booze2,booze3,booze4,ultra1,ultra2,ultra3,ultra4,ultra5", "Open offers the standard-pen mazes");
@@ -40,6 +48,7 @@ try {
   const box = await p.locator("#maze").boundingBox(), T = box.width / 28;
   const at = (x, y) => [box.x + (x + 0.5) * T, box.y + (y + 0.5) * T];
   // with Dots, the right button paints wall back
+  await p.keyboard.press("2");
   await p.mouse.move(...at(2, 29)); await p.mouse.down({ button: "right" }); await p.mouse.up({ button: "right" });
   check(await ed("E.doc.cells[29][2] + E.doc.cells[29][25]") === "##", "with Dots, right-click paints wall (mirrored)");
   await p.keyboard.press("Control+z");
