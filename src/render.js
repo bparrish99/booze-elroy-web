@@ -31,11 +31,16 @@
     // ---- love.graphics.setColor emulation (persists until changed, like LOVE)
     let col = [1, 1, 1, 1];
     const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; woozy = false; };
-    // web edition: Pac-Man "out of gas" (an ability not ready): instead of one flat tint, three sickly tones in diagonal
-    // bands slide slowly across him, the old palette-cycling trick (an oily, queasy shimmer, still crisp pixel art)
+    // web edition: Pac-Man "out of gas" (an ability not ready): instead of one flat tint, a dark, reddish "no-go" swirl
+    // spins on him: three spiral arms of sickly tones, palette-cycled per pixel (crisp pixel art, obvious even on the run)
     let woozy = false;
-    const setWoozy = () => { col = [0.62, 0.62, 0.05, 1]; woozy = true; };
-    const WOOZY_TONES = ["rgb(158,158,13)", "rgb(199,219,77)", "rgb(168,148,31)"];
+    const setWoozy = () => { col = [0.6, 0.3, 0.05, 1]; woozy = true; };
+    const WOOZY_TONES = ["rgb(178,72,10)", "rgb(122,104,10)", "rgb(140,38,18)"]; // rust red, muddy olive, dark red
+    const WOOZY_ARM = new Float32Array(256); // each pixel's place in the spiral: its angle (3 arms) plus a twist with distance
+    for (let py = 0; py < 16; py++) for (let px = 0; px < 16; px++) {
+      const dx = px - 7.5, dy = py - 7.5;
+      WOOZY_ARM[py * 16 + px] = (Math.atan2(dy, dx) / (2 * Math.PI)) * 3 + Math.hypot(dx, dy) * 0.22;
+    }
     const tmp = document.createElement("canvas"); tmp.width = 16; tmp.height = 16;
     const tctx = tmp.getContext("2d");
     tctx.imageSmoothingEnabled = false;
@@ -51,10 +56,11 @@
         tctx.globalCompositeOperation = "source-over";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "multiply";
-        if (woozy) { // the bands: 3 px wide, diagonal, moving along at a leisurely 6 px a second
-          const phase = Math.floor(performance.now() / 160);
+        if (woozy) { // the swirl: one arm's width every 110 ms, a full turn about every third of a second
+          const phase = performance.now() / 110;
           for (let py = 0; py < s.fh; py++) for (let px = 0; px < s.fw; px++) {
-            tctx.fillStyle = WOOZY_TONES[Math.floor((px + py + phase) / 3) % 3];
+            const v = Math.floor(WOOZY_ARM[py * 16 + px] + phase);
+            tctx.fillStyle = WOOZY_TONES[((v % 3) + 3) % 3];
             tctx.fillRect(px, py, 1, 1);
           }
         } else {
