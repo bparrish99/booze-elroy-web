@@ -53,6 +53,10 @@ try {
   check(await ev(() => !document.getElementById("fps").classList.contains("on")), "fps readout is off by default");
   await p.keyboard.type("xyzzy"); await p.waitForTimeout(1300);
   check(await ev(() => { const e = document.getElementById("fps"); return e.classList.contains("on") && / fps$/.test(e.textContent) && window.__core.g.scene.name === "attract"; }), "typing xyzzy shows it (" + await ev(() => document.getElementById("fps").textContent) + "), still on the title");
+  // test mode also skips the opening jingle: straight from the blank pregame to READY
+  await ev(() => { const c = window.__core; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });
+  check(await until("g.mode === 'ready'", 3000) && await g("!g.sounds.opening.isPlaying()"), "test mode: a game skips the opening jingle");
+  await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
   await p.keyboard.type("xyzzy"); await p.waitForTimeout(400);
   check(await ev(() => !document.getElementById("fps").classList.contains("on") && localStorage.getItem("booze-elroy-fps") === "0"), "typing it again hides it");
   check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Restore Defaults,Share Config,Create Arena,Credits,Back", "Options: Restore Defaults, Share Config, Create Arena, Credits, Back");

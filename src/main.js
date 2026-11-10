@@ -120,7 +120,7 @@
       mina: { scenes: CHEAT_SCENES, run() { const from = core.g.scene.name; core.setScene("mina", from); } },
       reset: { scenes: CHEAT_SCENES, run() { openReset(); } }, // admin: reset high scores (asks for the password)
       delete: { scenes: ["arena"], run() { openReset("arena"); } }, // admin: delete the arena on screen (asks for the password)
-      xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // a small frame-rate readout, bottom right
+      xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // test mode: a frame-rate readout, and games skip the opening jingle
     };
     // the frame-rate readout: off by default, remembered; counted in the frame loop, shown twice a second
     const fpsEl = document.getElementById("fps");
@@ -144,7 +144,7 @@
     let rwd = null; // the Rewind ability (rewind.js), made once the core exists
     const core = BoozeCore.create(A.data, {
       noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), rewind: () => rwd && rwd.trigger(), quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), rewind: () => rwd && rwd.trigger(), skipIntro: () => fpsOn /* test mode (xyzzy): no opening jingle */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),

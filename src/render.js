@@ -35,7 +35,7 @@
     // yellows flickers inside him, each pixel on its own staggered clock (crisp pixel art, still Pac-Man yellow, gone off)
     let woozy = false;
     const setWoozy = () => { col = [0.65, 0.62, 0, 1]; woozy = true; };
-    const WOOZY_TONES = ["rgb(214,202,0)", "rgb(160,150,0)", "rgb(112,104,0)"]; // decayed yellows: faded, dull, dark
+    const WOOZY_TONES = ["rgb(200,186,12)", "rgb(176,163,8)", "rgb(152,141,4)"]; // darker yellows, still saturated, close together
     const woozyHash = (a, b) => { let h = Math.imul(a, 374761393) + Math.imul(b, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; };
     const tmp = document.createElement("canvas"); tmp.width = 16; tmp.height = 16;
     const tctx = tmp.getContext("2d");
@@ -52,7 +52,8 @@
         tctx.globalCompositeOperation = "source-over";
         tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "multiply";
-        if (woozy) { // the static: each pixel picks a new tone about every 250 ms, on its own offset clock
+        if (woozy) { // the static: each pixel picks a new tone about every 250 ms, on its own offset clock (painted, not
+          tctx.globalCompositeOperation = "source-over"; //  multiplied: a multiply can't make yellow paler)
           const t = performance.now() / 250;
           for (let py = 0; py < s.fh; py++) for (let px = 0; px < s.fw; px++) {
             const p = py * 16 + px, tick = Math.floor(t + (woozyHash(p, 7) % 1000) / 1000);

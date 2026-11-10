@@ -878,6 +878,7 @@
             if (!g.attract) { for (const k of Object.keys(g.music)) if (g.music[k].isPlaying()) g.music[k].stop(); if (g.fever.isPlaying()) g.fever.stop(); }
           },
           frames: 30, state: { running: false, showPac: false, showGhosts: false, hideMaze: true }, nextMode: "playerUp",
+          endFunc() { if (env.skipIntro && env.skipIntro()) mode.setMode("ready"); }, // web edition: test mode skips the jingle
         },
         playerUp: {
           frames: 135, state: { running: false, showPac: false, showGhosts: false }, nextMode: "ready",
