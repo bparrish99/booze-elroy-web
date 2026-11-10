@@ -37,6 +37,17 @@
     // the Lua lists "mega1" here, which does not exist (the only mega maze is "large1"); mapped to it so it cannot crash
     large: { order: 9, list: ["junior1", "junior2", "junior3", "junior4", "junior5", "junior6", "junior7", "large1"] },
   };
+  // web edition: mazes made with the maze editor (tools/maze-editor) named booze5, booze6, ... join the booze pack and
+  // Normal (after booze4). env.testMaze (the editor's test play) makes every pack that one maze.
+  const extraBooze = (DATA) => DATA.mazeNames.filter((n) => /^booze\d+$/.test(n) && !MAZE_PACKS.booze.list.includes(n))
+    .sort((a, b) => Number(a.slice(5)) - Number(b.slice(5)));
+  function mazePacks(DATA, env) {
+    const packs = JSON.parse(JSON.stringify(MAZE_PACKS)), extra = extraBooze(DATA);
+    packs.booze.list.push(...extra);
+    packs.normal.list.splice(packs.normal.list.indexOf("booze4") + 1, 0, ...extra);
+    if (env.testMaze) for (const k of Object.keys(packs)) packs[k].list = [env.testMaze];
+    return packs;
+  }
   const PACK_ORDER = ["pac", "mspac", "junior", "booze", "ultra", "arrange", "mega", "normal", "large"];
   const INDEXES = "123456789ABCDEFGHIJKLMNOPQRSTUVWXY";
   const CHAR_ORDER = ["pac", "blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"];
@@ -94,7 +105,7 @@
       sounds: {},
       music: {},
       fever: null,
-      mazes: MAZE_PACKS,
+      mazes: mazePacks(DATA, env),
       backgroundOptions: BACKGROUND_OPTIONS,
     };
     function resetConfigs() {
@@ -1688,7 +1699,9 @@
     const cap = (n) => n.charAt(0).toUpperCase() + n.slice(1);
     const bgNames = BACKGROUND_OPTIONS.concat(["random"]);
     const PACKS = ["pac", "booze", "mspac", "junior", "ultra", "arrange", "mega", "normal", "large", "random"];
-    const PACK_TEXTS = ["pac-1", "booze-4", "mspac-4", "junior-7", "ultra-5", "arrange-3", "mega-1", "normal-17", "large-8", "random"];
+    // web edition: the pack sizes follow the packs (the maze editor adds booze mazes); "random" is shown as "all"
+    const PACK_TEXTS = PACKS.map((p) => p === "random" ? "all"
+      : p + "-" + (MAZE_PACKS[p].list.length + (p === "booze" || p === "normal" ? extraBooze(DATA).length : 0)));
     const saveConfig = () => { if (env.saveConfig) env.saveConfig(g.config); };
     const AV_KEYS = ["background", "mazeColor", "crtEffect", "volume", "musicVolume"]; // the Audio/Video section
     const MAZE_COLORS = [99].concat(range(1, 26), [0]);

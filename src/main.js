@@ -14,12 +14,21 @@
     const audio = BoozeAudio.createAudio(A.sounds);
     let muted = false;
     try { muted = localStorage.getItem("booze-elroy-muted") === "1"; } catch { /* ignore */ }
+    // maze editor test play (tools/maze-editor; localhost only): ?testmaze plays the maze the editor left in localStorage,
+    // whatever maze pack is chosen, offline
+    let testMaze = null;
+    if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && new URLSearchParams(location.search).has("testmaze")) {
+      try {
+        const m = JSON.parse(localStorage.getItem("booze-elroy-editor-test"));
+        if (m && m.map) { A.data.mazes.editortest = m; A.data.mazeNames.push("editortest"); testMaze = "editortest"; }
+      } catch { /* ignore */ }
+    }
     // online leaderboard + per-settings high score (only over http(s); a file:// page plays offline)
     let storage = null; try { storage = window.localStorage; } catch { /* ignore */ }
     const LB = BoozeLeaderboard.create({
       storage: storage || { getItem: () => null, setItem() {}, removeItem() {} },
-      apiBase: /^https?:$/.test(location.protocol) ? "/api/scores" : null,
-      arenaBase: /^https?:$/.test(location.protocol) ? "/api/arenas" : null,
+      apiBase: /^https?:$/.test(location.protocol) && !testMaze ? "/api/scores" : null,
+      arenaBase: /^https?:$/.test(location.protocol) && !testMaze ? "/api/arenas" : null,
       fetch: (...a) => fetch(...a),
       share: (cfg) => shareConfig(cfg ? "?cfg=" + SK.shareCode(cfg) : null), // the board on show on the Leaderboards page
       shareArena: (id) => shareConfig("?arena=" + id), // link straight to an arena's page
@@ -143,7 +152,7 @@
 
     let rwd = null; // the Rewind ability (rewind.js), made once the core exists
     const core = BoozeCore.create(A.data, {
-      noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
+      testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
       scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), rewind: () => rwd && rwd.trigger(), skipIntro: () => fpsOn /* test mode (xyzzy): no opening jingle */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },

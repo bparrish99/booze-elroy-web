@@ -2,6 +2,7 @@
 // with scores kept in a local Netlify Blobs store under .dev-blobs/. No Netlify account needed.
 //   npm run dev                    -> http://localhost:8888   (reset password: "dev")
 //   PORT=9000 LEADERBOARD_ADMIN_PASSWORD=secret npm run dev
+//   http://localhost:8888/editor/  -> the maze editor (tools/maze-editor)
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { mkdirSync } from "node:fs";
@@ -11,12 +12,13 @@ import { BlobsServer } from "@netlify/blobs/server";
 import { getStore } from "@netlify/blobs";
 import { handle } from "../netlify/lib/scores.mjs";
 import { handleArenas } from "../netlify/lib/arenas.mjs";
+import { handleEditor } from "./maze-editor/server.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json" };
 
 export async function startDev(opts = {}) {
-  const { port = 8888, blobsDir = join(ROOT, ".dev-blobs"), password = "dev", quiet = false } = opts; // opts.now: fake clock for tests
+  const { port = 8888, blobsDir = join(ROOT, ".dev-blobs"), password = "dev", quiet = false } = opts; // opts.now: fake clock for tests; opts.editorRoot: the maze editor's files (tests)
   mkdirSync(blobsDir, { recursive: true });
   const token = "dev-token";
   const blobs = new BlobsServer({ directory: blobsDir, token });
@@ -38,6 +40,7 @@ export async function startDev(opts = {}) {
         if (!quiet) console.log(req.method, u.pathname + u.search, r.status);
         return;
       }
+      if (await handleEditor(req, res, u, { root: opts.editorRoot })) return; // the maze editor: /editor/ (dev only)
       const rel = normalize(decodeURIComponent(u.pathname)).replace(/^([/\\])+/, "") || "index.html";
       if (rel.startsWith("..")) { res.writeHead(403); res.end(); return; }
       const data = await readFile(join(ROOT, "public", rel));

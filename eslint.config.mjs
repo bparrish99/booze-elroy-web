@@ -18,6 +18,8 @@ export default [
     files: ["netlify/**/*.mjs", "tests/**/*.mjs", "tools/**/*.mjs"],
     languageOptions: { ecmaVersion: 2022, sourceType: "module", globals: { ...globals.node } },
   },
+  // the maze editor's page script runs in the browser
+  { files: ["tools/maze-editor/editor.mjs"], languageOptions: { globals: { ...globals.browser } } },
   // Playwright page.evaluate() callbacks run in the page
   { files: ["tests/**/*.mjs"], languageOptions: { globals: { ...globals.browser } } },
 ];

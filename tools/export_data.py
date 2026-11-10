@@ -1,4 +1,6 @@
-"""Export the game's data tables straight out of the original Lua into JSON (no hand transcription)."""
+"""Export the game's data tables straight out of the original Lua into JSON (no hand transcription).
+RETIRED: the Lua is over and assets/data.json is now also written by the maze editor (tools/maze-editor);
+re-running this would drop the editor's mazes (booze5, ...). Kept for the record."""
 import json, sys
 from lupa.luajit21 import LuaRuntime
 
