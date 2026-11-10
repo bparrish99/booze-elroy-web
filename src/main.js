@@ -384,7 +384,7 @@
     // (next to mute; phones have no C). Not an option on the Options page (env.crtKey); saved at once, into the player's
     // own settings even while an arena's / leaderboard's are borrowed
     const lookBtn = document.getElementById("look");
-    const LOOK_NAMES = { true: "CRT", false: "plain", tv: "old TV" };
+    const LOOK_NAMES = { true: "CRT", false: "clean", tv: "retro TV" };
     const syncLook = () => { lookBtn.title = "Look: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title); };
     function cycleLook() {
       const crt = core.g.config.crtEffect;
