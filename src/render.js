@@ -31,7 +31,7 @@
     // ---- love.graphics.setColor emulation (persists until changed, like LOVE)
     let col = [1, 1, 1, 1];
     const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; hollow = false; };
-    // web edition: an ability not ready ("out of gas") draws Pac-Man hollow, just his 1-pixel outline in a darker yellow (a pixel is outline
+    // web edition: an ability not ready ("out of gas") draws Pac-Man hollow: his 1-pixel outline in a darker yellow, a very dark yellow inside (a pixel is outline
     // if any of its four neighbours is empty), instead of the original flat dark tint
     let hollow = false;
     const setHollow = () => { col = [1, 1, 1, 1]; hollow = true; };
@@ -56,12 +56,13 @@
         ictx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         ictx.globalCompositeOperation = "destination-in";
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) ictx.drawImage(s.img, sx, sy, s.fw, s.fh, dx, dy, s.fw, s.fh);
+        ictx.globalCompositeOperation = "source-atop"; // the inside: a very dark yellow
+        ictx.fillStyle = "rgb(62,58,0)"; ictx.fillRect(0, 0, 16, 16);
         ictx.globalCompositeOperation = "source-over";
-        tctx.globalCompositeOperation = "destination-out";
-        tctx.drawImage(inner, 0, 0);
-        tctx.globalCompositeOperation = "source-atop"; // and a darker yellow
+        tctx.globalCompositeOperation = "source-atop"; // the outline: a darker yellow
         tctx.fillStyle = "rgb(150,146,0)"; tctx.fillRect(0, 0, 16, 16);
         tctx.globalCompositeOperation = "source-over";
+        tctx.drawImage(inner, 0, 0);
         src = tmp; ssx = 0; ssy = 0;
       } else if (tinted) {
         tctx.clearRect(0, 0, 16, 16);
