@@ -31,7 +31,7 @@
     // ---- love.graphics.setColor emulation (persists until changed, like LOVE)
     let col = [1, 1, 1, 1];
     const setColor = (r, gg, b, a) => { col = [r, gg, b, a === undefined ? 1 : a]; hollow = false; };
-    // web edition: an ability not ready ("out of gas") draws Pac-Man hollow, just his 1-pixel outline (a pixel is outline
+    // web edition: an ability not ready ("out of gas") draws Pac-Man hollow, just his 1-pixel outline in a darker yellow (a pixel is outline
     // if any of its four neighbours is empty), instead of the original flat dark tint
     let hollow = false;
     const setHollow = () => { col = [1, 1, 1, 1]; hollow = true; };
@@ -59,6 +59,8 @@
         ictx.globalCompositeOperation = "source-over";
         tctx.globalCompositeOperation = "destination-out";
         tctx.drawImage(inner, 0, 0);
+        tctx.globalCompositeOperation = "source-atop"; // and a darker yellow
+        tctx.fillStyle = "rgb(150,146,0)"; tctx.fillRect(0, 0, 16, 16);
         tctx.globalCompositeOperation = "source-over";
         src = tmp; ssx = 0; ssy = 0;
       } else if (tinted) {
