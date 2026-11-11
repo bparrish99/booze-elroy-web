@@ -444,11 +444,14 @@
       }
 
       clip(0, 24, 224, 248);
+      const routes = debug && g.state.showGhosts && !g.state.hideMaze ? ghostRoutes() : null;
+      if (routes) drawRoutes(routes);
       if (g.state.showPac) drawChar(g.chars.pac, g.chars.pac.x, g.chars.pac.y, g.chars.pac.phased, true);
       if (g.state.showGhosts) {
         for (const name of core.charKeys()) { const c = g.chars[name]; if (c.target && !c.hidden) drawChar(c, c.x, c.y, false, true); }
       }
       ctx.restore();
+      if (routes) drawTargets(routes);
 
       const pac = g.chars.pac;
       if (g.mode === "ateGhost") {
@@ -549,8 +552,12 @@
     function drawIntermission3(t = g.modeTimer, started = core.mode.isStarted("intermission3")) {
       const v = assets.video;
       if (t <= 780 && t > 300 && started && v && v.readyState >= 2) {
-        const w = 1024 * 0.47, h = 576 * 0.47;
-        ctx.drawImage(v, -129, 0, w, h);
+        // web edition: the film is 480x270 with a portrait picture (x 146-333) between baked-in black bars; the original
+        // drew the whole frame about 1:1 from the top, leaving bars at the sides and a gap at the bottom. Crop to the
+        // picture and fill the screen with it; the trim (~30 rows at this aspect) comes mostly off the bottom (blanket),
+        // her hair starts ~20 rows down
+        const sx = 147, sw = 186, sh = Math.round(sw * GH / GW), sy = Math.min(6, 270 - sh);
+        ctx.drawImage(v, sx * v.videoWidth / 480, sy * v.videoHeight / 270, sw * v.videoWidth / 480, sh * v.videoHeight / 270, 0, 0, GW, GH);
       }
       if (t < 300 && t > 120) { setColor(1, 1, 1, Math.abs((t - 300) / 120)); print("for mina", 10, 17, 3); }
       if (t <= 120 && t > 0) { setColor(1, 1, 1, t / 120); print("for mina", 10, 17, 3); }
@@ -712,6 +719,66 @@
       return rows;
     }
 
+    // web edition, test mode (xyzzy): each ghost's target (a crosshair; off the maze: a ring at the edge) and the path it
+    // will take there by its own rules (core.projectGhost), in the ghost's colour (read off its sprite). Drawn on the
+    // game picture, so it goes through the look like everything else
+    let debug = false;
+    const ghostColors = {};
+    function ghostColor(name) {
+      if (ghostColors[name]) return ghostColors[name];
+      let best = "#ffffff";
+      try {
+        const a = core.animations[name][0], s = sheets[a.spr], i = a.frames[0] - 1;
+        const c = document.createElement("canvas"); c.width = s.fw; c.height = s.fh;
+        const cc = c.getContext("2d"); cc.drawImage(s.img, (i % s.cols) * s.fw, Math.floor(i / s.cols) * s.fh, s.fw, s.fh, 0, 0, s.fw, s.fh);
+        const d = cc.getImageData(0, 0, s.fw, s.fh).data, n = {};
+        for (let k = 0; k < d.length; k += 4) {
+          if (d[k + 3] < 128 || (d[k] > 200 && d[k + 1] > 200 && d[k + 2] > 200) || (d[k] + d[k + 1] + d[k + 2] < 60)) continue; // eyes, black
+          const key = `rgb(${d[k]},${d[k + 1]},${d[k + 2]})`; n[key] = (n[key] || 0) + 1;
+        }
+        let most = 0; for (const k in n) if (n[k] > most) { most = n[k]; best = k; }
+      } catch { /* ignore */ }
+      return (ghostColors[name] = best);
+    }
+    function ghostRoutes() {
+      const out = [];
+      core.charKeys().forEach((name, n) => {
+        const c = g.chars[name]; if (!c.target || c.hidden) return;
+        const r = core.projectGhost(c); if (!r) return;
+        out.push({ ...r, color: ghostColor(name), off: [0, -1, 1, -2, 2, -3, 3][n] || 0, dead: !!c.dead });
+      });
+      return out;
+    }
+    const tileX = (x) => camX() + x * TILE + CENTER_PX, tileY = (y) => camY() + 24 + y * TILE + CENTER_PX;
+    const CENTER_PX = core.constants.CENTER;
+    function drawRoutes(routes) {
+      ctx.save(); ctx.lineWidth = 1; ctx.lineJoin = "round"; ctx.globalAlpha = 0.8;
+      for (const r of routes) {
+        ctx.strokeStyle = r.dead ? "#ffffff" : r.color; ctx.setLineDash(r.dead ? [2, 2] : []);
+        ctx.beginPath();
+        r.path.forEach(([x, y], i) => {
+          const px = tileX(x) + r.off + 0.5, py = tileY(y) + r.off + 0.5;
+          const prev = r.path[i - 1];
+          if (!prev || Math.abs(prev[0] - x) > 1 || Math.abs(prev[1] - y) > 1) ctx.moveTo(px, py); else ctx.lineTo(px, py); // tunnels wrap
+        });
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    function drawTargets(routes) {
+      const cm = core.getCurrentMaze();
+      ctx.save(); ctx.lineWidth = 1; ctx.globalAlpha = 0.95;
+      for (const r of routes) {
+        const [tx, ty] = r.target;
+        const inside = tx >= 0 && ty >= 0 && tx < cm.w && ty < cm.h;
+        const cx = Math.min(GW - 5, Math.max(4, tileX(tx))) + 0.5, cy = Math.min(GH - 5, Math.max(4, tileY(ty))) + 0.5;
+        ctx.strokeStyle = r.dead ? "#ffffff" : r.color;
+        ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI * 2); ctx.stroke();
+        if (inside) { ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx + 6, cy); ctx.moveTo(cx, cy - 6); ctx.lineTo(cx, cy + 6); ctx.stroke(); }
+      }
+      ctx.restore();
+    }
+
     function draw() {
       ctx.globalAlpha = 1; oyBlock = null;
       const scene = g.scene.name;
@@ -739,7 +806,7 @@
       print(tt.text, x / 8 + 1, 15, 0);
     }
 
-    return { screen, draw, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock };
+    return { screen, draw, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock };
   }
 
   // =============================================================== presenter: normal CRT + "MAX" CRT (non-canon)

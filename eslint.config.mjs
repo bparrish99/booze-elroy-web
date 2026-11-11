@@ -10,7 +10,7 @@ export default [
       sourceType: "script",
       globals: {
         ...globals.browser, ...globals.node,
-        BoozeCore: "readonly", BoozeAudio: "readonly", BoozeRender: "readonly", BoozeScoreKey: "readonly", BoozeLeaderboard: "readonly", BoozeRewind: "readonly",
+        BoozeCore: "readonly", BoozeAudio: "readonly", BoozeRender: "readonly", BoozeScoreKey: "readonly", BoozeLeaderboard: "readonly", BoozeRewind: "readonly", BoozeTips: "readonly",
       },
     },
   },

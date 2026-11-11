@@ -440,7 +440,9 @@
     };
 
     // generic ghost brain; `chase(self, ctx)` supplies the per-ghost target tile when chasing
-    const makeTarget = (chaseFn) => function () {
+    // (web edition, test mode's overlay: the brain keeps its chase rule and the last target it aimed at, see projectGhost)
+    const lastTargets = new WeakMap();
+    const makeTarget = (chaseFn, random) => Object.assign(function () {
       const self = this;
       if (!T(self.iDir)) { self.iDir = self.dir; return; }
       const cm = getCurrentMaze();
@@ -454,6 +456,50 @@
       else [targetX, targetY] = chaseFn(self, cm, xTile, yTile);
       findBestDirection(self, xTile, yTile, targetX, targetY, candidates);
       if (self.name === "blinky") { self.targetX = targetX; self.targetY = targetY; }
+      lastTargets.set(self, [targetX, targetY]);
+    }, { chase: chaseFn, random: !!random });
+
+    // web edition (test mode's overlay): where a ghost is headed and the tiles it will take to get there, by its own rules
+    // (a choice on entering each tile: no reversing, the free neighbour nearest the target in a straight line, ties to the
+    // later direction, no turning into restricted tiles, turns only inside the maze, tunnels wrap). The target is worked
+    // out afresh on every tile (Clyde's depends on where he is), with Pac-Man and the mode as they are now. Makes no RNG
+    // calls and changes nothing: Punky and Gronky aim at random, so theirs is the last target they picked, and their path
+    // stops at the next choice. null when the ghost has no target (frightened, in or leaving the pen).
+    const projectGhost = (c, maxSteps = 150) => {
+      if (!c || !c.target || !c.target.chase || c.housing || c.leaving || c.entering || T(c.frightened)) return null;
+      const cm = getCurrentMaze(), hc = cm.houseCenter;
+      const [x0, , y0] = cm.getLoc(c);
+      const targetAt = (x, y) => c.dead ? [hc.x - 1, hc.y - 3] : c.target.random ? lastTargets.get(c) || null : c.target.chase(c, cm, x, y);
+      const inside = (x, y) => y > 0 && y < cm.h && x > 0 && x < cm.w;
+      const target = targetAt(x0, y0);
+      if (!target) return null;
+      let x = x0, y = y0, iDir = T(c.iDir) ? c.iDir : c.dir, d = inside(x, y) ? iDir : c.dir, end = "steps";
+      const path = [[x, y]], seen = new Set();
+      for (let step = 0; step < maxSteps; step++) {
+        if (cm.isWall(x + DELTAS[d].x, y + DELTAS[d].y)) { end = "stuck"; break; }
+        x += DELTAS[d].x; y += DELTAS[d].y;
+        if (x === cm.w + 2) x = -2; else if (x === -3) x = cm.w + 1;
+        if (y === cm.h + 2) y = -2; else if (y === -3) y = cm.h + 1;
+        path.push([x, y]);
+        const t = targetAt(x, y);
+        if (x === t[0] && y === t[1]) { end = "target"; break; }
+        const key = x + "," + y + "," + d;
+        if (seen.has(key)) { end = "loop"; break; }
+        seen.add(key);
+        const cands = [];
+        for (let i = 0; i <= 3; i++) if (!cm.isWall(x + DELTAS[i].x, y + DELTAS[i].y) && Math.abs(i - d) !== 2) cands.push(i);
+        if (cands.length === 1) iDir = cands[0];
+        else {
+          let shortest = Infinity;
+          for (const i of cands) {
+            const nx = x + DELTAS[i].x, ny = y + DELTAS[i].y;
+            if (g.config.freeGhost || !cm.isDisallowed(nx, ny)) { const dist = (nx - t[0]) ** 2 + (ny - t[1]) ** 2; if (dist <= shortest) { shortest = dist; iDir = i; } }
+          }
+        }
+        if (inside(x, y) && !cm.isWall(x + DELTAS[iDir].x, y + DELTAS[iDir].y)) d = iDir;
+        if (c.target.random && cands.length > 1) { end = "random"; break; }
+      }
+      return { target: targetAt(x0, y0), path, end };
     };
 
     const characters = {
@@ -524,7 +570,7 @@
           const tx = px + d.y * (rand(0, 8) - 4);
           const ty = py + d.x * (rand(0, 8) - 4);
           return [tx, ty];
-        }), "punky", false); }
+        }, true), "punky", false); }
         if (N > 5) { const s = cm.gunkyStart; mk("gunky", {
           x: 8 * s.x, y: 8 * s.y + 4, dir: 0, houseX: hc.x, houseY: hc.y, leavesRight: false,
         }, makeTarget((self, cm2) => {
@@ -538,7 +584,7 @@
           const tx = xTile + DELTAS[rand(0, 3)].x;
           const ty = yTile + DELTAS[rand(0, 3)].y;
           return [tx, ty];
-        }), "gronky", false); }
+        }, true), "gronky", false); }
         g.chars = chars;
         g.charOrder = CHAR_ORDER.filter((n) => chars[n]);
       },
@@ -1873,7 +1919,7 @@
         for (const name of charKeys()) { const c = g.chars[name]; if (c.dead) anyDead = true; if (c.frightened) anyFrightened = true; }
         if (anyDead) g.sounds.dead.play(); else if (anyFrightened) g.sounds.scared.play(); else playSiren();
       },
-      formatScore, constants: { TILE, CENTER, DELTAS, JOY_DIRS, MAX_THRUST, STUN_DISTANCE }, charKeys, animations, fruits,
+      formatScore, projectGhost, constants: { TILE, CENTER, DELTAS, JOY_DIRS, MAX_THRUST, STUN_DISTANCE }, charKeys, animations, fruits,
       gamepadpressed, gameFc: () => gameFc, attractFc: () => attractFc, attractMenu,
       intermissions, MAX_COLORS: DATA.maxColors, INDEXES, optMenu, creditsMenu, creditsBooze,
     };

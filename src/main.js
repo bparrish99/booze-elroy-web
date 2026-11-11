@@ -13,7 +13,7 @@
     const down = {};
     const audio = BoozeAudio.createAudio(A.sounds);
     let muted = false;
-    let volume = 100; // the page's volume slider, 0-100 (the game itself plays at a fixed 8: env.fixedVolume)
+    let volume = 60; // the page's volume slider, 0-100, 60 for new players (the game itself plays at a fixed 8: env.fixedVolume)
     try {
       muted = localStorage.getItem("booze-elroy-muted") === "1";
       const v = parseInt(localStorage.getItem("booze-elroy-volume"), 10);
@@ -136,16 +136,17 @@
       mina: { scenes: CHEAT_SCENES, run() { const from = core.g.scene.name; core.setScene("mina", from); } },
       reset: { scenes: CHEAT_SCENES, run() { openReset(); } }, // admin: reset high scores (asks for the password)
       delete: { scenes: ["arena"], run() { openReset("arena"); } }, // admin: delete the arena on screen (asks for the password)
-      xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // test mode: a frame-rate readout, and games skip the opening jingle
+      xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // test mode: frame rate, tiles, ghost targets and paths; Pro Mode always
     };
     // the frame-rate readout: off by default, remembered; counted in the frame loop, shown twice a second
     const fpsEl = document.getElementById("fps");
-    let fpsOn = false, fpsFrames = 0, fpsAt = 0;
+    let fpsOn = false, fpsFrames = 0, fpsAt = 0, fpsText = "", fpsHtml = "";
     try { fpsOn = localStorage.getItem("booze-elroy-fps") === "1"; } catch { /* ignore */ }
     function toggleFps() {
-      fpsOn = !fpsOn; fpsFrames = 0; fpsAt = performance.now(); fpsEl.textContent = "";
+      fpsOn = !fpsOn; fpsFrames = 0; fpsAt = performance.now(); fpsEl.textContent = ""; fpsText = ""; fpsHtml = "";
       try { localStorage.setItem("booze-elroy-fps", fpsOn ? "1" : "0"); } catch { /* ignore */ }
       fpsEl.classList.toggle("on", fpsOn);
+      R.setDebug(fpsOn);
     }
     fpsEl.classList.toggle("on", fpsOn);
     let typed = "";
@@ -178,6 +179,7 @@
     await audio.ready;
 
     const R = BoozeRender.createRenderer(core, { sprites: { spr16, spr8, text8 }, banner, backgrounds, video: videoEl });
+    R.setDebug(fpsOn); // test mode: ghost targets and paths
     const canvas = document.getElementById("screen");
     const P = BoozeRender.createPresenter(canvas, R.screen, () => core.g.config);
     // CRT on (WebGL): the bezel fills the window. The live canvas is only the screen plus a margin wide enough for the rim
@@ -262,6 +264,9 @@
         e.preventDefault(); core.keypressed(e.key); return;
       }
       const k = KEYMAP[e.code]; if (k === undefined || k === null) return;
+      // M in a game is the page's mute (below), in step with the volume control; the core's own M (the Lua's, which
+      // zeroed the game volume) never sees it, or the two mutes would drift apart
+      if (k === "m" && core.g.scene.name === "game") { e.preventDefault(); return; }
       e.preventDefault(); audio.unlock(); primeVideo(); primeVideo();
       if (!down[k]) { down[k] = true; core.keypressed(k); }
     });
@@ -292,6 +297,7 @@
     }
     canvas.addEventListener("pointermove", (e) => {
       const row = rowAt(e);
+      tipRow = row && row.menu === core.optMenu ? row.index : null;
       if (linkAt(e)) { canvas.style.cursor = "pointer"; return; }
       canvas.style.cursor = row ? "pointer" : "default";
       if (row && row.menu.selectedItem !== row.index) { row.menu.selectedItem = row.index; LB.wakka(); }
@@ -438,6 +444,16 @@
     lookBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
     lookBtn.addEventListener("click", (e) => { e.preventDefault(); cycleLook(); lookBtn.blur(); });
     syncLook();
+    // Options page tips (src/tips.js): the browser's own hover text on the option row under the mouse (what the option
+    // does, and what its current value means)
+    let tipRow = null, tipText = "";
+    function syncTip() {
+      const menu = core.optMenu;
+      const tip = core.g.scene.name === "options" && tipRow ? BoozeTips.tipFor(menu[tipRow - 1]) : null;
+      const t = tip ? tip.text + (tip.value ? "\n\n" + tip.value : "") : "";
+      if (t !== tipText) { tipText = t; canvas.title = t; }
+    }
+
     // touch devices have no Esc key: a small button leaves the game / autoplay / sub-screens
     const escBtn = document.getElementById("esc");
     escBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
@@ -480,9 +496,22 @@
       R.draw(); P.present();
       if (fpsOn) {
         fpsFrames += 1;
-        if (now - fpsAt >= 500) { if (fpsAt) fpsEl.textContent = Math.round(fpsFrames * 1000 / (now - fpsAt)) + " fps"; fpsFrames = 0; fpsAt = now; }
+        if (now - fpsAt >= 500) { if (fpsAt) fpsText = Math.round(fpsFrames * 1000 / (now - fpsAt)) + " fps"; fpsFrames = 0; fpsAt = now; }
+        // and every character's tile (x,y), in its colour, during a game
+        const g = core.g, rows = [fpsText];
+        if (g.scene.name === "game" && g.chars && g.chars.pac && !g.state.hideMaze) {
+          const cm = core.getCurrentMaze();
+          for (const name of ["pac", ...core.charKeys().filter((n) => n !== "pac")]) {
+            const c = g.chars[name]; if (!c) continue;
+            const [x, , y] = cm.getLoc(c);
+            rows.push(`<span style="color:${name === "pac" ? "#ffd400" : R.ghostColor(name)}">${name.padEnd(6)} ${String(x).padStart(2)},${String(y).padStart(2)}</span>`);
+          }
+        }
+        const html = rows.join("\n");
+        if (html !== fpsHtml) { fpsEl.innerHTML = html; fpsHtml = html; }
       }
       escBtn.classList.toggle("on", core.g.scene.name !== "attract");
+      syncTip();
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);

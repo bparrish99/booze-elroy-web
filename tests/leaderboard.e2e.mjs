@@ -42,7 +42,7 @@ try {
   check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "round the three looks and back to CRT, saved");
   check(await g("g.config.volume === 8"), "the game plays at a fixed volume (8)");
   // the mute button (next to fullscreen): mutes the page, remembered; M does it too, but only during gameplay
-  check(await ev(() => !document.getElementById("mute").classList.contains("muted")), "not muted to begin with");
+  check(await ev(() => !document.getElementById("mute").classList.contains("muted") && document.getElementById("volume").value === "60"), "not muted to begin with, volume 60");
   await p.click("#mute");
   check(await ev(() => document.getElementById("mute").classList.contains("muted") && localStorage.getItem("booze-elroy-muted") === "1"), "the mute button mutes, and that's remembered");
   await p.keyboard.press("m");
@@ -64,10 +64,33 @@ try {
   check(await ev(() => localStorage.getItem("booze-elroy-volume") === "50" && !document.getElementById("mute").classList.contains("muted")), "unmuting from volume 0 comes back at 50");
   await setVol(100);
   await p.mouse.move(600, 400);
+  // Options tips: hover text (the canvas's title) on the option row under the mouse; none on the buttons or other pages
+  await ev(() => { window.__core.g.config.crtEffect = false; window.__core.setScene("options"); });
+  await p.waitForTimeout(300);
+  const rowPoint = (pick) => ev((pick) => {
+    const c = document.getElementById("screen"), rc = c.getBoundingClientRect(), m = window.__core.optMenu;
+    const it = m.find((i) => pick === "radar" ? i.key === "radar" : i.text === "Back");
+    return { x: rc.left + 100 * rc.width / 224, y: rc.top + (it.y * 8 + 4) * rc.height / 288 };
+  }, pick);
+  let pt = await rowPoint("radar"); await p.mouse.move(pt.x, pt.y); await p.waitForTimeout(150);
+  check(await ev(() => /Limited ghost visibility/.test(document.getElementById("screen").title)), "hovering an option gives its hover text");
+  pt = await rowPoint("back"); await p.mouse.move(pt.x, pt.y); await p.waitForTimeout(150);
+  check(await ev(() => document.getElementById("screen").title === ""), "none on the buttons");
+  await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
+  await ev(() => { window.__core.g.config.crtEffect = true; });
   // cheat "xyzzy": a small frame-rate readout, off by default
   check(await ev(() => !document.getElementById("fps").classList.contains("on")), "fps readout is off by default");
   await p.keyboard.type("xyzzy"); await p.waitForTimeout(1300);
   check(await ev(() => { const e = document.getElementById("fps"); return e.classList.contains("on") && / fps$/.test(e.textContent) && window.__core.g.scene.name === "attract"; }), "typing xyzzy shows it (" + await ev(() => document.getElementById("fps").textContent) + "), still on the title");
+  // test mode: every character's tile in the readout, and M in a game is only the page's mute (the core's own stays off)
+  await ev(() => { const c = window.__core; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });
+  check(await until("g.mode === 'normal'", 3000) && await ev(() => /pac +\d+, *\d+/.test(document.getElementById("fps").textContent) && /blinky +\d+, *\d+/.test(document.getElementById("fps").textContent)), "test mode shows the characters' tiles");
+  check(await ev(() => window.__core.projectGhost(window.__core.g.chars.blinky).path.length > 1), "and Blinky's projected path");
+  await p.keyboard.press("m");
+  check(await ev(() => document.getElementById("mute").classList.contains("muted") && !window.__core.g.muted && window.__core.g.config.volume === 8), "M mutes the page (the button shows it), not the game's own volume");
+  await p.keyboard.press("m");
+  check(await ev(() => !document.getElementById("mute").classList.contains("muted")), "and M again unmutes");
+  await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
   // test mode also skips the opening jingle: straight from the blank pregame to READY
   await ev(() => { const c = window.__core; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });
   check(await until("g.mode === 'ready'", 3000) && await g("!g.sounds.opening.isPlaying()"), "test mode: a game skips the opening jingle");
