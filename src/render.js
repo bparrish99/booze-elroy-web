@@ -844,7 +844,15 @@
         gl_FragColor = vec4(acc / wsum, 1.0); }`);
     const pF = mk(HDR + `uniform sampler2D glow; uniform vec3 factors; uniform float glowK;
       void main(){ vec3 c = texture2D(tex, vuv).rgb + texture2D(glow, vuv).rgb * glowK; gl_FragColor = vec4(clamp(c * factors, 0.0, 1.0), 1.0); }`);
-    const pP = mk(HDR + `void main(){ gl_FragColor = vec4(texture2D(tex, vuv).rgb, 1.0); }`);
+    // plain look: "sharp bilinear". Nearest-neighbour at a non-whole scale makes some game pixels a screen pixel wider than
+    // others (uneven dots); this keeps every game pixel a solid block of the same size and only blends the one screen pixel
+    // its edge falls inside (sampled with LINEAR, the uv pushed to the texel centre everywhere else)
+    const pP = mk(HDR + `uniform vec2 srcSize, outSize;
+      void main(){
+        vec2 texel = vuv * srcSize, scale = outSize / srcSize;
+        vec2 cd = fract(texel) - 0.5, region = max(0.5 - 0.5 / scale, 0.0);
+        vec2 f = (cd - clamp(cd, -region, region)) * scale + 0.5;
+        gl_FragColor = vec4(texture2D(tex, (floor(texel) + f) / srcSize).rgb, 1.0); }`);
     // the window's static bezel background: Z with the final pass's colour factors, flipped so readPixels comes out top row first
     const ULTRA_FACTORS = [1.08, 1.08, 1.25];
     const pG = mk(HDR + `uniform vec3 factors; void main(){ gl_FragColor = vec4(clamp(texture2D(tex, vec2(vuv.x, 1.0 - vuv.y)).rgb * factors, 0.0, 1.0), 1.0); }`);
@@ -1075,10 +1083,10 @@
         if (!A) return;
         const crtOn = !!getConfig().crtEffect;
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex);
-        const f = (crtOn && !api.ultra) ? gl.LINEAR : gl.NEAREST;
+        const f = (!crtOn || !api.ultra) ? gl.LINEAR : gl.NEAREST; // plain: LINEAR for pP's sharp bilinear
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-        if (!crtOn) { pass(pP, null, null, srcTex); return; }
+        if (!crtOn) { pass(pP, null, (p) => { gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform2f(p.u("outSize"), cw, ch); }, srcTex); return; }
         const time = performance.now() / 1000;
         if (api.ultra) {
           const nxt = 1 - ph;
