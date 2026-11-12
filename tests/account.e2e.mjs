@@ -243,6 +243,11 @@ try {
   const log = await p.evaluate(() => document.getElementById("log").textContent);
   check(/PINBACK\s*created an account/.test(log) && /earned SPENT A QUARTER/.test(log) && /logged in/.test(log) && /played today/.test(log), "activity page: signups, logins, achievements (by name) and games");
   await shot("acc9-activity");
+  // auto-refresh: a new signup shows up (lit), and the "updated" line says it's live
+  await p.evaluate(() => fetch("/api/account/signup", { method: "POST", body: JSON.stringify({ name: "night owl", password: "hoot" }) }));
+  await p.evaluate(() => window.__refresh());
+  await p.waitForTimeout(500);
+  check(await p.evaluate(() => { const tr = document.querySelector("tr.new"); return !!tr && /NIGHT OWL\s*created an account/.test(tr.textContent) && /updated/.test(document.getElementById("live").textContent); }), "activity page: auto-refresh brings in new activity, lit up");
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join("; ") : ""));
 } finally {
   await b.close(); await dev.stop(); rmSync(blobsDir, { recursive: true, force: true });

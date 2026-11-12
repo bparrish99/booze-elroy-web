@@ -32,10 +32,15 @@ form button,.bar button{padding:6px 14px;background:var(--fg);color:#000;border:
 .bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
 .bar button{background:#111;color:var(--fg)}
 .msg{color:var(--pink);min-height:1.4em}
+.live{color:var(--dim);font-size:13px}.live i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#3c3;margin-right:6px;vertical-align:1px}
+.live.off i{background:#c33}
+tr.new td{animation:glow 6s ease-out}
+@keyframes glow{from{background:#2a2a00}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){tr.new td{animation:none;background:#1a1a00}}
 [hidden]{display:none!important}
 </style></head><body><main>
 <h1>BOOZE ELROY ACTIVITY</h1>
-<p class="sub">Accounts, logins, achievements and games, newest first. Times are your local time.</p>
+<p class="sub">Accounts, logins, achievements and games, newest first. Times are your local time. Checks for new activity every 30 seconds.</p>
 <div id="ask" class="box" hidden>
   <form id="pw"><label>Password <input type="password" name="pw" autocomplete="current-password"></label><button>Show</button></form>
   <div class="msg" id="askMsg"></div>
@@ -43,7 +48,7 @@ form button,.bar button{padding:6px 14px;background:var(--fg);color:#000;border:
 <div id="out" hidden>
   <div class="box stats" id="stats"></div>
   <div class="box"><div class="bar"><strong>ACCOUNTS</strong> <span class="sub" id="filterNote" style="margin:0"></span><button id="clear" hidden>Show everyone</button></div><div class="accts" id="accts"></div></div>
-  <div class="box"><div class="bar"><strong>ACTIVITY</strong><button id="reload">Refresh</button></div><table><tbody id="log"></tbody></table></div>
+  <div class="box"><div class="bar"><strong>ACTIVITY</strong><button id="reload">Refresh</button><span class="live" id="live"></span></div><table><tbody id="log"></tbody></table></div>
 </div>
 <div class="msg" id="msg"></div>
 </main>
@@ -52,6 +57,11 @@ form button,.bar button{padding:6px 14px;background:var(--fg);color:#000;border:
   const ACH = Object.fromEntries(/*ACHIEVEMENTS*/);
   const $ = (id) => document.getElementById(id);
   let key = decodeURIComponent(location.hash.slice(1)), data = null, who = null;
+  // auto-refresh: every 30 s (and at once when the tab comes back); events not seen before light up, and while the tab
+  // is in the background the title counts them
+  const EVERY = 30000, TITLE = document.title;
+  const idOf = (e) => e.at + "|" + e.type + "|" + e.name + "|" + e.detail;
+  let seen = null, fresh = new Set(), unseen = 0, timer = null, lastOk = 0;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const what = (e) => e.type === "signup" ? "created an account" : e.type === "login" ? "logged in"
     : e.type === "achievement" ? "earned <b>" + esc((ACH[e.detail] || e.detail).toUpperCase()) + "</b>"
@@ -71,15 +81,32 @@ form button,.bar button{padding:6px 14px;background:var(--fg);color:#000;border:
     for (const e of ev) {
       const d = new Date(e.at), dk = d.toDateString();
       if (dk !== last) { html += '<tr class="day"><td colspan="3">' + esc(dayOf(d).toUpperCase()) + "</td></tr>"; last = dk; }
-      html += '<tr><td class="t">' + esc(d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })) + '</td><td class="w"><button class="name" data-n="' + esc(e.name) + '">' + esc(e.name) + '</button></td><td class="k-' + esc(e.type) + '">' + what(e) + "</td></tr>";
+      html += '<tr' + (fresh.has(idOf(e)) ? ' class="new"' : "") + '><td class="t">' + esc(d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })) + '</td><td class="w"><button class="name" data-n="' + esc(e.name) + '">' + esc(e.name) + '</button></td><td class="k-' + esc(e.type) + '">' + what(e) + "</td></tr>";
     }
     $("log").innerHTML = html || '<tr><td class="sub">nothing yet</td></tr>';
   }
-  async function load() {
-    $("msg").textContent = "Loading…";
+  const clock = (t) => new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
+  function schedule() { clearTimeout(timer); timer = setTimeout(() => load(true), EVERY); }
+  async function load(auto) {
+    if (!auto) $("msg").textContent = "Loading…";
     let r = null;
     try { r = await fetch("/api/account/activity", { headers: { "x-admin-key": key }, cache: "no-store" }); } catch { r = null; }
-    if (r && r.ok) { data = await r.json(); $("msg").textContent = ""; $("ask").hidden = true; $("out").hidden = false; render(); return; }
+    if (r && r.ok) {
+      data = await r.json();
+      const ids = data.events.map(idOf);
+      fresh = seen ? new Set(ids.filter((i) => !seen.has(i))) : new Set(); // nothing lights up on the first load
+      seen = new Set(ids);
+      if (fresh.size) setTimeout(() => fresh.clear(), 6500); // after the glow, so a re-render (a name clicked) doesn't replay it
+      if (document.hidden) { unseen += fresh.size; document.title = (unseen ? "(" + unseen + ") " : "") + TITLE; }
+      lastOk = Date.now();
+      $("live").className = "live"; $("live").innerHTML = "<i></i>updated " + esc(clock(lastOk));
+      $("msg").textContent = ""; $("ask").hidden = true; $("out").hidden = false; render(); schedule(); return;
+    }
+    if (auto && data && (!r || r.status >= 500)) { // a hiccup while watching: keep what's on screen, try again later
+      $("live").className = "live off"; $("live").innerHTML = "<i></i>can't reach the server, last updated " + esc(clock(lastOk)) + ", retrying";
+      schedule(); return;
+    }
+    clearTimeout(timer);
     $("msg").textContent = "";
     $("out").hidden = true; $("ask").hidden = false;
     $("askMsg").textContent = !key ? "" : !r ? "Can't reach the server." : r.status === 403 ? "Wrong password." : r.status === 503 ? "No admin password is set on the server." : "That didn't work (" + r.status + ").";
@@ -87,7 +114,9 @@ form button,.bar button{padding:6px 14px;background:var(--fg);color:#000;border:
   $("pw").addEventListener("submit", (e) => { e.preventDefault(); key = e.target.elements.pw.value; history.replaceState(null, "", "#" + encodeURIComponent(key)); load(); });
   document.addEventListener("click", (e) => { const b = e.target.closest("button.name"); if (b) { who = who === b.dataset.n ? null : b.dataset.n; render(); } });
   $("clear").addEventListener("click", () => { who = null; render(); });
-  $("reload").addEventListener("click", load);
+  $("reload").addEventListener("click", () => load());
+  window.__refresh = () => load(true); // tests: an auto-refresh now
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { unseen = 0; document.title = TITLE; if (data) load(true); } });
   load();
 })();
 </script>
