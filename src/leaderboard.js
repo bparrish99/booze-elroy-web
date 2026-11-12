@@ -353,7 +353,7 @@
           items.push(it);
           rows.push({ h: 3, item: it, draw: (y) => decor.push({ text: a.leader ? "won by " + a.leader.name : "no scores", x: 4, y: y + 1, o: a.leader ? 4 : 2 }) });
         }
-        items.push({ text: "Create Arena", x: 8, y: 32, action() { core.setScene("nameEntry", { mode: "createArena" }); } });
+        items.push({ text: "Create Arena", x: 8, y: 32, action() { createArena(); } });
         items.push({ text: "Back", x: 12, y: 34, action() { core.setScene("attract", true); } });
         rebuildMenu(this, items);
         // scrolling: follow the selection when it moves; otherwise stay where the wheel / "more" left it
@@ -638,7 +638,11 @@
 
     const attach = (c) => { core = c; g = c.g; };
     // Create Arena on the Options page: names a new arena with the current settings; Esc goes back to Options
-    const createArena = (from) => core.setScene("nameEntry", { mode: "createArena", from });
+    // creating an arena takes an account (the author's first restriction, 2026-11-12): logged out, just a note
+    const createArena = (from) => {
+      if (opts.playerName && !opts.playerName()) { g.toast = { text: "log in to create an arena", until: performance.now() + 2500 }; return; }
+      core.setScene("nameEntry", { mode: "createArena", from });
+    };
     return { attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
   }
 

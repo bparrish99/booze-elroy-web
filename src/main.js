@@ -219,6 +219,7 @@
       core.g.toast.unlocked = true;
     }
     window.__core = core;
+    window.__acc = ACC; // tests: log in / out without the dialog
 
     const [spr16, spr8, text8, banner] = await Promise.all(["spr16", "spr8", "text8", "banner"].map((n) => loadImg(A.images[n])));
     const backgrounds = {};

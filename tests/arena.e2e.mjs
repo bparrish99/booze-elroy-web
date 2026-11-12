@@ -45,6 +45,12 @@ try {
   check(await g("g.scene.menu.map((i) => i.text).join(',') === 'Create Arena,Back'"), "list has Create Arena and Back");
   await shot("a2-empty-list");
 
+  // creating one takes an account: logged out, Create Arena just says so
+  await choose("Create Arena"); await p.waitForTimeout(100);
+  check(await g("g.scene.name === 'arenas' && g.toast && g.toast.text === 'log in to create an arena'"), "logged out: Create Arena says to log in");
+  await shot("a2b-login-note");
+  check(await ev(() => window.__acc.signup("arena maker", "pass").then((r) => r.ok)), "signs up");
+
   // create one with the current settings
   await choose("Create Arena");
   check(await g("g.scene.name === 'nameEntry' && g.scene.mode === 'createArena' && g.scene.entry === ''"), "Create Arena asks for a name (blank, no timer)");
@@ -90,6 +96,7 @@ try {
   check(await until("g.scene.message === 'that name is taken' && !g.scene.sending"), "an open arena's name can't be reused");
   await p.keyboard.press("Escape");
   check(await until("g.scene.name === 'arenas' && g.scene.menu.some((i) => i.text === 'SUNDAY CUP')"), "the list shows the arena");
+  await ev(() => window.__acc.logout()); // the rest plays logged out (name entry)
   check(await g("g.scene.decor.some((d) => d.text === '24h')"), "with its time left");
   await shot("a5-list");
 

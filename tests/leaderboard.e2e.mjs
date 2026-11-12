@@ -99,10 +99,15 @@ try {
   check(await ev(() => !document.getElementById("fps").classList.contains("on") && localStorage.getItem("booze-elroy-fps") === "0"), "typing it again hides it");
   check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Restore Defaults,Share Config,Create Arena,Credits,Back", "Options: Restore Defaults, Share Config, Create Arena, Credits, Back");
   await ev(() => { const c = window.__core; c.setScene("options"); c.g.config.ghostCount = 2; c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Create Arena") + 1; });
+  await p.keyboard.press("Enter"); await p.waitForTimeout(100);
+  check(await g("g.scene.name === 'options' && g.toast && g.toast.text === 'log in to create an arena'"), "logged out: Options > Create Arena says to log in");
+  check(await ev(() => window.__acc.signup("options maker", "pass").then((r) => r.ok)), "signs up");
+  await ev(() => { window.__core.g.toast = null; });
   await p.keyboard.press("Enter");
   check(await g("g.scene.name === 'nameEntry' && g.scene.mode === 'createArena' && g.scene.summary(26).join() === 'ghosts 2'"), "Options > Create Arena names an arena with the current settings");
   await p.keyboard.press("Escape");
   check(await g("g.scene.name === 'options'"), "Esc there goes back to Options");
+  await ev(() => window.__acc.logout());
   await ev(() => { window.__core.g.config.ghostCount = 4; });
   await ev(() => { const c = window.__core; c.setScene("options"); c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Credits") + 1; });
   await p.keyboard.press("Enter");
