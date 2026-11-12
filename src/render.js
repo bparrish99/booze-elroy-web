@@ -309,6 +309,31 @@
       print("1up", 3, 0); print("high score", 9, 0);
       print(core.formatScore(g.score || 0), 0, 1, 0);
       drawHighScore();
+      drawAccount();
+    }
+    // web edition: the account corner, where 2UP would be (menu screens and the attract demo, not in a game): "login",
+    // or the player's name (light blue; a long one scrolls through the 8 columns). accountBox = its click area this frame
+    let accountName = () => null, accountOnline = false, accountHot = false, accountBox = null, acctKey = null, acctT0 = 0;
+    const ACCT_COL = 20, ACCT_W = 8;
+    function drawAccount() {
+      if (!accountOnline) return;
+      const name = accountName();
+      accountBox = { x0: ACCT_COL * TILE, x1: GW, y0: 0, y1: 2 * TILE, name };
+      if (!name) { // "login" sparkles like "pinback" on the credits (a colour wave), to invite a click
+        const w = "login", step = Math.floor(performance.now() / 110);
+        for (let i = 0; i < w.length; i++) print(w[i], 22 + i, 0, accountHot ? 1 : PULSE[(step + w.length - i) % PULSE.length]);
+        return;
+      }
+      if (name.length <= ACCT_W) { print(name, 28 - name.length, 0, 3); return; }
+      const now = performance.now();
+      if (acctKey !== name) { acctKey = name; acctT0 = now; }
+      const gap = 3, span = (name.length + gap) * TILE;
+      const t = (now - acctT0) % (TICK_HOLD + (span / TICK_SPEED) * 1000);
+      const d = Math.round(Math.max(0, t - TICK_HOLD) * TICK_SPEED / 1000);
+      clip(ACCT_COL * TILE, 0, ACCT_W * TILE, TILE);
+      const x = ACCT_COL - d / TILE;
+      print(name, x, 0, 3); print(name, x + name.length + gap, 0, 3);
+      ctx.restore();
     }
     // HIGH SCORE value; the online leader's name scrolls through it while the value shown is the leader's score
     // (so not once a game, or an autoplay run, has gone past it)
@@ -394,6 +419,7 @@
         // web edition: the leader's name scrolls in the attract demo and autoplay, never in a real game
         if (g.attract || g.autoplay) drawHighScore();
         else if (g.highScore) print(core.formatScore(g.highScore), 10, 1);
+        if (g.attract) drawAccount();
       }
       if (g.mode === "gameover") {
         print("game", cm.w / 2 - 5, cm.ready, 1, true);
@@ -609,7 +635,7 @@
     }
     const LINKS = [
       { x0: 80, y0: 84, x1: 144, y1: 100, url: "mailto:bparrish99@gmail.com" },
-      { x0: 0, y0: 264, x1: 224, y1: 284, url: "https://pinback.substack.com" },
+      { x0: 0, y0: 264, x1: 224, y1: 284, url: "https://pinback.substack.com", secret: "wake" }, // a secret achievement (main.js)
     ];
     // web edition: "web edition" on the title opens the credits
     const TITLE_LINKS = [{ x0: 64, y0: 276, x1: 160, y1: 288, scene: "credits" }];
@@ -670,6 +696,29 @@
       for (const d of sc.decor) print(d.text, d.x, d.y, d.o);
       drawMenu(sc.menu, 0, 0, 1);
     }
+    // web edition: the player's profile (src/account.js): name (shimmering), achievements (a row each, plus one for the date once earned; "prev 1/2 next" when they don't fit), (earned: yellow with the date; not yet:
+    // dimmed). Hovering / tapping a name shows its description (an HTML popup, main.js). Rows 8-29 (account.js layout)
+    const localDate = (ms) => { const d = new Date(ms), p2 = (n) => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()); };
+    function drawProfile() {
+      const sc = g.scene;
+      begin(true); drawHeader();
+      { // the player's name, shimmering like "login" / "pinback" on the credits
+        const n = sc.player(), step = Math.floor(performance.now() / 110), x0 = 14 - n.length / 2;
+        for (let i = 0; i < n.length; i++) print(n[i], x0 + i, 3, PULSE[(step + n.length - i) % PULSE.length]);
+      }
+      const list = sc.achievements(), got = list.filter((a) => a.earned).length;
+      center("achievements " + got + "/" + list.length, 5, 3);
+      if (sc.pageLabel()) center(sc.pageLabel(), 6, 2);
+      if (!got && sc.status() === "loading") center("loading", 8, 0);
+      else sc.pageItems().forEach((a) => {
+        const y = a.y;
+        if (!a.earned) ctx.globalAlpha = 0.45;
+        print(a.name, 3, y, a.earned ? 6 : 0);
+        if (a.earned) print(localDate(a.earned), 4, y + 1, 0);
+        ctx.globalAlpha = 1;
+      });
+      drawMenu(sc.menu, 12, 33, 1);
+    }
     function drawNameEntry() {
       const sc = g.scene;
       begin(true); drawHeader();
@@ -704,7 +753,7 @@
       if (scene === "attract") { if (g.state && g.state.showHelperText) spec = [core.attractMenu, 6, 23, 1]; }
       else if (scene === "options") spec = [core.optMenu, 18, 5, 1];
       else if (scene === "credits") spec = [core.creditsMenu, 12, 27, 2];
-      else if ((scene === "leaderboard" || scene === "nameEntry" || scene === "arenas" || scene === "arena") && !g.scene.sending) spec = [g.scene.menu, 0, 0, 1];
+      else if ((scene === "leaderboard" || scene === "nameEntry" || scene === "arenas" || scene === "arena" || scene === "profile") && !g.scene.sending) spec = [g.scene.menu, 0, 0, 1];
       if (!spec) return [];
       const [menu, mx, my, sp] = spec, rows = [];
       menu.forEach((item, i0) => {
@@ -780,7 +829,7 @@
     }
 
     function draw() {
-      ctx.globalAlpha = 1; oyBlock = null;
+      ctx.globalAlpha = 1; oyBlock = null; accountBox = null;
       const scene = g.scene.name;
       if (scene === "game") drawGame();
       else if (scene === "attract") drawAttract();
@@ -790,23 +839,28 @@
       else if (scene === "arenas") drawArenas();
       else if (scene === "mina") { begin(false); drawIntermission3(g.scene.t, true); } // the "mina" cheat
       else if (scene === "nameEntry") drawNameEntry();
+      else if (scene === "profile") drawProfile();
       else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, GW, GH); print(scene, 2, 2, 0); }
       drawToast();
     }
-    // web edition: short popup message (g.toast = {text, until}), e.g. "link copied to clipboard"
+    // web edition: short popup message (g.toast = {text, until}), e.g. "link copied to clipboard"; "\n" starts a
+    // second line (each line centred)
     function drawToast() {
       const tt = g.toast;
       if (!tt) return;
       if (performance.now() > tt.until) { g.toast = null; return; }
-      const w = (tt.text.length + 2) * 8, x = Math.floor((GW - w) / 2), y = 15 * 8 - 4;
-      ctx.globalAlpha = 0.9; ctx.fillStyle = "#000"; ctx.fillRect(x, y, w, 16);
+      const lines = tt.text.split("\n"), n = lines.length;
+      const w = (Math.max(...lines.map((l) => l.length)) + 2) * 8, h = n * 8 + 8, x = Math.floor((GW - w) / 2), y = 15 * 8 - 4;
+      ctx.globalAlpha = 0.9; ctx.fillStyle = "#000"; ctx.fillRect(x, y, w, h);
       ctx.globalAlpha = 1; ctx.fillStyle = "#ffb8ff"; // pink frame, like the maze-wall highlights
-      ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + 15, w, 1); ctx.fillRect(x, y, 1, 16); ctx.fillRect(x + w - 1, y, 1, 16);
+      ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1); ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
       setColor(1, 1, 1);
-      print(tt.text, x / 8 + 1, 15, 0);
+      lines.forEach((l, i) => print(l, 14 - l.length / 2, 15 + i, 0));
     }
 
-    return { screen, draw, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock };
+    return { screen, draw, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
+      // account corner: fn() -> the logged-in name or null (fn.online false: no corner); hot = under the mouse
+      setAccount(fn, online) { accountName = fn; accountOnline = !!online; }, accountBox: () => accountBox, setAccountHot(h) { accountHot = !!h; } };
   }
 
   // =============================================================== presenter: normal CRT + "MAX" CRT (non-canon)

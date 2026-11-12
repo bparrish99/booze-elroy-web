@@ -12,6 +12,7 @@ import { BlobsServer } from "@netlify/blobs/server";
 import { getStore } from "@netlify/blobs";
 import { handle } from "../netlify/lib/scores.mjs";
 import { handleArenas } from "../netlify/lib/arenas.mjs";
+import { handleAccounts } from "../netlify/lib/accounts.mjs";
 import { handleEditor } from "./maze-editor/server.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -25,17 +26,19 @@ export async function startDev(opts = {}) {
   const { port: bport } = await blobs.start();
   const url = `http://localhost:${bport}`;
   const mkStore = (name) => getStore({ name, siteID: "dev-site", token, edgeURL: url, uncachedEdgeURL: url, consistency: "strong" });
-  const store = mkStore("leaderboard"), arenaStore = mkStore("arenas");
+  const store = mkStore("leaderboard"), arenaStore = mkStore("arenas"), accountStore = mkStore("accounts");
   const env = { LEADERBOARD_ADMIN_PASSWORD: password };
 
   const server = createServer(async (req, res) => {
     try {
       const u = new URL(req.url, "http://localhost");
-      if (u.pathname.startsWith("/api/scores") || u.pathname.startsWith("/api/arenas")) {
+      if (u.pathname.startsWith("/api/scores") || u.pathname.startsWith("/api/arenas") || u.pathname.startsWith("/api/account/")) {
         const chunks = []; for await (const c of req) chunks.push(c);
         const body = chunks.length ? Buffer.concat(chunks) : undefined;
         const request = new Request(u, { method: req.method, headers: req.headers, body: req.method === "GET" ? undefined : body });
-        const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now }) : await handle(request, store, { env });
+        const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now })
+          : u.pathname.startsWith("/api/account/") ? await handleAccounts(request, accountStore, { failDelay: opts.failDelay, now: opts.now })
+          : await handle(request, store, { env });
         res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer()));
         if (!quiet) console.log(req.method, u.pathname + u.search, r.status);
         return;

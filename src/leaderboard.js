@@ -146,10 +146,18 @@
       if (arenaList.p) return fresh ? arenaList.p.then(() => loadArenas()) : arenaList.p; // fresh: not one already under way
       arenaList.p = fetchFn(arenaApi, { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
-        .then((d) => { clockOffset = d.now - Date.now(); arenaList.arenas = d.arenas || []; arenaList.status = "ok"; })
+        .then((d) => { clockOffset = d.now - Date.now(); arenaList.arenas = d.arenas || []; arenaList.status = "ok"; checkWins(arenaList.arenas); })
         .catch(() => { if (arenaList.status !== "ok") arenaList.status = "error"; })
         .finally(() => { arenaList.at = performance.now(); arenaList.p = null; });
       return arenaList.p;
+    }
+    // arenas the logged-in player (opts.playerName) won: closed, past the 15-minute grace for late scores, theirs on top
+    // -> opts.arenaWon(arena) (achievements; may be told more than once)
+    const ARENA_GRACE = 15 * 60 * 1000;
+    function checkWins(list) {
+      const me = opts.playerName && opts.playerName();
+      if (!me || !opts.arenaWon) return;
+      for (const a of list) if (a && a.leader && a.leader.name === me && a.endsAt + ARENA_GRACE <= serverNow()) opts.arenaWon(a);
     }
     const arenaBoards = new Map(); // id -> { status: "loading" | "ok" | "error" | "gone", entries, at }
     function loadArena(id) {
@@ -162,6 +170,7 @@
           const d = await r.json();
           clockOffset = d.now - Date.now();
           if (arena && arena.id === id) arena = d.arena;
+          if (d.arena) checkWins([d.arena]);
           arenaBoards.set(id, { status: "ok", entries: d.entries || [], at: performance.now() });
         })
         .catch(() => { const old = arenaBoards.get(id); arenaBoards.set(id, { status: old && old.status === "ok" ? "ok" : "error", entries: old ? old.entries : [], at: performance.now() }); });
@@ -424,6 +433,9 @@
     // grid cells double as a "menu" so the mouse / touch code can hover and click them
 
     let pending = null;
+    // a score placed on a regular board: opts.placed({ key, rank, isDefault, first }) (achievements; first: the board's
+    // first ever score)
+    const placed = (key, rank, entries) => { if (rank && opts.placed) opts.placed({ key, rank, isDefault: key === SK.keyFor(g.defaultConfig), first: rank === 1 && entries.length === 1 }); };
     const neMenu = [];
     GRID.forEach((row, r) => { for (let c = 0; c < row.length; c++) neMenu.push({ text: row[c], char: row[c], x: GRID_X + c * 2, y: GRID_Y + r * 2 }); });
     for (const s of SPECIALS) neMenu.push({ text: s.text, x: s.x, y: SPECIAL_Y });
@@ -443,6 +455,9 @@
         if (typeof this.entry !== "string" || !SK.cleanName(this.entry)) this.entry = "";
         this.timer = ENTRY_FRAMES; this.sending = false; this.fc = 0;
         neMenu.selectedItem = (this.entry ? END : 0) + 1; // a remembered name is one press from done
+        // logged in (opts.playerName): the account's name goes straight on the board
+        const player = this.mode === "score" && opts.playerName && SK.cleanName(opts.playerName() || "");
+        if (player) { this.entry = player; this.submit(); }
       },
       update() {
         this.fc += 1;
@@ -501,12 +516,13 @@
         if (!name) return;
         this.sending = true; this.message = null; sfx("coindrop");
         if (this.mode === "createArena") return this.createArena(name);
-        store.set(NAME, name);
+        if (!(opts.playerName && opts.playerName())) store.set(NAME, name); // the remembered name is for logged-out entry
         if (this.arenaId) return this.submitArena(name);
         let res = null;
         try { res = await post("", { board: this.key, name, score: this.score }); } catch { res = null; }
         if (res && res.ok && res.data) {
           boards.set(this.key, { status: "ok", entries: res.data.entries || [], at: performance.now() });
+          placed(this.key, res.data.rank, res.data.entries || []);
           core.setScene("leaderboard", { fresh: true, highlight: res.data.rank, message: res.data.rank ? null : "not in the top 10" });
         } else core.setScene("leaderboard", { message: "score could not be saved" });
       },
@@ -519,6 +535,7 @@
           arenaList.arenas = arenaList.arenas.filter((x) => x.id !== a.id).concat([a]);
           arenaBoards.set(a.id, { status: "ok", entries: [], at: performance.now() });
           core.setScene("arena", { arena: a, fresh: true });
+          if (opts.arenaCreated) opts.arenaCreated(a);
           return;
         }
         this.sending = false;
@@ -530,7 +547,7 @@
           post2(arenaApi + "/score", { id: this.arenaId, name, score: this.score }).catch(() => null),
           post("", { board: this.key, name, score: this.score }).catch(() => null),
         ]);
-        if (gr && gr.ok && gr.data) boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() });
+        if (gr && gr.ok && gr.data) { boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() }); placed(this.key, gr.data.rank, gr.data.entries || []); }
         const grank = gr && gr.ok && gr.data ? gr.data.rank : null;
         let rank = null, msg;
         if (ar && ar.ok && ar.data) {

@@ -15,7 +15,7 @@ assets = {
     "backgrounds": {stem(f): uri(rd(f), "image/jpeg") for f in sorted(glob.glob(f"{A}/backgrounds/*.jpg"))},
 }
 os.makedirs(f"{ROOT}/build", exist_ok=True); os.makedirs(f"{ROOT}/public", exist_ok=True)
-open(f"{ROOT}/build/bundle.js", "w").write("\n".join(open(f"{ROOT}/src/{n}.js").read() for n in ("core", "scorekey", "leaderboard", "rewind", "audio", "render", "tips", "main")))
+open(f"{ROOT}/build/bundle.js", "w").write("\n".join(open(f"{ROOT}/src/{n}.js").read() for n in ("core", "scorekey", "leaderboard", "achievements", "account", "rewind", "audio", "render", "tips", "main")))
 subprocess.run(["npx", "--yes", "esbuild@0.25.0", f"{ROOT}/build/bundle.js", "--minify", f"--outfile={ROOT}/build/bundle.min.js"], check=True, capture_output=True)
 code = open(f"{ROOT}/build/bundle.min.js").read().replace("</script", "<\\/script")
 html = open(f"{ROOT}/template/index.html").read().replace("/*ASSETS*/", json.dumps(assets, separators=(",", ":")), 1).replace("/*CODE*/", code, 1)

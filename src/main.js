@@ -39,7 +39,22 @@
       fetch: (...a) => fetch(...a),
       share: (cfg) => shareConfig(cfg ? "?cfg=" + SK.shareCode(cfg) : null), // the board on show on the Leaderboards page
       shareArena: (id) => shareConfig("?arena=" + id), // link straight to an arena's page
+      arenaCreated: () => earned(["planner"]),
+      arenaWon: () => earned(["dinner"]),
+      placed: (p) => {
+        earned([...(p.rank === 1 && p.isDefault ? ["billy"] : []), ...(p.first ? ["trailblazer"] : [])]);
+        // the booze dogs: top 10 on 3 / 5 / 10 / 20 different boards (counted by the server)
+        ACC.placedOn(p.key).then((n) => { if (n) earned(BoozeAchievements.LIST.filter((a) => a.boards && n >= a.boards).map((a) => a.id)); });
+      },
+      playerName: () => ACC.name(), // logged in: a top-10 score goes on the board under the account's name, no name entry
     });
+    // player accounts (src/account.js): username + password; the corner where 2UP would be logs in / shows the name
+    const ACC = BoozeAccount.create({
+      storage: storage || { getItem: () => null, setItem() {}, removeItem() {} },
+      apiBase: /^https?:$/.test(location.protocol) && !testMaze ? "/api/account" : null,
+      fetch: (...a) => fetch(...a),
+    });
+    const verified = ACC.verify();
     // xorshift-free: normal Math.random in the browser
     // intermission 3 plays a short video (with sound); core calls video.play()/stop()
     let videoEl = null, videoPrimed = false;
@@ -161,7 +176,19 @@
     let rwd = null; // the Rewind ability (rewind.js), made once the core exists
     const core = BoozeCore.create(A.data, {
       testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, proMode: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      scenes: { ...LB.scenes, mina }, afterGameOver: (s) => LB.afterGameOver(s), rewind: () => rwd && rwd.trigger(), testMode: () => fpsOn /* test mode (xyzzy): Pro Mode always */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      scenes: { ...LB.scenes, ...ACC.scenes, mina },
+      afterGameOver: (s) => {
+        const c = core.g.config, d = core.g.defaultConfig, styled = c.background !== d.background || c.mazeColor !== d.mazeColor;
+        const ach = BoozeAchievements.LIST;
+        earned(["quarter", ...(LB.inArena() ? ["arena"] : []), ...(styled ? ["stylish"] : []),
+          ...ach.filter((a) => a.mode && s >= a.points && c[a.mode.key] === a.mode.value).map((a) => a.id), // points in a mode (house of horrors, ...)
+          ...ach.filter((a) => a.score && s >= a.score).map((a) => a.id)]); // clyde / inky / pinky / blinky: the final score
+        return LB.afterGameOver(s);
+      }, rewind: () => {
+        if (!rwd) return;
+        const was = rwd.active(); rwd.trigger();
+        if (!was && rwd.active() && !core.g.attract && !core.g.autoplay) earned(["kind"]); // be kind (rewind)
+      }, testMode: () => fpsOn /* test mode (xyzzy): Pro Mode always */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
@@ -171,6 +198,25 @@
     core.T = BoozeCore.T;
     rwd = BoozeRewind.create(core);
     LB.attach(core);
+    const toast = (text, ms) => { core.g.toast = { text, until: performance.now() + (ms || 2500) }; }; // "\n" for a second line
+    ACC.attach({ wakka: () => LB.wakka(), setScene: (n, o) => core.setScene(n, o), toast });
+    // achievements just earned share one popup (a game over and the board it lands on add up while it's showing).
+    // Earned during live play (a real game in mode "normal"): saved at once, the popup held until play stops
+    let unlocked = [], lastScene = null, held = [], run = null;
+    const livePlay = () => core.g.scene.name === "game" && core.g.mode === "normal" && !core.g.attract && !core.g.autoplay;
+    function earned(ids) {
+      const got = ids.map((id) => ACC.award(id)).filter(Boolean);
+      if (!got.length) return;
+      if (livePlay()) { held.push(...got); return; }
+      showUnlocked(got);
+    }
+    function showUnlocked(got) {
+      const t = core.g.toast;
+      if (!(t && t.unlocked && performance.now() < t.until)) unlocked = [];
+      unlocked.push(...got.map((a) => a.name));
+      toast((unlocked.length > 1 ? "achievements unlocked" : "achievement unlocked") + "\n" + unlocked.join("\n"), 3500);
+      core.g.toast.unlocked = true;
+    }
     window.__core = core;
 
     const [spr16, spr8, text8, banner] = await Promise.all(["spr16", "spr8", "text8", "banner"].map((n) => loadImg(A.images[n])));
@@ -180,6 +226,7 @@
 
     const R = BoozeRender.createRenderer(core, { sprites: { spr16, spr8, text8 }, banner, backgrounds, video: videoEl });
     R.setDebug(fpsOn); // test mode: ghost targets and paths
+    window.__R = R;
     const canvas = document.getElementById("screen");
     const P = BoozeRender.createPresenter(canvas, R.screen, () => core.g.config);
     // CRT on (WebGL): the bezel fills the window. The live canvas is only the screen plus a margin wide enough for the rim
@@ -211,6 +258,8 @@
     fit();
 
     core.init();
+    // logged in: any arena won since last time (chicken dinner) shows up in the arena list
+    verified.then(() => { if (ACC.name()) LB.loadArenas(true); });
     // ?arena=<id>: a shared arena link opens that arena's page
     {
       const arenaId = new URLSearchParams(location.search).get("arena");
@@ -228,7 +277,7 @@
     // Reset High Scores: opened by the cheat "reset" on a menu screen (no menu item); wipes the online boards,
     // the password is checked by the server
     const rs = document.getElementById("reset"), rsForm = rs.querySelector("form"), rsMsg = rs.querySelector(".msg");
-    const resetOpen = () => rs.open;
+    const dialogOpen = () => !!document.querySelector("dialog[open]"); // typing into a dialog (reset, account): no hotkeys, no game keys
     // the same dialog deletes an arena (cheat "delete" on an arena's page): rsMode "reset" | "arena"
     let rsMode = "reset";
     function openReset(mode) {
@@ -256,8 +305,50 @@
     });
     rs.addEventListener("close", () => canvas.focus && canvas.focus());
 
+    // account dialog (logged out): "login" | "signup". Logged in, the corner opens the profile page instead
+    R.setAccount(ACC.name, ACC.online);
+    const ac = document.getElementById("account"), acForm = ac.querySelector("form"), acMsg = ac.querySelector(".msg");
+    const acSwitch = ac.querySelector(".switch a");
+    let acMode = "login", acBusy = false;
+    function setAcMode(mode) {
+      acMode = mode;
+      ac.querySelector("h2").textContent = mode === "signup" ? "CREATE ACCOUNT" : "LOG IN";
+      ac.querySelector(".confirm").hidden = mode !== "signup";
+      acForm.elements.password.autocomplete = mode === "signup" ? "new-password" : "current-password";
+      acForm.querySelector("button.go").textContent = mode === "signup" ? "Create" : "Log in";
+      acSwitch.textContent = mode === "signup" ? "I have an account: log in" : "Create an account";
+      acMsg.textContent = "";
+    }
+    function openAccount() {
+      const sc = core.g.scene.name;
+      if (sc === "nameEntry" || sc === "profile") return; // don't walk out of a name entry
+      if (ACC.name()) { LB.wakka(); core.setScene("profile"); return; }
+      if (typeof ac.showModal !== "function" || ac.open) return;
+      for (const k in down) down[k] = false;
+      acForm.reset(); setAcMode("login");
+      LB.wakka(); ac.showModal();
+    }
+    acSwitch.addEventListener("click", (e) => { e.preventDefault(); setAcMode(acMode === "signup" ? "login" : "signup"); acForm.elements.name.focus(); });
+    acForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (acBusy) return;
+      if (e.submitter && e.submitter.value === "cancel") { ac.close(); return; }
+      const f = acForm.elements, name = SK.cleanName(f.name.value), pw = f.password.value;
+      if (!name) { acMsg.textContent = f.name.value.trim() ? "Names use letters, digits, spaces and ! - / (up to 16)." : "Enter a username."; return; }
+      if (acMode === "signup" && pw.length < 4) { acMsg.textContent = "Passwords need at least 4 characters."; return; }
+      if (acMode === "signup" && pw !== f.password2.value) { acMsg.textContent = "The passwords don't match."; return; }
+      if (!pw) { acMsg.textContent = "Enter your password."; return; }
+      acBusy = true; acMsg.textContent = acMode === "signup" ? "Creating…" : "Logging in…";
+      const res = acMode === "signup" ? await ACC.signup(name, pw) : await ACC.login(name, pw);
+      acBusy = false;
+      if (res.ok) { ac.close(); toast("welcome " + ACC.name().toLowerCase()); LB.loadArenas(true); return; }
+      acMsg.textContent = res.status === 409 ? "That name is taken." : res.status === 403 ? "Wrong username or password." : res.status === 0 ? "Can't reach the server." : "That didn't work (" + res.status + ").";
+    });
+    ac.addEventListener("close", () => canvas.focus && canvas.focus());
+    const accountAt = (e) => { const B = R.accountBox(); if (!B) return null; const p = toGame(e); return p.x >= B.x0 && p.x < B.x1 && p.y >= B.y0 && p.y < B.y1 ? B : null; };
+
     window.addEventListener("keydown", (e) => {
-      if (resetOpen()) return; // typing into the reset dialog
+      if (dialogOpen()) return;
       cheatKey(e);
       // name entry takes typed characters as they are (shifted symbols included)
       if (core.g.scene.name === "nameEntry" && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -298,7 +389,10 @@
     canvas.addEventListener("pointermove", (e) => {
       const row = rowAt(e);
       tipRow = row && row.menu === core.optMenu ? row.index : null;
-      if (linkAt(e)) { canvas.style.cursor = "pointer"; return; }
+      const acc = accountAt(e); R.setAccountHot(!!acc); accTip = acc ? (acc.name ? "Your profile" : "Log in or create an account") : "";
+      const L = linkAt(e);
+      if (L && L.tip) showTip(L.tip, e); else if (e.pointerType === "mouse") hideTip(); // touch: a tapped tip stays until the next tap
+      if (acc || L) { canvas.style.cursor = L && L.tip ? "help" : "pointer"; return; }
       canvas.style.cursor = row ? "pointer" : "default";
       if (row && row.menu.selectedItem !== row.index) { row.menu.selectedItem = row.index; LB.wakka(); }
     });
@@ -306,9 +400,12 @@
     const oySnd = audio.makeSound("oy");
     canvas.addEventListener("pointerdown", (e) => {
       { const B = R.oyBlock(), p = toGame(e);
-        if (B && p.x >= B.x0 && p.x < B.x1 && p.y >= B.y0 && p.y < B.y1) { audio.unlock(); oySnd.stop(); oySnd.setVolume((core.g.attract && core.g.originalVolume != null ? core.g.originalVolume : core.g.config.volume) / 10); oySnd.play(); } }
+        if (B && p.x >= B.x0 && p.x < B.x1 && p.y >= B.y0 && p.y < B.y1) { earned(["neil"]); audio.unlock(); oySnd.stop(); oySnd.setVolume((core.g.attract && core.g.originalVolume != null ? core.g.originalVolume : core.g.config.volume) / 10); oySnd.play(); } }
+      if (accountAt(e)) { e.preventDefault(); audio.unlock(); openAccount(); return; }
       if (gestureStart(e)) return;
-      { const L = linkAt(e); if (L) { e.preventDefault(); if (L.action) L.action(); else if (L.scene) { LB.wakka(); core.setScene(L.scene); } else openUrl(L.url); return; } }
+      { const L = linkAt(e); if (L && L.tip) { e.preventDefault(); showTip(L.tip, e); return; } hideTip();
+        if (L && L.secret) earned([L.secret]); // the credits' "what is seeing this?": time to wake up
+        if (L) { e.preventDefault(); if (L.action) L.action(); else if (L.scene) { LB.wakka(); core.setScene(L.scene); } else openUrl(L.url); return; } }
       const row = rowAt(e);
       if (!row) return;
       e.preventDefault();
@@ -332,6 +429,17 @@
       if (row && row.menu[row.index - 1].share) core.keypressed("return");
     });
     canvas.addEventListener("pointercancel", () => { pendingShareTap = null; });
+    canvas.addEventListener("pointerleave", (e) => { R.setAccountHot(false); accTip = ""; if (e.pointerType === "mouse") hideTip(); });
+    // description popup (the profile's achievement names, link.tip): plain HTML text by the pointer, styled like the dialogs
+    const tipEl = document.getElementById("tip");
+    function showTip(text, e) {
+      if (tipEl.textContent !== text) tipEl.textContent = text;
+      tipEl.classList.add("on");
+      const w = tipEl.offsetWidth, h = tipEl.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+      tipEl.style.left = Math.max(8, Math.min(vw - w - 8, e.clientX + 14)) + "px";
+      tipEl.style.top = (e.clientY + 18 + h > vh - 8 ? Math.max(8, e.clientY - h - 12) : e.clientY + 18) + "px";
+    }
+    function hideTip() { tipEl.classList.remove("on"); }
     // touch gameplay: swipe = direction (stays latched, like holding a key), tap = ability, two-finger tap = pause
     const touches = new Map(); let touchDir = null, twoFinger = false;
     const setTouchDir = (d) => {
@@ -405,7 +513,7 @@
     volSlider.addEventListener("pointerup", () => volSlider.blur());
     window.addEventListener("pointerdown", (e) => { if (!volBox.contains(e.target)) closeVol(); }, true);
     window.addEventListener("keydown", (e) => {
-      if (resetOpen() || core.g.scene.name !== "game" || core.g.attract || e.code !== "KeyM" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (dialogOpen() || core.g.scene.name !== "game" || core.g.attract || e.code !== "KeyM" || e.ctrlKey || e.metaKey || e.altKey) return;
       e.preventDefault(); toggleMute();
     });
     syncMute();
@@ -423,7 +531,7 @@
       fsBtn.addEventListener("click", (e) => { e.preventDefault(); toggleFullscreen(); fsBtn.blur(); });
       document.addEventListener("fullscreenchange", syncFsButton);
       document.addEventListener("webkitfullscreenchange", syncFsButton);
-      window.addEventListener("keydown", (e) => { if (!resetOpen() && core.g.scene.name !== "nameEntry" && e.code === "KeyF" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFullscreen(); } });
+      window.addEventListener("keydown", (e) => { if (!dialogOpen() && core.g.scene.name !== "nameEntry" && e.code === "KeyF" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFullscreen(); } });
     }
     // the look: CRT (true, the default) -> plain (false) -> 1982 living-room TV ("tv") -> CRT. The C key or the TV button
     // (between mute and fullscreen; phones have no C). Not an option on the Options page (env.crtKey); saved at once, into the player's
@@ -438,7 +546,7 @@
       syncLook();
     }
     window.addEventListener("keydown", (e) => {
-      if (resetOpen() || core.g.scene.name === "nameEntry" || e.code !== "KeyC" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (dialogOpen() || core.g.scene.name === "nameEntry" || e.code !== "KeyC" || e.ctrlKey || e.metaKey || e.altKey) return;
       e.preventDefault(); cycleLook();
     });
     lookBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
@@ -446,11 +554,11 @@
     syncLook();
     // Options page tips (src/tips.js): the browser's own hover text on the option row under the mouse (what the option
     // does, and what its current value means)
-    let tipRow = null, tipText = "";
+    let tipRow = null, tipText = "", accTip = "";
     function syncTip() {
       const menu = core.optMenu;
       const tip = core.g.scene.name === "options" && tipRow ? BoozeTips.tipFor(menu[tipRow - 1]) : null;
-      const t = tip ? tip.text + (tip.value ? "\n\n" + tip.value : "") : "";
+      const t = accTip && R.accountBox() ? accTip : tip ? tip.text + (tip.value ? "\n\n" + tip.value : "") : "";
       if (t !== tipText) { tipText = t; canvas.title = t; }
     }
 
@@ -489,7 +597,7 @@
       acc += dt;
       const step = core.FIXED_DT;
       if (touchDir && ["playerUp", "ready", "dying", "caught", "gameover", "levelAnimation", "intermission1", "intermission2", "intermission3", "destroyed"].includes(core.g.mode)) setTouchDir(null);
-      if (!resetOpen()) pollPad();
+      if (!dialogOpen()) pollPad();
       while (acc >= step) { if (!rwd.update()) core.update(); rwd.record(); acc -= step; } // a rewind playing back takes the frame
       LB.tick();
       if (wantsFullBezel() !== fullBezel || (core.g.config && core.g.config.crtEffect) !== fitLook) fit();
@@ -511,6 +619,27 @@
         if (html !== fpsHtml) { fpsEl.innerHTML = html; fpsHtml = html; }
       }
       escBtn.classList.toggle("on", core.g.scene.name !== "attract");
+      // achievements for what's on screen: a real game (not the demo / autoplay) just started with no ghosts; the
+      // credits; intermission 3 (Mina's film) in a real game
+      { const g = core.g, sn = g.scene.name, real = sn === "game" && !g.attract && !g.autoplay;
+        if (real && lastScene !== "game" && g.config.ghostCount === 0) earned(["park"]);
+        // without a scratch (2): past board 2 (the first intermission) / board 5 (the second) with no life lost, in a game
+        // that started before it. By board, so Pro Mode (no intermissions) counts too
+        if (real && lastScene !== "game") run = { start: g.levelNumber, lives: null, scratched: false };
+        if (real && run) {
+          if (run.lives === null) { if (g.mode === "normal") run.lives = g.lives; } // the lives on hand once play starts
+          else { if (g.lives < run.lives) run.scratched = true; run.lives = g.lives; }
+          if (!run.scratched && run.lives !== null) earned([...(run.start <= 2 && g.levelNumber > 2 ? ["scratch"] : []), ...(run.start <= 5 && g.levelNumber > 5 ? ["scratch2"] : [])]);
+        }
+        if (real && lastScene !== "game") { // one day at a time: a game on 7 days in a row (the player's own calendar)
+          const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
+          ACC.playedOn(d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate())).then((n) => { if (n >= 7) earned(["streak"]); });
+        }
+        if (sn === "credits" && lastScene !== "credits") earned(["respects"]);
+        if (real && g.mode === "intermission3") earned(["dedication"]);
+        if (held.length && !livePlay()) { const h = held; held = []; showUnlocked(h); }
+        lastScene = sn; }
+      if (core.g.scene.name !== "profile") hideTip();
       syncTip();
       requestAnimationFrame(frame);
     }

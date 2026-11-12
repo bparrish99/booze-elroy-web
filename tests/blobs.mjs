@@ -12,5 +12,5 @@ export async function startBlobs() {
   const { port } = await server.start();
   const url = `http://localhost:${port}`;
   const mk = (name) => getStore({ name, siteID: "test-site", token, edgeURL: url, uncachedEdgeURL: url, consistency: "strong" });
-  return { store: mk("leaderboard"), arenaStore: mk("arenas"), async stop() { await server.stop(); rmSync(directory, { recursive: true, force: true }); } };
+  return { store: mk("leaderboard"), arenaStore: mk("arenas"), accountStore: mk("accounts"), async stop() { await server.stop(); rmSync(directory, { recursive: true, force: true }); } };
 }

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { handle } from "../netlify/lib/scores.mjs";
 import { handleArenas, HOUR, GRACE } from "../netlify/lib/arenas.mjs";
+import { handleAccounts } from "../netlify/lib/accounts.mjs";
 import { startBlobs } from "./blobs.mjs";
 
 const require = createRequire(import.meta.url);
@@ -91,6 +92,19 @@ test("share codes: links shared before Rewind existed still mean the same settin
   assert.deepEqual(SK.configFromCode(code), rw);
   assert.equal(SK.keyFor(def), "pac.0.f.f.f.3.1.f.0.4.t.f.f");
   assert.equal(SK.keyFor(rw), "pac.0.f.f.f.3.1.4.0.4.t.f.f");
+});
+
+test("achievements: the list the server checks ids against", () => {
+  const ACH = require("../src/achievements.js");
+  const MODES = ["haunted", "terror", "afterdark", "rocketman", "coke", "booze", "seven", "yolo"];
+  assert.deepEqual(ACH.LIST.map((a) => a.id), ["quarter", "respects", "stylish", "park", "kind", "dedication", "streak", "scratch", "scratch2", "clyde", "inky", "pinky", "blinky",
+    ...MODES, ...MODES.map((m) => m + "2"), "arena", "planner", "dinner", "trailblazer", "billy", "pug", "beagle", "boxer", "hound", "wake", "neil"]);
+  assert.equal(ACH.byId("yolo2").name, "yolo 2");
+  assert.equal(ACH.byId("seven2").desc, "Score 20,000 points with 7 ghosts.");
+  assert.deepEqual(ACH.byId("coke").mode, { key: "plusMode", value: true });
+  assert.equal(new Set(ACH.LIST.map((a) => a.id)).size, ACH.LIST.length);
+  const font = "abcdefghijklmnopqrstuvwxyz0123456789!-/ ";
+  for (const a of ACH.LIST) assert.ok([...a.name].every((c) => font.includes(c)) && a.name.length <= 24 && a.desc, a.name);
 });
 
 test("cleanName", () => {
@@ -282,4 +296,80 @@ test("arenas: create, list, unique open names, scores and leader, closing, grace
   const c = r.data.arenas[0];
   assert.equal((await acall("POST", "/api/arenas/delete", { id: c.id, password: "correct horse" })).status, 200);
   assert.ok(!(await acall("GET", "/api/arenas")).data.arenas.some((x) => x.id === c.id));
+});
+
+// ---------------------------------------------------------------- accounts
+const acct = async (method, action, body, token) => {
+  const headers = token ? { authorization: "Bearer " + token } : {};
+  const req = new Request("http://x/api/account/" + action, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await handleAccounts(req, blobs.accountStore, { failDelay: 0 });
+  return { status: res.status, data: await res.json() };
+};
+
+test("accounts: sign up, log in, me, log out", async () => {
+  const s = await acct("POST", "signup", { name: " pin  back ", password: "hunter2" });
+  assert.equal(s.status, 200);
+  assert.equal(s.data.name, "PIN BACK");
+  assert.equal((await acct("GET", "me", undefined, s.data.token)).data.name, "PIN BACK");
+  // names are case-insensitive (upper-cased), so this one is taken
+  assert.equal((await acct("POST", "signup", { name: "Pin Back", password: "other" })).status, 409);
+  assert.equal((await acct("POST", "login", { name: "pin back", password: "wrong!" })).status, 403);
+  assert.equal((await acct("POST", "login", { name: "nobody", password: "hunter2" })).status, 403);
+  const l = await acct("POST", "login", { name: "pin back", password: "hunter2" });
+  assert.equal(l.status, 200);
+  assert.notEqual(l.data.token, s.data.token);
+  // logging out ends that session only
+  assert.equal((await acct("POST", "logout", undefined, s.data.token)).status, 200);
+  assert.equal((await acct("GET", "me", undefined, s.data.token)).status, 401);
+  assert.equal((await acct("GET", "me", undefined, l.data.token)).data.name, "PIN BACK");
+  assert.equal((await acct("GET", "me")).status, 401);
+  // the password is not stored in the clear
+  const { blobs: keys } = await blobs.accountStore.list();
+  for (const k of keys) assert.ok(!JSON.stringify(await blobs.accountStore.get(k.key, { type: "json" })).includes("hunter2"));
+});
+
+test("accounts: bad names and passwords are refused", async () => {
+  for (const name of ["", "x".repeat(17), "what?", 7]) assert.equal((await acct("POST", "signup", { name, password: "good pw" })).status, 400, String(name));
+  for (const password of ["abc", "x".repeat(129), 1234, undefined]) assert.equal((await acct("POST", "signup", { name: "someone", password })).status, 400, String(password));
+  assert.equal((await acct("GET", "signup")).status, 405);
+});
+
+test("accounts: boards placed on are counted once each", async () => {
+  const { data: a } = await acct("POST", "signup", { name: "placer", password: "pw12" });
+  const B2 = "pac.0.f.f.f.3.1.f.0.6.t.f.f";
+  assert.deepEqual((await acct("POST", "placed", { board: BOARD }, a.token)).data, { count: 1 });
+  assert.deepEqual((await acct("POST", "placed", { board: BOARD }, a.token)).data, { count: 1 });
+  assert.deepEqual((await acct("POST", "placed", { board: B2 }, a.token)).data, { count: 2 });
+  assert.equal((await acct("POST", "placed", { board: "nope" }, a.token)).status, 400);
+  assert.equal((await acct("POST", "placed", { board: BOARD })).status, 401);
+});
+
+test("accounts: days played, and the streak of days in a row", async () => {
+  const { data: a } = await acct("POST", "signup", { name: "regular", password: "pw12" });
+  const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  const play = (d) => acct("POST", "played", { day: d }, a.token);
+  assert.deepEqual((await play(day(-1))).data, { streak: 1 });
+  assert.deepEqual((await play(day(-1))).data, { streak: 1 }); // the same day again
+  assert.deepEqual((await play(day(0))).data, { streak: 2 });
+  assert.deepEqual((await play(day(2))).data, { streak: 1 }); // skipped a day: a new run
+  assert.deepEqual((await play(day(1))).data, { streak: 3 }); // days -1, 0, 1 (day 2 comes after)
+  assert.deepEqual((await play(day(2))).data, { streak: 4 });
+  for (const d of ["2026-13-01", "yesterday", day(-5), 20261111]) assert.equal((await play(d)).status, 400, String(d));
+  assert.equal((await acct("POST", "played", { day: day(0) })).status, 401);
+});
+
+test("accounts: achievements are earned once, per account, known ids only", async () => {
+  const { data: a } = await acct("POST", "signup", { name: "achiever", password: "pw12" });
+  const { data: b } = await acct("POST", "signup", { name: "other one", password: "pw12" });
+  assert.deepEqual((await acct("GET", "achievements", undefined, a.token)).data, { achievements: {} });
+  const first = await acct("POST", "achievements", { id: "quarter" }, a.token);
+  assert.equal(first.data.earned, true);
+  assert.ok(first.data.achievements.quarter > 0);
+  const again = await acct("POST", "achievements", { id: "quarter" }, a.token);
+  assert.equal(again.data.earned, false);
+  assert.equal(again.data.achievements.quarter, first.data.achievements.quarter); // keeps the first date
+  assert.deepEqual((await acct("GET", "achievements", undefined, b.token)).data, { achievements: {} });
+  assert.equal((await acct("POST", "achievements", { id: "nonsense" }, a.token)).status, 400);
+  assert.equal((await acct("POST", "achievements", { id: "quarter" })).status, 401);
+  assert.equal((await acct("GET", "achievements")).status, 401);
 });

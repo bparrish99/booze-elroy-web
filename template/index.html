@@ -33,26 +33,38 @@ html,body{overscroll-behavior:none;margin:0;height:100%;background:#000;color:#f
 #fs:hover,#fs:focus-visible,#esc:hover,#esc:focus-visible{opacity:.9}
 #esc{display:none;position:absolute;top:max(8px,env(safe-area-inset-top,0px));right:max(8px,env(safe-area-inset-right,0px));z-index:5;width:44px;height:44px;padding:0;border:0;background:none;color:#a8a8a8;font:28px/44px Arial,Helvetica,sans-serif;text-align:center;text-shadow:0 0 3px #000;touch-action:manipulation;-webkit-tap-highlight-color:transparent;opacity:.55;transition:opacity .2s}
 #esc.on{display:block}
-#reset{background:#000;color:#ffd400;border:2px solid #2121de;border-radius:6px;padding:20px 22px;font:15px/1.5 "Courier New",monospace;max-width:min(320px,calc(100vw - 48px))}
-#reset::backdrop{background:rgba(0,0,0,.7)}
-#reset h2{margin:0 0 12px;font-size:16px;letter-spacing:.15em}
-#reset label{display:block;margin:6px 0}
-#reset input[type=password]{width:100%;box-sizing:border-box;margin-top:4px;padding:6px 8px;background:#111;color:#fff;border:1px solid #555;border-radius:3px;font:inherit}
-#reset .row{display:flex;flex-direction:row-reverse;gap:10px;justify-content:flex-start;margin-top:14px}
-#reset button{padding:6px 14px;background:#111;color:#ffd400;border:1px solid #ffd400;border-radius:3px;font:inherit;cursor:pointer}
-#reset button[value=reset]{background:#ffd400;color:#000}
-#reset .what{margin:0 0 8px;color:#fff}
-#reset .msg{min-height:1.5em;margin-top:8px;color:#ffb8ff}
+.box{background:#000;color:#ffd400;border:2px solid #2121de;border-radius:6px;padding:20px 22px;font:15px/1.5 "Courier New",monospace;max-width:min(320px,calc(100vw - 48px))}
+.box::backdrop{background:rgba(0,0,0,.7)}
+.box h2{margin:0 0 12px;font-size:16px;letter-spacing:.15em}
+.box label{display:block;margin:6px 0}
+.box input[type=password],.box input[type=text]{width:100%;box-sizing:border-box;margin-top:4px;padding:6px 8px;background:#111;color:#fff;border:1px solid #555;border-radius:3px;font:inherit}
+.box .row{display:flex;flex-direction:row-reverse;gap:10px;justify-content:flex-start;margin-top:14px}
+.box button{padding:6px 14px;background:#111;color:#ffd400;border:1px solid #ffd400;border-radius:3px;font:inherit;cursor:pointer}
+.box button.go{background:#ffd400;color:#000}
+.box .what{margin:0 0 8px;color:#fff}
+.box .msg{min-height:1.5em;margin-top:8px;color:#ffb8ff}
+.box [hidden]{display:none}
+.box input[name=name]{text-transform:uppercase}
+.box .switch{margin:12px 0 0;font-size:13px}.box .switch a{color:#a8a8ff}
+#tip{display:none;position:fixed;z-index:8;max-width:min(260px,calc(100vw - 32px));padding:8px 11px;background:#000;color:#ffd400;border:2px solid #2121de;border-radius:6px;font:14px/1.4 "Courier New",monospace;pointer-events:none}
+#tip.on{display:block}
 #loading{position:absolute;color:#8a8a9a;letter-spacing:.2em;text-transform:uppercase;font-size:14px}
 </style><link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAFkklEQVR4XsWXOWycVRDHf/Pebnbt2N51nLWdOFwJCBBNJKRAAQVHhagoKKgoKWhANDRQ0iCIBAVCKZBAogTEJQFNiLkkEIhDgkgEFEgCzmETJ97ze4Pm+95b7/oKV8Ron/Y75r03838z/5kP/meRrfZXcJDrKFAGngN2xvs0197Z9XngYWAlzREI/6l/CosKusloKZT+7oYbTtDCI5MXgH0UnpiuoZBtgoDpvK/QiwgsAQ8CF20hKVD8e6JwdAuPN0MiPV9RqNqOAw6tEzvjviRFhRcVPgamo8fmtY1LSdJLuocVXo/IbWnIkCh8GT0P/wKBNPdMio2NkMgRiNGePP8KuOYvenwpMSRGgS8U3oixsd6QAQPmhzwXdN3YPAs2001IHB/Yp5/+a7PActii2SLW//7QrXSuqCPdDOkFZg/O45fbIBbTMagjS4SRMr89cjuhWsIIwPR2HZxHOpkiKFpkw1pJBkg8HzsSF7zLxAmdmXHae2q2SG5AqJZxzR4SwlBSacnn79q7J3JD1EHpjxahUkICuCzL17UjWBsHQ0yowvsod//20IGsde2Ud9scbPOF0ebwUgsyZffBjyidMbAgVDynHruNXm0EGSuDi0tmAb3YM70w98y8oxd+ELghpWXihRwBhbFoYX4fpnYQZmdone0Q2hE0gZHGRIG4Hzg5cYTpabKJEVrnjYMKMdQr02Wcu5Ae+UWo16Eb6TqXtNKrwC0g42bObP1Rr7sPcP+hwNfHPdVtBoTy5uMwsyPg/KeR+i0cqszNPMWi38kDz8JyW/Koa4wF3npSGJMTTuVthPZVdZGjqH4ncEeyKhlgBaYRAxDnJ6BUo+TJh7dRWh06xF+C83V81DddO2jnwZVsXCSIoCIlJzSC7RMsTHPrNRlgsNgpF6Eda+BLD2cEu8nVldERVyTxQOTk1yrUJuC9JwIW8j7Pt8C2soNeD9ftWtao6Tno2MZrEbBlVpddWYbl84yUq2CL5OoKKxcg64EOVlmFi0tItcxodTQPwqaHnkK7LKgF8uQk2mshsiLBcFnqjcHJgMwVkaxwJBKMzVMdq6vWGxpe/F7DYdXwnmp4J6ju269aa6j68mohck51YkqzK2/U8FpTf5lXbXRVa5nqdEe10exqY+G0NhY+08YCOnn22jaqi2j27mAQDssFq6Qg507CuR1gmdBtw9mT8MfpIbByQjp/FrJuri9+HDmnOTcsTNahLFC1EGsBUzHU1sg6BEQ0H9XtqqMTcYyrOl88X0vH9syQGBnXbHtNl8cn9NjevVpttdTO3mWZor0MtfvW14YxesJqxCYdTKLZ1obsuV6SSc3lPH6NVDLv2PvTTyzVapyanaXUDexaWLTzzn65YlefHDaOgeRhQiL9b1WI7F3UCyLa815bInpsz54chat//DFrOdGW8FW/bG2KQJKExGpzOdTArBMt0kMsF0SoTDeoTtv5g3hPZdcsRtE4Z0YNMeGlZOuNV8X1K+XYdvT5p8mmZ4q3O6fQVw4hzTbcc19/RiIiszw1m4OSSvNRjECKYmJzUruexPSsEHxvZRy4Pue5yHdR3x5kyHCrnjzbHicO9geGkb23Be8V2A804/3a7wnTMyNuZnT0LjPSiXgqFT9WreR7OPtVKz7PgAFJG34ePbwOmOxTMnwX2+pOrOMfxkb1pthqmZjn3wBn8n3MSzgSVMva6crpTq8C7G863+w0W986cYbmxqL0W7KUWLZRTv+DjYTCrwMZYcWvlvT6K6eCoVot6oD+MBDcwy2ZFjAbhJ9EyrJrg64dN85LzkDX9AGwJy5ofO7WGChXHztWOTE3d0BhJitQqnrVOwWWe+SIXyax1jSHQ2ei5zkPDIxTG8VAMafwehXFTT4u/6KeBezLMVbSB67Jz5fJ9X8mfwIIoR4uy+utTwAAAABJRU5ErkJggg==">
 </head><body>
-<div id="stage"><canvas id="bezel"></canvas><canvas id="screen"></canvas><div id="fps"></div><div id="loading">Loading…</div><div id="vol"><button id="mute" type="button" aria-label="Mute" title="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M3 9h4l5-4v14l-5-4H3z"/><path class="on lo" d="M15.5 8.5a5 5 0 0 1 0 7"/><path class="on hi" d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M16 9l6 6M22 9l-6 6"/></svg></button><div id="volPanel"><input id="volume" type="range" min="0" max="100" step="1" value="60" aria-label="Volume" title="Volume"></div></div><button id="fs" type="button" aria-label="Toggle fullscreen"title="Fullscreen (F)">⛶</button><button id="look" type="button" aria-label="Change visuals" title="Change visuals (C)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2.5"/><path d="M8 21h8M12 17v4"/></svg></button><button id="esc" type="button" aria-label="Exit to menu">✕</button></div>
-<dialog id="reset"><form method="dialog"><h2>RESET HIGH SCORES</h2>
+<div id="stage"><canvas id="bezel"></canvas><canvas id="screen"></canvas><div id="fps"></div><div id="loading">Loading…</div><div id="tip" role="tooltip"></div><div id="vol"><button id="mute" type="button" aria-label="Mute" title="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M3 9h4l5-4v14l-5-4H3z"/><path class="on lo" d="M15.5 8.5a5 5 0 0 1 0 7"/><path class="on hi" d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M16 9l6 6M22 9l-6 6"/></svg></button><div id="volPanel"><input id="volume" type="range" min="0" max="100" step="1" value="60" aria-label="Volume" title="Volume"></div></div><button id="fs" type="button" aria-label="Toggle fullscreen"title="Fullscreen (F)">⛶</button><button id="look" type="button" aria-label="Change visuals" title="Change visuals (C)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2.5"/><path d="M8 21h8M12 17v4"/></svg></button><button id="esc" type="button" aria-label="Exit to menu">✕</button></div>
+<dialog id="reset" class="box"><form method="dialog"><h2>RESET HIGH SCORES</h2>
 <p class="what" hidden></p>
 <label class="scope"><input type="radio" name="scope" value="board" checked> Leaderboard for the current settings</label>
 <label class="scope"><input type="radio" name="scope" value="all"> All leaderboards (every setting)</label>
 <label>Password<input type="password" name="password" autocomplete="current-password"></label>
-<div class="row"><button value="reset">Reset</button><button value="cancel" formnovalidate>Cancel</button></div>
+<div class="row"><button value="reset" class="go">Reset</button><button value="cancel" formnovalidate>Cancel</button></div>
+<div class="msg" role="status"></div></form></dialog>
+<dialog id="account" class="box"><form method="dialog"><h2>LOG IN</h2>
+<div class="fields"><label>Username<input type="text" name="name" maxlength="16" autocomplete="username" autocapitalize="characters" autocorrect="off" spellcheck="false"></label>
+<label>Password<input type="password" name="password" autocomplete="current-password"></label>
+<label class="confirm">Password again<input type="password" name="password2" autocomplete="new-password"></label></div>
+<div class="row"><button value="ok" class="go">Log in</button><button value="cancel" formnovalidate>Cancel</button></div>
+<p class="switch"><a href="#">Create an account</a></p>
 <div class="msg" role="status"></div></form></dialog>
 <script>window.BOOZE_ASSETS=/*ASSETS*/;</script>
 <script>/*CODE*/</script>
