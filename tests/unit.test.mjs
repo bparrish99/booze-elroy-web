@@ -299,10 +299,10 @@ test("arenas: create, list, unique open names, scores and leader, closing, grace
 });
 
 // ---------------------------------------------------------------- accounts
-const acct = async (method, action, body, token) => {
-  const headers = token ? { authorization: "Bearer " + token } : {};
+const acct = async (method, action, body, token, headers = {}) => {
+  if (token) headers = { ...headers, authorization: "Bearer " + token };
   const req = new Request("http://x/api/account/" + action, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  const res = await handleAccounts(req, blobs.accountStore, { failDelay: 0 });
+  const res = await handleAccounts(req, blobs.accountStore, { failDelay: 0, env });
   return { status: res.status, data: await res.json() };
 };
 
@@ -325,7 +325,7 @@ test("accounts: sign up, log in, me, log out", async () => {
   assert.equal((await acct("GET", "me")).status, 401);
   // the password is not stored in the clear
   const { blobs: keys } = await blobs.accountStore.list();
-  for (const k of keys) assert.ok(!JSON.stringify(await blobs.accountStore.get(k.key, { type: "json" })).includes("hunter2"));
+  for (const k of keys) assert.ok(!(await blobs.accountStore.get(k.key)).includes("hunter2") && !k.key.includes("hunter2"));
 });
 
 test("accounts: bad names and passwords are refused", async () => {
@@ -372,4 +372,22 @@ test("accounts: achievements are earned once, per account, known ids only", asyn
   assert.equal((await acct("POST", "achievements", { id: "nonsense" }, a.token)).status, 400);
   assert.equal((await acct("POST", "achievements", { id: "quarter" })).status, 401);
   assert.equal((await acct("GET", "achievements")).status, 401);
+});
+
+test("accounts: the activity log (signups, logins, achievements, first game of the day), behind the admin password", async () => {
+  const { data: a } = await acct("POST", "signup", { name: "logged one", password: "pw12" });
+  await acct("POST", "login", { name: "logged one", password: "pw12" });
+  await acct("POST", "achievements", { id: "quarter" }, a.token);
+  await acct("POST", "achievements", { id: "quarter" }, a.token); // already had it: not logged again
+  const today = new Date().toISOString().slice(0, 10);
+  await acct("POST", "played", { day: today }, a.token);
+  await acct("POST", "played", { day: today }, a.token); // the same day: logged once
+  assert.equal((await acct("GET", "activity")).status, 403);
+  assert.equal((await acct("GET", "activity", undefined, null, { "x-admin-key": "nope" })).status, 403);
+  const r = await acct("GET", "activity", undefined, null, { "x-admin-key": "correct horse" });
+  assert.equal(r.status, 200);
+  assert.ok(r.data.accounts.includes("LOGGED ONE"));
+  const mine = r.data.events.filter((e) => e.name === "LOGGED ONE").map((e) => e.type + (e.detail ? ":" + e.detail : ""));
+  assert.deepEqual(mine.sort(), ["achievement:quarter", "login", "played:1", "signup"]);
+  for (let i = 1; i < r.data.events.length; i++) assert.ok(r.data.events[i - 1].at >= r.data.events[i].at, "newest first");
 });

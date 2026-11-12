@@ -21,3 +21,6 @@ code = open(f"{ROOT}/build/bundle.min.js").read().replace("</script", "<\\/scrip
 html = open(f"{ROOT}/template/index.html").read().replace("/*ASSETS*/", json.dumps(assets, separators=(",", ":")), 1).replace("/*CODE*/", code, 1)
 open(f"{ROOT}/public/index.html", "w").write(html)
 print(f"public/index.html  {len(html)//1024} KB")
+# the author's secret activity page (template/activity.html), with the achievement names (id -> name) baked in
+ach = subprocess.run(["node", "-e", "console.log(JSON.stringify(require('./src/achievements.js').LIST.map((a) => [a.id, a.name])))"], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
+open(f"{ROOT}/public/activity.html", "w").write(open(f"{ROOT}/template/activity.html").read().replace("/*ACHIEVEMENTS*/", ach, 1))

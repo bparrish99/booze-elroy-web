@@ -236,6 +236,13 @@ try {
   await p.evaluate(() => localStorage.setItem("booze-elroy-account", JSON.stringify({ name: "GHOST", token: "x".repeat(32) })));
   await p.reload(); await p.waitForTimeout(1500);
   check(await box() === null, "an unknown saved login is dropped");
+  // the author's activity page: the password after #, else it asks
+  await p.goto(dev.url + "/activity.html#nope"); await p.waitForTimeout(500);
+  check(await p.evaluate(() => !document.getElementById("ask").hidden && /Wrong/.test(document.getElementById("askMsg").textContent)), "activity page: a wrong password just asks again");
+  await p.goto(dev.url + "/activity.html#dev"); await p.reload(); await p.waitForTimeout(800);
+  const log = await p.evaluate(() => document.getElementById("log").textContent);
+  check(/PINBACK\s*created an account/.test(log) && /earned SPENT A QUARTER/.test(log) && /logged in/.test(log) && /played today/.test(log), "activity page: signups, logins, achievements (by name) and games");
+  await shot("acc9-activity");
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join("; ") : ""));
 } finally {
   await b.close(); await dev.stop(); rmSync(blobsDir, { recursive: true, force: true });

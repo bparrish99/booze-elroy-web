@@ -37,7 +37,7 @@ export async function startDev(opts = {}) {
         const body = chunks.length ? Buffer.concat(chunks) : undefined;
         const request = new Request(u, { method: req.method, headers: req.headers, body: req.method === "GET" ? undefined : body });
         const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now })
-          : u.pathname.startsWith("/api/account/") ? await handleAccounts(request, accountStore, { failDelay: opts.failDelay, now: opts.now })
+          : u.pathname.startsWith("/api/account/") ? await handleAccounts(request, accountStore, { env, failDelay: opts.failDelay, now: opts.now })
           : await handle(request, store, { env });
         res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer()));
         if (!quiet) console.log(req.method, u.pathname + u.search, r.status);

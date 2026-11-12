@@ -10,19 +10,24 @@
 //        board, never forgotten even if the score is pushed off later); count = boards placed on so far
 //   POST /api/account/played { day: "YYYY-MM-DD" } (Bearer) -> { streak }   a real game started on that day (the
 //        player's own calendar day, within a day of the server's); streak = days in a row ending on that day
+//   GET  /api/account/activity  (x-admin-key: LEADERBOARD_ADMIN_PASSWORD) -> { accounts: [names], events: [{ at, type,
+//        name, detail }] newest first, the last 1000 }   the author's secret page (public/activity.html)
 //
 // Names follow the leaderboard's rules (scorekey cleanName: up to 16 of A-Z 0-9 ! - / space, upper-cased), so
 // "pinback" and "PINBACK" are the same account. Passwords: 4 to 128 characters, anything goes; stored as scrypt hashes.
 // Storage: blob "u/<hex of name>" = { name, salt, hash, createdAt }; blob "s/<sha256 of token>" = { name, createdAt }
 // (only the token's hash is stored); blob "a/<hex of name>" = { <achievement id>: <ms earned> };
 // blob "b/<hex of name>" = [board keys placed on]; blob "d/<hex of name>" = [days played, "YYYY-MM-DD", the last 60].
+// Activity log: one empty blob per event, everything in its key, "e/<ISO time>/<type>/<hex of name>/<detail>/<rand>"
+// (type: signup | login | achievement (detail: its id) | played (the first game of a day; detail: the streak)), so
+// listing the keys is the whole log, no reads.
 // Sessions don't expire; logging out deletes one. Achievements are trust-the-client, like scores (src/achievements.js
 // lists the ids).
 import { randomBytes, scrypt, timingSafeEqual, createHash } from "node:crypto";
 import { promisify } from "node:util";
 import scorekey from "../../src/scorekey.js";
 import achievements from "../../src/achievements.js";
-import { json, sleep, readBody, updateJSON } from "./scores.mjs";
+import { json, sleep, readBody, updateJSON, sha } from "./scores.mjs";
 
 const { cleanName, isKey } = scorekey;
 const scryptP = promisify(scrypt);
@@ -47,6 +52,12 @@ const hashPw = async (pw, salt) => (await scryptP(pw, salt, 32)).toString("hex")
 const goodPw = (pw) => typeof pw === "string" && pw.length >= PW_MIN && pw.length <= PW_MAX;
 const DUMMY_SALT = "00000000000000000000000000000000";
 
+const ACTIVITY_MAX = 1000;
+/** add an event to the activity log (never fails the request it belongs to) */
+async function logEvent(store, type, name, detail, now) {
+  const key = "e/" + new Date(now || Date.now()).toISOString() + "/" + type + "/" + hex(name) + "/" + (detail === undefined || detail === "" ? "-" : encodeURIComponent(String(detail))) /* never empty: the store folds "//" */ + "/" + randomBytes(3).toString("hex");
+  try { await store.set(key, ""); } catch { /* ignore */ }
+}
 async function newSession(store, name) {
   const token = randomBytes(24).toString("base64url");
   await store.setJSON(sessionKey(token), { name, createdAt: Date.now() });
@@ -63,6 +74,20 @@ export async function handleAccounts(req, store, opts = {}) {
   const action = path.slice(path.lastIndexOf("/") + 1);
 
   const session = async () => { const token = tokenOf(req); const s = token ? await store.get(sessionKey(token), { type: "json" }) : null; return s && s.name ? s : null; };
+  if (action === "activity") {
+    if (req.method !== "GET") return json(405, { error: "method not allowed" });
+    const secret = (opts.env || process.env).LEADERBOARD_ADMIN_PASSWORD;
+    if (!secret) return json(503, { error: "not configured" });
+    const given = req.headers.get("x-admin-key") || "";
+    if (!timingSafeEqual(sha(given), sha(secret))) { await sleep(failDelay); return json(403, { error: "wrong password" }); }
+    const { blobs } = await store.list();
+    const unhex = (h) => { try { return Buffer.from(h, "hex").toString(); } catch { return "?"; } };
+    const accounts = blobs.filter((b) => b.key.startsWith("u/")).map((b) => unhex(b.key.slice(2))).sort();
+    const events = blobs.filter((b) => b.key.startsWith("e/")).map((b) => b.key.split("/")).filter((p) => p.length >= 5)
+      .map((p) => ({ at: p[1], type: p[2], name: unhex(p[3]), detail: p[4] === "-" ? "" : decodeURIComponent(p[4]) }))
+      .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, ACTIVITY_MAX);
+    return json(200, { accounts, events });
+  }
   if (action === "me") {
     if (req.method !== "GET") return json(405, { error: "method not allowed" });
     const s = await session();
@@ -79,9 +104,11 @@ export async function handleAccounts(req, store, opts = {}) {
       const have = Array.isArray(cur) ? cur : [];
       if (have.includes(body.day)) return { result: { streak: streakOf(have, body.day) } };
       const next = [...have, body.day].sort().slice(-60);
-      return { value: next, result: { streak: streakOf(next, body.day) } };
+      return { value: next, result: { streak: streakOf(next, body.day), first: true } };
     });
-    return r ? json(200, r) : json(409, { error: "busy, try again" });
+    if (!r) return json(409, { error: "busy, try again" });
+    if (r.first) await logEvent(store, "played", s.name, r.streak, now);
+    return json(200, { streak: r.streak });
   }
   if (action === "placed") {
     if (req.method !== "POST") return json(405, { error: "method not allowed" });
@@ -108,6 +135,7 @@ export async function handleAccounts(req, store, opts = {}) {
       const next = { ...have, [body.id]: Date.now() };
       return { value: next, result: { achievements: next, earned: true } };
     });
+    if (r && r.earned) await logEvent(store, "achievement", s.name, body.id);
     return r ? json(200, r) : json(409, { error: "busy, try again" });
   }
   if (req.method !== "POST") return json(405, { error: "method not allowed" });
@@ -128,6 +156,7 @@ export async function handleAccounts(req, store, opts = {}) {
       const salt = randomBytes(16).toString("hex");
       const res = await store.setJSON(userKey(name), { name, salt, hash: await hashPw(body.password, salt), createdAt: Date.now() }, { onlyIfNew: true });
       if (!res.modified) return json(409, { error: "name taken" });
+      await logEvent(store, "signup", name);
       return json(200, { name, token: await newSession(store, name) });
     }
     const user = name ? await store.get(userKey(name), { type: "json" }) : null;
@@ -137,6 +166,7 @@ export async function handleAccounts(req, store, opts = {}) {
       await sleep(failDelay); // slows down guessing
       return json(403, { error: "wrong name or password" });
     }
+    await logEvent(store, "login", user.name);
     return json(200, { name: user.name, token: await newSession(store, user.name) });
   }
 

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Booze Elroy Activity</title>
+<!-- The author's secret page (web edition): who signed up, logged in, earned achievements, played. Opened as
+     /activity.html#<admin password> (the part after # is never sent anywhere but as the key below); the data comes
+     from GET /api/account/activity, which checks LEADERBOARD_ADMIN_PASSWORD. Built from template/activity.html. -->
+<style>
+:root{--bg:#000;--fg:#ffd400;--dim:#a8a8a8;--line:#2121de;--pink:#ffb8ff;--cyan:#00ffff;--white:#dedeff}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 "Courier New",monospace}
+main{max-width:860px;margin:0 auto;padding:20px 16px 40px}
+h1{margin:0 0 4px;font-size:18px;letter-spacing:.15em}
+.sub{color:var(--dim);margin:0 0 18px}
+.box{border:2px solid var(--line);border-radius:6px;padding:14px 16px;margin:0 0 16px}
+.stats{display:flex;flex-wrap:wrap;gap:8px 24px}
+.stats b{display:block;font-size:22px;color:var(--white);font-weight:normal}
+.stats span{color:var(--dim);font-size:13px}
+.accts{display:flex;flex-wrap:wrap;gap:6px 14px}
+button.name{all:unset;cursor:pointer;color:var(--pink)}
+button.name:hover,button.name:focus-visible{text-decoration:underline}
+button.name.on{background:var(--pink);color:#000;padding:0 3px}
+table{width:100%;border-collapse:collapse}
+td{padding:4px 8px 4px 0;vertical-align:top;border-top:1px solid #1a1a3a}
+td.t{color:var(--dim);white-space:nowrap;width:1%}
+td.w{white-space:nowrap;width:1%}
+.k-signup{color:var(--cyan)}.k-achievement{color:var(--fg)}.k-login,.k-played{color:var(--white)}
+.day td{border-top:0;padding-top:14px;color:var(--dim);font-size:13px;letter-spacing:.1em}
+form{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input{padding:6px 8px;background:#111;color:#fff;border:1px solid #555;border-radius:3px;font:inherit}
+form button,.bar button{padding:6px 14px;background:var(--fg);color:#000;border:1px solid var(--fg);border-radius:3px;font:inherit;cursor:pointer}
+.bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+.bar button{background:#111;color:var(--fg)}
+.msg{color:var(--pink);min-height:1.4em}
+[hidden]{display:none!important}
+</style></head><body><main>
+<h1>BOOZE ELROY ACTIVITY</h1>
+<p class="sub">Accounts, logins, achievements and games, newest first. Times are your local time.</p>
+<div id="ask" class="box" hidden>
+  <form id="pw"><label>Password <input type="password" name="pw" autocomplete="current-password"></label><button>Show</button></form>
+  <div class="msg" id="askMsg"></div>
+</div>
+<div id="out" hidden>
+  <div class="box stats" id="stats"></div>
+  <div class="box"><div class="bar"><strong>ACCOUNTS</strong> <span class="sub" id="filterNote" style="margin:0"></span><button id="clear" hidden>Show everyone</button></div><div class="accts" id="accts"></div></div>
+  <div class="box"><div class="bar"><strong>ACTIVITY</strong><button id="reload">Refresh</button></div><table><tbody id="log"></tbody></table></div>
+</div>
+<div class="msg" id="msg"></div>
+</main>
+<script>
+(() => {
+  const ACH = Object.fromEntries(/*ACHIEVEMENTS*/);
+  const $ = (id) => document.getElementById(id);
+  let key = decodeURIComponent(location.hash.slice(1)), data = null, who = null;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const what = (e) => e.type === "signup" ? "created an account" : e.type === "login" ? "logged in"
+    : e.type === "achievement" ? "earned <b>" + esc((ACH[e.detail] || e.detail).toUpperCase()) + "</b>"
+    : e.type === "played" ? "played today" + (Number(e.detail) > 1 ? " (" + Number(e.detail) + " days in a row)" : "") : esc(e.type);
+  const dayOf = (d) => d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  function render() {
+    const ev = data.events.filter((e) => !who || e.name === who), now = Date.now(), day = 864e5;
+    const since = (ms, t) => data.events.filter((e) => (!t || e.type === t) && now - Date.parse(e.at) < ms).length;
+    const active = new Set(data.events.filter((e) => now - Date.parse(e.at) < day).map((e) => e.name)).size;
+    $("stats").innerHTML = [[data.accounts.length, "accounts"], [active, "active today"], [since(day, "signup"), "signups today"],
+      [since(day, "login"), "logins today"], [since(day, "achievement"), "achievements today"], [since(7 * day, "signup"), "signups this week"]]
+      .map(([n, l]) => "<div><b>" + n + "</b><span>" + l + "</span></div>").join("");
+    $("accts").innerHTML = data.accounts.length ? data.accounts.map((n) => '<button class="name' + (n === who ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + "</button>").join("") : '<span class="sub">none yet</span>';
+    $("filterNote").textContent = who ? "showing " + who : "click a name to see just theirs";
+    $("clear").hidden = !who;
+    let html = "", last = "";
+    for (const e of ev) {
+      const d = new Date(e.at), dk = d.toDateString();
+      if (dk !== last) { html += '<tr class="day"><td colspan="3">' + esc(dayOf(d).toUpperCase()) + "</td></tr>"; last = dk; }
+      html += '<tr><td class="t">' + esc(d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })) + '</td><td class="w"><button class="name" data-n="' + esc(e.name) + '">' + esc(e.name) + '</button></td><td class="k-' + esc(e.type) + '">' + what(e) + "</td></tr>";
+    }
+    $("log").innerHTML = html || '<tr><td class="sub">nothing yet</td></tr>';
+  }
+  async function load() {
+    $("msg").textContent = "Loading…";
+    let r = null;
+    try { r = await fetch("/api/account/activity", { headers: { "x-admin-key": key }, cache: "no-store" }); } catch { r = null; }
+    if (r && r.ok) { data = await r.json(); $("msg").textContent = ""; $("ask").hidden = true; $("out").hidden = false; render(); return; }
+    $("msg").textContent = "";
+    $("out").hidden = true; $("ask").hidden = false;
+    $("askMsg").textContent = !key ? "" : !r ? "Can't reach the server." : r.status === 403 ? "Wrong password." : r.status === 503 ? "No admin password is set on the server." : "That didn't work (" + r.status + ").";
+  }
+  $("pw").addEventListener("submit", (e) => { e.preventDefault(); key = e.target.elements.pw.value; history.replaceState(null, "", "#" + encodeURIComponent(key)); load(); });
+  document.addEventListener("click", (e) => { const b = e.target.closest("button.name"); if (b) { who = who === b.dataset.n ? null : b.dataset.n; render(); } });
+  $("clear").addEventListener("click", () => { who = null; render(); });
+  $("reload").addEventListener("click", load);
+  load();
+})();
+</script>
+</body></html>
