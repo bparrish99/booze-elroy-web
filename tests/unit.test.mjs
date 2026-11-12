@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { handle } from "../netlify/lib/scores.mjs";
 import { handleArenas, HOUR, GRACE } from "../netlify/lib/arenas.mjs";
-import { handleAccounts } from "../netlify/lib/accounts.mjs";
+import { handleAccounts, nameChecker } from "../netlify/lib/accounts.mjs";
 import { startBlobs } from "./blobs.mjs";
 
 const require = createRequire(import.meta.url);
@@ -326,6 +326,25 @@ test("accounts: sign up, log in, me, log out", async () => {
   // the password is not stored in the clear
   const { blobs: keys } = await blobs.accountStore.list();
   for (const k of keys) assert.ok(!(await blobs.accountStore.get(k.key)).includes("hunter2") && !k.key.includes("hunter2"));
+});
+
+test("accounts: an account's name goes on the boards only from its own login", async () => {
+  const { token } = (await acct("POST", "signup", { name: "taken name", password: "mine" })).data;
+  const other = (await acct("POST", "signup", { name: "someone else", password: "theirs" })).data.token;
+  const nameCheck = nameChecker(blobs.accountStore);
+  const B = "pac.0.f.f.f.3.2.f.0.4.t.f.f";
+  const post = (name, tok) => handle(new Request("http://x/api/scores", { method: "POST", headers: tok ? { authorization: "Bearer " + tok } : {}, body: JSON.stringify({ board: B, name, score: 100 }) }), blobs.store, { env, nameCheck })
+    .then(async (r) => ({ status: r.status, data: await r.json() }));
+  const no = await post("Taken Name");
+  assert.equal(no.status, 403); assert.equal(no.data.error, "name taken");
+  assert.equal((await post("taken name", other)).status, 403); // someone else's login doesn't do
+  assert.equal((await post("taken name", token)).status, 200);
+  assert.equal((await post("free name")).status, 200); // a name nobody has: anyone
+  // arenas too
+  const a = (await handleArenas(new Request("http://x/api/arenas", { method: "POST", body: JSON.stringify({ name: "name check cup", board: B }) }), blobs.arenaStore, { env, now: () => clock }).then((r) => r.json())).arena;
+  const ascore = (tok) => handleArenas(new Request("http://x/api/arenas/score", { method: "POST", headers: tok ? { authorization: "Bearer " + tok } : {}, body: JSON.stringify({ id: a.id, name: "TAKEN NAME", score: 50 }) }), blobs.arenaStore, { env, now: () => clock, nameCheck }).then((r) => r.status);
+  assert.equal(await ascore(), 403);
+  assert.equal(await ascore(token), 200);
 });
 
 test("accounts: bad names and passwords are refused", async () => {

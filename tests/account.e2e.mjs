@@ -167,7 +167,7 @@ try {
 
   // winning an arena: on top when it closes (and the 15-minute grace is over): chicken dinner, noticed at start-up
   const testArena = await p.evaluate(() => fetch("/api/arenas").then((r) => r.json()).then((d) => d.arenas.find((a) => a.name === "TEST ARENA").id));
-  await p.evaluate((id) => fetch("/api/arenas/score", { method: "POST", body: JSON.stringify({ id, name: "PINBACK", score: 500 }) }), testArena);
+  await p.evaluate((id) => fetch("/api/arenas/score", { method: "POST", headers: { authorization: "Bearer " + JSON.parse(localStorage.getItem("booze-elroy-account")).token }, body: JSON.stringify({ id, name: "PINBACK", score: 500 }) }), testArena); // PINBACK's own login
   clock += 24.5 * 3600 * 1000;
   await p.goto(dev.url + "/"); await p.waitForTimeout(1500);
   check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievement unlocked\nchicken dinner", "won an arena: chicken dinner (at start-up)");
@@ -218,6 +218,20 @@ try {
   await p.keyboard.press("Enter");
   await p.waitForTimeout(200);
   check(await box() === null && await p.evaluate(() => localStorage.getItem("booze-elroy-account")) === null && await p.evaluate(() => window.__core.g.scene.name) === "attract", "Log Out: logged out, back on the title");
+  // logged out, an account's name can't go on a board: name entry says so and starts over
+  await p.evaluate(() => { const c = window.__core; const m = c.attractMenu; m.selectedItem = m.findIndex((i) => i.text === "Play 1P") + 1; });
+  await p.keyboard.press("Enter");
+  await p.waitForFunction(() => window.__core.g.scene.name === "game" && window.__core.g.mode === "normal", null, { timeout: 15000 });
+  await p.evaluate(() => { const c = window.__core; c.g.score = 50000; c.mode.setMode("gameover"); });
+  await p.waitForFunction(() => window.__core.g.scene.name === "nameEntry", null, { timeout: 15000 });
+  await p.evaluate(() => { window.__core.g.scene.entry = "PINBACK"; window.__core.g.scene.submit(); });
+  await p.waitForFunction(() => { const s = window.__core.g.scene; return s.name === "nameEntry" && !s.sending; }, null, { timeout: 8000 });
+  check(await p.evaluate(() => { const s = window.__core.g.scene; return s.message === "that name is taken" && s.entry === ""; }), "logged out: an account's name is refused (\"that name is taken\")");
+  await shot("acc5b-name-taken");
+  await p.evaluate(() => { window.__core.g.scene.entry = "VISITOR"; window.__core.g.scene.submit(); });
+  await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 8000 });
+  check(await p.evaluate(() => window.__core.g.scene.board().entries.some((e) => e.name === "VISITOR")), "another name goes on the board");
+  await p.evaluate(() => window.__core.setScene("attract"));
   await corner();
   await p.fill("#account input[name=name]", "pinback");
   await p.fill("#account input[name=password]", "nope");

@@ -71,6 +71,20 @@ function tokenOf(req) {
   return m ? m[1] : null;
 }
 
+/** may this request put a score under `name`? An account's name only with that account's login (Bearer token);
+ *  any other name, anyone. Used by the leaderboard and arena score endpoints (opts.nameCheck). If the accounts store
+ *  can't be read, the score goes through (a hiccup there shouldn't lose a game). */
+export function nameChecker(store) {
+  return async (req, name) => {
+    try {
+      if (!(await store.get(userKey(name)))) return true;
+      const token = tokenOf(req);
+      const s = token ? await store.get(sessionKey(token), { type: "json" }) : null;
+      return !!(s && s.name === name);
+    } catch { return true; }
+  };
+}
+
 export async function handleAccounts(req, store, opts = {}) {
   const failDelay = opts.failDelay === undefined ? 1000 : opts.failDelay;
   const path = new URL(req.url).pathname.replace(/\/+$/, "");

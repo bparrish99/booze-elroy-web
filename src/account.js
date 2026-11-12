@@ -144,6 +144,7 @@
       online: !!api,
       placedOn, playedOn, arenaPlaced,
       name: () => (me ? me.name : null),
+      auth, // { authorization: "Bearer ..." } logged in, else {}
       signup: (name, password) => enter("signup", name, password),
       login: (name, password) => enter("login", name, password),
       async logout() { if (me) { const t = me; save(null); try { await fetchFn(api + "/logout", { method: "POST", headers: { authorization: "Bearer " + t.token } }); } catch { /* ignore */ } } },

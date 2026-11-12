@@ -6,6 +6,7 @@
 //   POST /api/arenas         { name, board } -> { now, arena }            (409: an open arena has that name)
 //   POST /api/arenas/score   { id, name, score } -> { now, arena, entries, rank, best? }   (410: arena closed)
 //        one entry per name: a better score replaces that name's old one; a worse one gets rank null, best = their score
+//        403 "name taken": the name is an account's and the request isn't logged in as it (opts.nameCheck)
 //   POST /api/arenas/delete  { id, password } -> { deleted: id }          (LEADERBOARD_ADMIN_PASSWORD)
 //
 // Storage: blob "index" lists the arenas (with each one's current leader, for the list page);
@@ -79,6 +80,7 @@ export async function handleArenas(req, store, opts = {}) {
     const a = await find(id);
     if (!a) return json(404, { error: "no such arena" });
     if (now > a.endsAt + GRACE) return json(410, { error: "arena closed", arena: show(a) });
+    if (opts.nameCheck && !(await opts.nameCheck(req, name))) return json(403, { error: "name taken" });
     const r = await addScore(store, entriesKey(id), name, score, true); // one entry per name
     if (!r) return json(409, { error: "busy, try again" });
     let arena = a;

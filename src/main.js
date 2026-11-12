@@ -47,6 +47,7 @@
         // the booze dogs: top 10 on 3 / 5 / 10 / 20 different boards (counted by the server)
         ACC.placedOn(p.key, p.rank, p.score, p.settings).then((n) => { if (n) earned(BoozeAchievements.LIST.filter((a) => a.boards && n >= a.boards).map((a) => a.id)); });
       },
+      auth: () => ACC.auth(), // logged in: score posts carry the login (an account's name is only its owner's)
       playerName: () => ACC.name(), // logged in: a top-10 score goes on the board under the account's name, no name entry
     });
     // player accounts (src/account.js): username + password; the corner where 2UP would be logs in / shows the name

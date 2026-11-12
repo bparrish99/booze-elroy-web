@@ -743,7 +743,7 @@
       sc.menu.forEach((it, i0) => print(it.text, it.x, it.y, sc.menu.selectedItem === i0 + 1 ? 1 : 0));
       if (sc.sending) center("saving", 30, 2);
       else if (sc.mode === "createArena") { if (sc.message) center(sc.message, 30, 1); center("esc to cancel", 32, 2); }
-      else { center("time " + Math.ceil(sc.timer / 60), 30, 0); center("esc to skip", 32, 2); }
+      else { if (sc.message) center(sc.message, 28, 1); center("time " + Math.ceil(sc.timer / 60), 30, 0); center("esc to skip", 32, 2); }
     }
 
     // clickable rows of the current menu, in game pixels (mirrors drawMenu's placement)

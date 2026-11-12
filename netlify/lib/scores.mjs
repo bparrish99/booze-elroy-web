@@ -3,6 +3,7 @@
 //
 //   GET  /api/scores?board=<key>                      -> { board, entries: [{ name, score, at }] }
 //   POST /api/scores        { board, name, score }    -> { board, entries, rank }   (rank null: didn't make the top 10)
+//        403 "name taken": the name is an account's and the request isn't logged in as it (opts.nameCheck)
 //   GET  /api/scores/boards                           -> { boards: [{ board, count, top: { name, score } }] }  (every board with scores)
 //   POST /api/scores/reset  { password, board? }      -> { reset: "all" | <key> }    (needs LEADERBOARD_ADMIN_PASSWORD)
 //
@@ -111,6 +112,7 @@ export async function handle(req, store, opts = {}) {
     if (!isKey(board)) return json(400, { error: "bad board" });
     if (!name) return json(400, { error: "bad name" });
     if (!Number.isInteger(score) || score < 1 || score > MAX_SCORE) return json(400, { error: "bad score" });
+    if (opts.nameCheck && !(await opts.nameCheck(req, name))) return json(403, { error: "name taken" });
     const r = await addScore(store, board, name, score);
     return r ? json(200, { board, ...r }) : json(409, { error: "busy, try again" });
   }

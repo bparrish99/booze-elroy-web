@@ -65,17 +65,20 @@
       inflight.set(key, p);
       return p;
     }
+    // logged in, score posts carry the login (opts.auth): only its owner may use an account's name
+    const headers = () => ({ "content-type": "application/json", ...(opts.auth ? opts.auth() : {}) });
     async function post(path, body) {
-      const r = await fetchFn(api + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const r = await fetchFn(api + path, { method: "POST", headers: headers(), body: JSON.stringify(body) });
       let d = null; try { d = await r.json(); } catch { /* ignore */ }
       return { ok: r.ok, status: r.status, data: d };
     }
     async function post2(url, body) {
-      const r = await fetchFn(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const r = await fetchFn(url, { method: "POST", headers: headers(), body: JSON.stringify(body) });
       let d = null; try { d = await r.json(); } catch { /* ignore */ }
       return { ok: r.ok, status: r.status, data: d };
     }
     const currentKey = () => SK.keyFor(g.config);
+    const taken = (r) => !!(r && r.status === 403 && r.data && r.data.error === "name taken");
 
     // ---------------------------------------------------------------- header high score per configuration
     let lastKey = null, keyChangedAt = 0, lastScene = null;
@@ -522,6 +525,7 @@
         if (this.arenaId) return this.submitArena(name);
         let res = null;
         try { res = await post("", { board: this.key, name, score: this.score }); } catch { res = null; }
+        if (taken(res)) return this.taken(name);
         if (res && res.ok && res.data) {
           boards.set(this.key, { status: "ok", entries: res.data.entries || [], at: performance.now() });
           placed(this.key, res.data.rank, res.data.entries || [], this.score);
@@ -543,12 +547,19 @@
         this.sending = false;
         this.message = res && res.status === 409 && res.data && res.data.error === "name taken" ? "that name is taken" : "could not create arena";
       },
+      // the name is an account's (and this isn't its login): pick another one, with the clock started over
+      taken(name) {
+        this.sending = false; this.message = "that name is taken";
+        if (store.get(NAME, "") === name) store.set(NAME, "");
+        this.entry = ""; this.timer = ENTRY_FRAMES; neMenu.selectedItem = 1;
+      },
       // a game in an arena: the arena board, and the regular board for these settings too
       async submitArena(name) {
         const [ar, gr] = await Promise.all([
           post2(arenaApi + "/score", { id: this.arenaId, name, score: this.score }).catch(() => null),
           post("", { board: this.key, name, score: this.score }).catch(() => null),
         ]);
+        if (taken(ar) || taken(gr)) return this.taken(name);
         if (gr && gr.ok && gr.data) { boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() }); placed(this.key, gr.data.rank, gr.data.entries || [], this.score); }
         const grank = gr && gr.ok && gr.data ? gr.data.rank : null;
         let rank = null, msg;
