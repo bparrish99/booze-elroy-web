@@ -44,7 +44,7 @@
     ...tier(10000, ""),
     ...tier(20000, "2"),
 
-    { id: "arena", name: "welcome to the party", desc: "Finish a game in an arena." },
+    { id: "arena", name: "party animal", desc: "Finish a game in an arena." },
     { id: "planner", name: "party planner", desc: "Create an arena." },
     { id: "dinner", name: "chicken dinner", desc: "Win an arena." },
 

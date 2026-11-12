@@ -161,7 +161,7 @@ try {
   await p.waitForFunction(() => window.__core.g.scene.name === "game" && window.__core.g.mode === "normal", null, { timeout: 15000 });
   await p.evaluate(() => { const c = window.__core; c.g.score = 0; c.mode.setMode("gameover"); });
   await p.waitForFunction(() => window.__core.g.scene.name === "arena", null, { timeout: 15000 });
-  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievement unlocked\nwelcome to the party", "an arena game: welcome to the party");
+  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievement unlocked\nparty animal", "an arena game: party animal");
   await shot("acc5-arena-unlock");
   await p.keyboard.press("Escape"); await p.waitForTimeout(300);
 
