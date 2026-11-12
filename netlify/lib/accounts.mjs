@@ -6,8 +6,10 @@
 //   POST /api/account/logout  (Authorization: Bearer <token>) -> { ok: true }
 //   GET  /api/account/achievements        (Bearer) -> { achievements: { <id>: <ms earned> } }
 //   POST /api/account/achievements { id } (Bearer) -> { achievements, earned: true | false (already had it) }
-//   POST /api/account/placed { board }    (Bearer) -> { count }   a top-10 score on that board: remembered (once per
-//        board, never forgotten even if the score is pushed off later); count = boards placed on so far
+//   POST /api/account/placed { board, rank?, score?, settings? } (Bearer) -> { count }   a top-10 score on that board:
+//        remembered (once per board, never forgotten even if the score is pushed off later); count = boards placed on
+//        so far. With rank and score it's logged too (settings: the client's one-line summary of the board)
+//   POST /api/account/placed { arena, rank, score } (Bearer) -> { ok }   a top-10 score in an arena: only logged
 //   POST /api/account/played { day: "YYYY-MM-DD" } (Bearer) -> { streak }   a real game started on that day (the
 //        player's own calendar day, within a day of the server's); streak = days in a row ending on that day
 //   GET  /api/account/activity  (x-admin-key: LEADERBOARD_ADMIN_PASSWORD) -> { accounts: [names], events: [{ at, type,
@@ -19,7 +21,8 @@
 // (only the token's hash is stored); blob "a/<hex of name>" = { <achievement id>: <ms earned> };
 // blob "b/<hex of name>" = [board keys placed on]; blob "d/<hex of name>" = [days played, "YYYY-MM-DD", the last 60].
 // Activity log: one empty blob per event, everything in its key, "e/<ISO time>/<type>/<hex of name>/<detail>/<rand>"
-// (type: signup | login | achievement (detail: its id) | played (the first game of a day; detail: the streak)), so
+// (type: signup | login | achievement (detail: its id) | played (the first game of a day; detail: the streak) |
+// score (detail: JSON [rank, score, settings]) | arenascore (detail: JSON [rank, score, arena name])), so
 // listing the keys is the whole log, no reads.
 // Sessions don't expire; logging out deletes one. Achievements are trust-the-client, like scores (src/achievements.js
 // lists the ids).
@@ -29,7 +32,7 @@ import scorekey from "../../src/scorekey.js";
 import achievements from "../../src/achievements.js";
 import { json, sleep, readBody, updateJSON, sha } from "./scores.mjs";
 
-const { cleanName, isKey } = scorekey;
+const { cleanName, isKey, MAX_SCORE } = scorekey;
 const scryptP = promisify(scrypt);
 export const PW_MIN = 4, PW_MAX = 128;
 const hex = (name) => Buffer.from(name).toString("hex");
@@ -115,11 +118,20 @@ export async function handleAccounts(req, store, opts = {}) {
     const s = await session();
     if (!s) return json(401, { error: "not logged in" });
     const body = await readBody(req);
-    if (!body || !isKey(body.board)) return json(400, { error: "bad board" });
+    if (!body) return json(400, { error: "bad request" });
+    const scored = Number.isInteger(body.rank) && body.rank >= 1 && body.rank <= 10 && Number.isInteger(body.score) && body.score >= 1 && body.score <= MAX_SCORE;
+    const text = (v, n) => (typeof v === "string" ? v.replace(/[^\x20-\x7e]/g, "").slice(0, n) : "");
+    if (body.arena !== undefined) { // an arena placement: only logged
+      if (!scored || !text(body.arena, 24)) return json(400, { error: "bad arena score" });
+      await logEvent(store, "arenascore", s.name, JSON.stringify([body.rank, body.score, text(body.arena, 24)]));
+      return json(200, { ok: true });
+    }
+    if (!isKey(body.board)) return json(400, { error: "bad board" });
     const r = await updateJSON(store, placedKey(s.name), (cur) => {
       const have = Array.isArray(cur) ? cur : [];
       return have.includes(body.board) ? { result: { count: have.length } } : { value: [...have, body.board], result: { count: have.length + 1 } };
     });
+    if (r && scored) await logEvent(store, "score", s.name, JSON.stringify([body.rank, body.score, text(body.settings, 160) || body.board]));
     return r ? json(200, r) : json(409, { error: "busy, try again" });
   }
   if (action === "achievements") {

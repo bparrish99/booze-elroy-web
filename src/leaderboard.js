@@ -433,9 +433,11 @@
     // grid cells double as a "menu" so the mouse / touch code can hover and click them
 
     let pending = null;
-    // a score placed on a regular board: opts.placed({ key, rank, isDefault, first }) (achievements; first: the board's
-    // first ever score)
-    const placed = (key, rank, entries) => { if (rank && opts.placed) opts.placed({ key, rank, isDefault: key === SK.keyFor(g.defaultConfig), first: rank === 1 && entries.length === 1 }); };
+    // a score placed on a regular board: opts.placed({ key, rank, score, settings, isDefault, first }) (achievements and the
+    // activity log; settings: a one-line summary; first: the board's first ever score)
+    const placed = (key, rank, entries, score) => {
+      if (rank && opts.placed) opts.placed({ key, rank, score, settings: summary(200, SK.configFor(key)).join("  "), isDefault: key === SK.keyFor(g.defaultConfig), first: rank === 1 && entries.length === 1 });
+    };
     const neMenu = [];
     GRID.forEach((row, r) => { for (let c = 0; c < row.length; c++) neMenu.push({ text: row[c], char: row[c], x: GRID_X + c * 2, y: GRID_Y + r * 2 }); });
     for (const s of SPECIALS) neMenu.push({ text: s.text, x: s.x, y: SPECIAL_Y });
@@ -522,7 +524,7 @@
         try { res = await post("", { board: this.key, name, score: this.score }); } catch { res = null; }
         if (res && res.ok && res.data) {
           boards.set(this.key, { status: "ok", entries: res.data.entries || [], at: performance.now() });
-          placed(this.key, res.data.rank, res.data.entries || []);
+          placed(this.key, res.data.rank, res.data.entries || [], this.score);
           core.setScene("leaderboard", { fresh: true, highlight: res.data.rank, message: res.data.rank ? null : "not in the top 10" });
         } else core.setScene("leaderboard", { message: "score could not be saved" });
       },
@@ -547,13 +549,14 @@
           post2(arenaApi + "/score", { id: this.arenaId, name, score: this.score }).catch(() => null),
           post("", { board: this.key, name, score: this.score }).catch(() => null),
         ]);
-        if (gr && gr.ok && gr.data) { boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() }); placed(this.key, gr.data.rank, gr.data.entries || []); }
+        if (gr && gr.ok && gr.data) { boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() }); placed(this.key, gr.data.rank, gr.data.entries || [], this.score); }
         const grank = gr && gr.ok && gr.data ? gr.data.rank : null;
         let rank = null, msg;
         if (ar && ar.ok && ar.data) {
           arenaBoards.set(this.arenaId, { status: "ok", entries: ar.data.entries || [], at: performance.now() });
           if (ar.data.arena) arena = ar.data.arena;
           rank = ar.data.rank;
+          if (rank && opts.arenaPlaced) opts.arenaPlaced({ rank, score: this.score, arena: this.arenaName }); // the activity log
           msg = grank ? "leaderboard rank " + grank : rank ? null : ar.data.best ? "your arena best is " + ar.data.best : "not in the arena top 10";
         } else msg = ar && ar.status === 410 ? "the arena has closed" : "score could not be saved";
         core.setScene("arena", { fresh: !!(ar && ar.ok), highlight: rank, message: msg });

@@ -389,5 +389,12 @@ test("accounts: the activity log (signups, logins, achievements, first game of t
   assert.ok(r.data.accounts.includes("LOGGED ONE"));
   const mine = r.data.events.filter((e) => e.name === "LOGGED ONE").map((e) => e.type + (e.detail ? ":" + e.detail : ""));
   assert.deepEqual(mine.sort(), ["achievement:quarter", "login", "played:1", "signup"]);
+  // top-10 scores: on a board (with the client's summary of it) and in an arena
+  await acct("POST", "placed", { board: BOARD, rank: 3, score: 12340, settings: "default settings" }, a.token);
+  await acct("POST", "placed", { arena: "FRIDAY FIGHT", rank: 1, score: 8200 }, a.token);
+  assert.equal((await acct("POST", "placed", { arena: "X", rank: 11, score: 5 }, a.token)).status, 400);
+  const r2 = await acct("GET", "activity", undefined, null, { "x-admin-key": "correct horse" });
+  const scores = r2.data.events.filter((e) => e.name === "LOGGED ONE" && /score/.test(e.type)).map((e) => [e.type, JSON.parse(e.detail)]);
+  assert.deepEqual(scores.sort(), [["arenascore", [1, 8200, "FRIDAY FIGHT"]], ["score", [3, 12340, "default settings"]]]);
   for (let i = 1; i < r.data.events.length; i++) assert.ok(r.data.events[i - 1].at >= r.data.events[i].at, "newest first");
 });

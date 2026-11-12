@@ -241,7 +241,7 @@ try {
   check(await p.evaluate(() => !document.getElementById("ask").hidden && /Wrong/.test(document.getElementById("askMsg").textContent)), "activity page: a wrong password just asks again");
   await p.goto(dev.url + "/activity.html#dev"); await p.reload(); await p.waitForTimeout(800);
   const log = await p.evaluate(() => document.getElementById("log").textContent);
-  check(/PINBACK\s*created an account/.test(log) && /earned SPENT A QUARTER/.test(log) && /logged in/.test(log) && /played today/.test(log), "activity page: signups, logins, achievements (by name) and games");
+  check(/PINBACK\s*created an account/.test(log) && /earned SPENT A QUARTER/.test(log) && /logged in/.test(log) && /played today/.test(log) && /placed #1 with 31,230 on default settings/.test(log), "activity page: signups, logins, scores, achievements (by name) and games");
   await shot("acc9-activity");
   // auto-refresh: a new signup shows up (lit), and the "updated" line says it's live
   await p.evaluate(() => fetch("/api/account/signup", { method: "POST", body: JSON.stringify({ name: "night owl", password: "hoot" }) }));

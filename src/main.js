@@ -41,10 +41,11 @@
       shareArena: (id) => shareConfig("?arena=" + id), // link straight to an arena's page
       arenaCreated: () => earned(["planner"]),
       arenaWon: () => earned(["dinner"]),
+      arenaPlaced: (p) => ACC.arenaPlaced(p.arena, p.rank, p.score),
       placed: (p) => {
         earned([...(p.rank === 1 && p.isDefault ? ["billy"] : []), ...(p.first ? ["trailblazer"] : [])]);
         // the booze dogs: top 10 on 3 / 5 / 10 / 20 different boards (counted by the server)
-        ACC.placedOn(p.key).then((n) => { if (n) earned(BoozeAchievements.LIST.filter((a) => a.boards && n >= a.boards).map((a) => a.id)); });
+        ACC.placedOn(p.key, p.rank, p.score, p.settings).then((n) => { if (n) earned(BoozeAchievements.LIST.filter((a) => a.boards && n >= a.boards).map((a) => a.id)); });
       },
       playerName: () => ACC.name(), // logged in: a top-10 score goes on the board under the account's name, no name entry
     });

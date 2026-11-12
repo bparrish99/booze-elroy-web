@@ -123,11 +123,14 @@
     };
 
     /** a top-10 score on a regular board -> how many different boards this account has placed on (null: unknown) */
-    async function placedOn(board) {
+    // (rank, score, settings: logged on the author's activity page)
+    async function placedOn(board, rank, score, settings) {
       if (!me) return null;
-      const r = await (saving = saving.then(() => call("placed", { board })));
+      const r = await (saving = saving.then(() => call("placed", { board, rank, score, settings })));
       return r.ok && r.data ? r.data.count : null;
     }
+    /** a top-10 score on an arena board (only logged, for the activity page) */
+    function arenaPlaced(arena, rank, score) { if (me) saving = saving.then(() => call("placed", { arena, rank, score })); }
     /** a real game started on `day` (the player's "YYYY-MM-DD") -> days in a row played (null: unknown); once a day */
     let lastDay = null;
     async function playedOn(day) {
@@ -139,7 +142,7 @@
     }
     const api_ = {
       online: !!api,
-      placedOn, playedOn,
+      placedOn, playedOn, arenaPlaced,
       name: () => (me ? me.name : null),
       signup: (name, password) => enter("signup", name, password),
       login: (name, password) => enter("login", name, password),
