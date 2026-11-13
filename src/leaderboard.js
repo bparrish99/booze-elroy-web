@@ -112,8 +112,10 @@
       if (scene === "leaderboard" && g.scene.key) { refreshHeader(g.scene.key); return; } // the board on show
       const key = currentKey();
       if (key !== lastKey) { lastKey = key; keyChangedAt = performance.now(); }
-      // flicking through Options changes the key a lot: only fetch once it settles
-      if (key && !boards.has(key) && performance.now() - keyChangedAt > 350) load(key);
+      // flicking through Options changes the key a lot: only fetch once it settles. After that load() refetches once its
+      // copy is a minute old, so a tab left on the title picks up a new high score set elsewhere (a hidden tab doesn't
+      // tick, and refreshes as soon as it's back on screen)
+      if (key && performance.now() - keyChangedAt > 350) load(key);
       refreshHeader(key);
     }
 

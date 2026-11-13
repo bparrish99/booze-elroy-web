@@ -26,6 +26,19 @@ try {
   await p.goto(dev.url + "/"); await p.waitForTimeout(1500);
   check(await until("g.highScore === 5000 && g.highScoreName === 'PINBACK'"), "title header shows the online leader for the default settings");
   await shot("1-title");
+  // a new leader set elsewhere: an idle title screen picks it up once its copy is a minute old (clock faked forward)
+  await api("", { board: DEFAULT, name: "newcomer", score: 6000 });
+  await p.waitForTimeout(500);
+  check(await g("g.highScoreName === 'PINBACK'"), "(the title's copy is still the old one for now)");
+  await ev(() => { const real = performance.now.bind(performance); window.__realNow = real; performance.now = () => real() + 61000; });
+  check(await until("g.highScore === 6000 && g.highScoreName === 'NEWCOMER'"), "a minute on, the title refetches: the new leader shows without a reload");
+  await ev(() => { performance.now = window.__realNow; });
+  // put the board back as the rest of this test expects it (only PINBACK 5000)
+  await api("/reset", { password: "pw", board: DEFAULT });
+  await api("", { board: DEFAULT, name: "pinback", score: 5000 });
+  await ev(() => { const real = performance.now.bind(performance); performance.now = () => real() + 122000; });
+  check(await until("g.highScore === 5000 && g.highScoreName === 'PINBACK'"), "(board restored)");
+  await ev(() => { performance.now = window.__realNow; });
   check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Options,Leaderboards", "main menu: Play 1P, Arena, Options, Leaderboards");
   // C cycles CRT (default) -> plain -> ratty old TV (not on the Options page), saved at once
   check(await g("g.config.crtEffect === true"), "CRT is on by default");
