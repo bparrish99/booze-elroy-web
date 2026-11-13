@@ -9,8 +9,9 @@
   else root.BoozeAchievements = factory();
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
-  // points in a mode: [id, name, how (for the description), option, value]; each comes as a 10,000-point one and a
-  // 20,000-point "2" (id + "2", name + " 2"). Earned at game over (main.js) when the option has that value
+  // points in a mode: [id, name, how (for the description), option, value]; each comes as a 10,000-point one, a
+  // 20,000-point "2" and a 30,000-point "3" (id + "2", name + " 2", ...), listed together. Earned at game over
+  // (main.js) when the option has that value
   const MODES = [
     ["haunted", "house of horrors", "in Haunted mode (Blindfold: Haunted)", "afterDark", 4],
     ["terror", "house of terrors", "with Sonar: Terror", "radar", 120], // next to house of horrors (the author's symmetry)
@@ -20,29 +21,38 @@
     ["booze", "best mazes ever", "with the Booze maze pack", "mazepack", "booze"],
     ["seven", "desaturating seven", "with 7 ghosts", "ghostCount", 7],
     ["yolo", "yolo", "with 1 starting life", "startingLives", 1],
+    ["photo", "photographic memory", "with Blindfold: Blackout", "afterDark", 5],
   ];
-  const tier = (points, suffix) => MODES.map(([id, name, how, key, value]) =>
-    ({ id: id + suffix, name: name + (suffix ? " " + suffix : ""), desc: "Score " + points.toLocaleString("en-US") + " points " + how + ".", mode: { key, value }, points }));
+  const TIERS = [[10000, ""], [20000, "2"], [30000, "3"]];
+  const modeTiers = MODES.flatMap(([id, name, how, key, value]) => TIERS.map(([points, suffix]) =>
+    ({ id: id + suffix, name: name + (suffix ? " " + suffix : ""), desc: "Score " + points.toLocaleString("en-US") + " points " + how + ".", mode: { key, value }, points })));
 
-  // in the profile's order, grouped: firsts, scores, points in a mode (10,000, then 20,000), arenas, leaderboards, secrets
+  // Reaching a board (dedication, peer pressure, without a scratch 1-3, pac-man fever) counts only in a game started on
+  // level 1 (the author: a high Starting Level mustn't skip there); main.js checks it, the descriptions say it.
+  // in the profile's order, grouped: firsts, scores, points in a mode (each mode's 10,000 / 20,000 / 30,000 together),
+  // arenas, leaderboards, secrets
   const LIST = [
     { id: "quarter", name: "spent a quarter", desc: "Finish a game." },
     { id: "respects", name: "pay respects", desc: "View the credits." },
     { id: "stylish", name: "stylish", desc: "Finish a game with a background or maze style other than the default." },
     { id: "park", name: "walk in the park", desc: "Start a game with zero ghosts." },
     { id: "kind", name: "be kind", desc: "Use Rewind in a game." },
-    { id: "dedication", name: "dedication", desc: "See the third intermission." },
+    { id: "dedication", name: "dedication", desc: "See the third intermission, in a game started on level 1." },
+    { id: "martini", name: "peer pressure", desc: "Enjoy a delicious martini, in a game started on level 1." }, // the bonus on boards 9 and 10 ("galaxian")
     { id: "streak", name: "one week chip", desc: "Play a game on seven days in a row." },
-    { id: "scratch", name: "without a scratch", desc: "Make it to the first intermission without losing a life." },
-    { id: "scratch2", name: "without a scratch 2", desc: "Make it to the second intermission without losing a life." },
+    { id: "scratch", name: "without a scratch", desc: "Make it to the first intermission without losing a life, in a game started on level 1." },
+    { id: "scratch2", name: "without a scratch 2", desc: "Make it to the second intermission without losing a life, in a game started on level 1." },
+    { id: "scratch3", name: "without a scratch 3", desc: "Make it to the third intermission without losing a life, in a game started on level 1." },
+    // the ninth key: boards 13-21 carry the key (pancakes in Plus Mode); earned past board 21
+    { id: "fever", name: "pac-man fever", desc: "Complete the ninth key, in a game started on level 1." },
 
     { id: "clyde", name: "clyde", desc: "Score 10,000 points in a game.", score: 10000 },
     { id: "inky", name: "inky", desc: "Score 30,000 points in a game.", score: 30000 },
     { id: "pinky", name: "pinky", desc: "Score 60,000 points in a game.", score: 60000 },
     { id: "blinky", name: "blinky", desc: "Score 100,000 points in a game.", score: 100000 },
 
-    ...tier(10000, ""),
-    ...tier(20000, "2"),
+    ...modeTiers,
+    { id: "elephant", name: "elephantine memory", desc: "Complete a large maze with Blindfold: Blackout." }, // the author: right after photographic memory 3
 
     { id: "arena", name: "party animal", desc: "Finish a game in an arena." },
     { id: "planner", name: "party planner", desc: "Create an arena." },

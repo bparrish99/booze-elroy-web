@@ -15,6 +15,9 @@
     try { const v = JSON.parse(storage.getItem(KEY)); if (v && typeof v.name === "string" && typeof v.token === "string") me = v; } catch { /* ignore */ }
     // earned achievements: { status: "none" | "loading" | "ok" | "error", have: { id: ms } }
     let ach = { status: "none", have: {} }, saving = Promise.resolve();
+    // the login check / achievements load under way (ready() waits for it, so nothing already earned pops up again)
+    let pending = null;
+    const track = (p) => { pending = p; p.finally(() => { if (pending === p) pending = null; }); return p; };
     const save = (v) => {
       me = v; ach = { status: "none", have: {} };
       try { if (v) storage.setItem(KEY, JSON.stringify(v)); else storage.removeItem(KEY); } catch { /* ignore */ }
@@ -35,7 +38,8 @@
       if (r.ok && r.data && r.data.token) save({ name: r.data.name, token: r.data.token });
       return r;
     }
-    async function loadAchievements() {
+    function loadAchievements() { return track(loadAchievements_()); }
+    async function loadAchievements_() {
       if (!api || !me) return;
       const was = me;
       ach = { status: "loading", have: ach.have };
@@ -151,19 +155,23 @@
       award,
       scenes: { profile },
       attach(h) { hooks = h; },
+      /** resolves once the earned achievements are known (or couldn't be loaded): award() before that could take an
+       *  old one for new (the arena win checked at start-up, before the list came back) */
+      ready: () => pending || Promise.resolve(),
       /** is the saved login still good? (a 401 logs out; a network failure keeps it). Loads the achievements too. */
-      async verify() {
-        if (!api || !me) return;
-        const was = me;
-        try {
-          const res = await fetchFn(api + "/me", { headers: auth(), cache: "no-store" });
-          if (me !== was) return;
-          if (res.status === 401) { save(null); return; }
-          if (res.ok) { const d = await res.json(); if (d && d.name && d.name !== me.name) { save({ ...me, name: d.name }); return; } }
-          loadAchievements();
-        } catch { /* offline: keep it */ }
-      },
+      verify() { return track(verify_()); },
     };
+    async function verify_() {
+      if (!api || !me) return;
+      const was = me;
+      try {
+        const res = await fetchFn(api + "/me", { headers: auth(), cache: "no-store" });
+        if (me !== was) return;
+        if (res.status === 401) { save(null); return; }
+        if (res.ok) { const d = await res.json(); if (d && d.name && d.name !== me.name) { save({ ...me, name: d.name }); return; } }
+        await loadAchievements_();
+      } catch { /* offline: keep it */ }
+    }
     return api_;
   }
 

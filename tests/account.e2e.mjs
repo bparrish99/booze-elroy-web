@@ -89,10 +89,10 @@ try {
   await p.waitForFunction(() => !window.__core.g.rewinding, null, { timeout: 5000 }); // a rewind restores everything, game over included
   await p.evaluate(() => { const c = window.__core; c.g.score = 10000; c.mode.setMode("gameover"); });
   await p.waitForTimeout(200);
-  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievement unlocked\nbe kind", "play stopped (game over): now the be kind popup");
+  check(await p.evaluate(() => !window.__core.g.toast), "game over, still on the game screen: be kind still held");
   await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 15000 });
-  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nhouse of horrors\nhouse of terrors\nrocketman\ncoke and a smile\nyolo\nclyde",
-    "10,000 in Haunted / Terror / Jetpack / Plus Mode / 1 life: house of horrors, house of terror, rocketman, coke and a smile, yolo (and clyde)");
+  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nbe kind\nhouse of horrors\nhouse of terrors\nrocketman\ncoke and a smile\nyolo\nclyde",
+    "the game over: be kind; 10,000 in Haunted / Terror / Jetpack / Plus Mode / 1 life: house of horrors, house of terror, rocketman, coke and a smile, yolo (and clyde)");
   await shot("acc8-many");
   await p.keyboard.press("Escape"); await p.waitForTimeout(300);
   await p.evaluate(() => { const c = window.__core.g; for (const k of ["afterDark", "radar", "movement", "plusMode", "ability", "startingLives"]) c.config[k] = c.defaultConfig[k]; c.toast = null; });
@@ -104,26 +104,38 @@ try {
   const pg = await popup; if (pg) await pg.close();
   check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\npay respects\ntime to wake up", "credits: pay respects; the marquee link: time to wake up");
   await p.evaluate(() => { window.__core.setScene("attract"); window.__core.g.toast = null; });
-  // starting a game with zero ghosts: walk in the park (at the start)
-  await p.evaluate(() => { const c = window.__core; c.g.config.ghostCount = 0; const m = c.attractMenu; m.selectedItem = m.findIndex((i) => i.text === "Play 1P") + 1; });
+  // a game with zero ghosts, on the large pack with Blindfold: Blackout. Everything earned in it waits for the game to
+  // end (the author: no popups mid-game): walk in the park (at the start), without a scratch, elephantine memory,
+  // peer pressure (the martini), pac-man fever, dedication
+  await p.evaluate(() => { const c = window.__core; Object.assign(c.g.config, { ghostCount: 0, mazepack: "large", afterDark: 5 }); const m = c.attractMenu; m.selectedItem = m.findIndex((i) => i.text === "Play 1P") + 1; });
   await p.keyboard.press("Enter");
   await p.waitForFunction(() => window.__core.g.scene.name === "game", null, { timeout: 15000 });
   await p.waitForTimeout(300);
-  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievement unlocked\nwalk in the park", "a zero-ghost game: walk in the park, as it starts");
-  // past board 2 with every life: without a scratch; then a life lost: no "2" past board 5
+  check(await p.evaluate(() => !window.__core.g.toast), "a zero-ghost game: walk in the park, its popup held");
+  // past board 2 with every life (on a large maze, Blackout): without a scratch, elephantine memory; then a life lost:
+  // no "2" past board 5
   await p.waitForFunction(() => window.__core.g.mode === "normal", null, { timeout: 15000 });
+  check(await p.evaluate(() => { const m = window.__core.getCurrentMaze(); return m.w > 28 || m.h > 31; }), "(playing a large maze: " + await p.evaluate(() => window.__core.g.currentMaze) + ")");
   await p.evaluate(() => { const g = window.__core.g; g.toast = null; g.levelNumber = 3; });
   await p.waitForTimeout(200);
-  check(await p.evaluate(() => !window.__core.g.toast), "past board 2 without losing a life: without a scratch, its popup held while play goes on");
+  check(await p.evaluate(() => !window.__core.g.toast), "past board 2 without losing a life: without a scratch, held while play goes on");
+  await p.evaluate(() => { const c = window.__core, g = c.g; g.level = { ...g.level, fruit: c.fruits.galaxian }; g.fruitScoreTimer = 120; }); // the martini eaten
+  await p.waitForTimeout(200);
   await p.evaluate(() => { const g = window.__core.g; g.toast = null; g.lives -= 1; });
   await p.waitForTimeout(100);
   await p.evaluate(() => { window.__core.g.levelNumber = 6; });
   await p.waitForTimeout(200);
-  check(await p.evaluate(() => !window.__core.g.toast), "a life lost: no without a scratch 2 past board 5");
+  await p.evaluate(() => { window.__core.g.levelNumber = 22; }); // past the ninth key (board 21), from board 1: pac-man fever
+  await p.waitForTimeout(200);
   await p.evaluate(() => window.__core.mode.setMode("intermission3"));
   await p.waitForTimeout(300);
-  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\ndedication\nwithout a scratch", "intermission 3 in a game: dedication; play stopped, so the held without a scratch shows too");
+  check(await p.evaluate(() => !window.__core.g.toast), "intermission 3: dedication, still held (the game isn't over)");
   await p.keyboard.press("Escape");
+  await p.waitForFunction(() => window.__core.g.scene.name === "attract", null, { timeout: 15000 });
+  await p.waitForTimeout(200);
+  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nwalk in the park\nwithout a scratch\nelephantine memory\npeer pressure\npac-man fever\ndedication",
+    "leaving the game: all of them in one popup (no without a scratch 2 after the life lost): " + JSON.stringify(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text)));
+  await p.evaluate(() => { const c = window.__core.g; for (const k of ["mazepack", "afterDark"]) c.config[k] = c.defaultConfig[k]; });
   await p.waitForFunction(() => window.__core.g.scene.name === "attract", null, { timeout: 15000 });
   await p.evaluate(() => { const c = window.__core.g; c.config.ghostCount = c.defaultConfig.ghostCount; c.toast = null; });
   await p.waitForTimeout(500);
@@ -179,11 +191,12 @@ try {
   await corner();
   check(await p.evaluate(() => window.__core.g.scene.name) === "profile", "clicking the name opens the profile");
   await p.reload(); await p.waitForTimeout(1500); // a fresh page loads the achievements from the server
+  check(await p.evaluate(() => !window.__core.g.toast), "reloading: no chicken dinner again (wins are checked only once the earned list is in)");
   await p.evaluate(() => { window.__core.g.config.crtEffect = false; window.dispatchEvent(new Event("resize")); });
   await p.waitForTimeout(300);
   await corner();
   await p.waitForTimeout(500);
-  check(await p.evaluate(() => window.__core.g.scene.achievements().filter((a) => a.earned > 0).length) === 21, "the profile shows the twenty-one earned so far (booze pug: three boards)");
+  check(await p.evaluate(() => window.__core.g.scene.achievements().filter((a) => a.earned > 0).length) === 24, "the profile shows the twenty-four earned so far (booze pug: three boards)");
   { // hovering an achievement's name: its description in a popup; off it, gone
     const r = await p.evaluate(() => { const c = document.getElementById("screen").getBoundingClientRect(); return { x: c.left, y: c.top, w: c.width, h: c.height }; });
     await p.mouse.move(r.x + (3 * 8 + 20) / 224 * r.w, r.y + (8 * 8 + 4) / 288 * r.h);
@@ -205,7 +218,7 @@ try {
       sc.page = 0; return out.map((pg) => pg.map((a) => ({ name: a.name, y: a.y, earned: !!a.earned })));
     });
     const all = pages.flat();
-    check(all.length === 40 && all.every((a) => a.y >= 8 && a.y + (a.earned ? 1 : 0) <= 29), "every achievement fits on a page (" + pages.length + " page(s))");
+    check(all.length === 55 && all.every((a) => a.y >= 8 && a.y + (a.earned ? 1 : 0) <= 29), "every achievement fits on a page (" + pages.length + " page(s))");
     if (pages.length > 1) {
       await p.keyboard.press("ArrowRight");
       check(await p.evaluate(() => window.__core.g.scene.page) === 1, "right: the next page");

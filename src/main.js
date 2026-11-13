@@ -203,10 +203,16 @@
     const toast = (text, ms) => { core.g.toast = { text, until: performance.now() + (ms || 2500) }; }; // "\n" for a second line
     ACC.attach({ wakka: () => LB.wakka(), setScene: (n, o) => core.setScene(n, o), toast });
     // achievements just earned share one popup (a game over and the board it lands on add up while it's showing).
-    // Earned during live play (a real game in mode "normal"): saved at once, the popup held until play stops
-    let unlocked = [], lastScene = null, held = [], run = null;
-    const livePlay = () => core.g.scene.name === "game" && core.g.mode === "normal" && !core.g.attract && !core.g.autoplay;
+    // Earned during a real game (any mode: playing, rewinding, dying, an intermission, game over): saved at once, the
+    // popup held until the game is over or left (the author: never on screen mid-game).
+    // Nothing is awarded before the account's earned list is known (ACC.ready), so an old one never pops up again.
+    let unlocked = [], lastScene = null, held = [], run = null, fruitShown = false;
+    const livePlay = () => core.g.scene.name === "game" && !core.g.attract && !core.g.autoplay;
     function earned(ids) {
+      if (!ids.length) return;
+      ACC.ready().then(() => earned_(ids));
+    }
+    function earned_(ids) {
       const got = ids.map((id) => ACC.award(id)).filter(Boolean);
       if (!got.length) return;
       if (livePlay()) { held.push(...got); return; }
@@ -626,20 +632,34 @@
       // credits; intermission 3 (Mina's film) in a real game
       { const g = core.g, sn = g.scene.name, real = sn === "game" && !g.attract && !g.autoplay;
         if (real && lastScene !== "game" && g.config.ghostCount === 0) earned(["park"]);
-        // without a scratch (2): past board 2 (the first intermission) / board 5 (the second) with no life lost, in a game
-        // that started before it. By board, so Pro Mode (no intermissions) counts too
-        if (real && lastScene !== "game") run = { start: g.levelNumber, lives: null, scratched: false };
+        // without a scratch (2, 3): past board 2 / 5 / 9 (where the intermissions come) with no life lost. By board, so
+        // Pro Mode (no intermissions) counts too. These, pac-man fever, peer pressure and dedication: games started on
+        // level 1 only (run.start)
+        if (real && lastScene !== "game") run = { start: g.levelNumber, lives: null, scratched: false, level: g.levelNumber, maze: g.currentMaze };
         if (real && run) {
           if (run.lives === null) { if (g.mode === "normal") run.lives = g.lives; } // the lives on hand once play starts
           else { if (g.lives < run.lives) run.scratched = true; run.lives = g.lives; }
-          if (!run.scratched && run.lives !== null) earned([...(run.start <= 2 && g.levelNumber > 2 ? ["scratch"] : []), ...(run.start <= 5 && g.levelNumber > 5 ? ["scratch2"] : [])]);
+          if (run.start === 1 && !run.scratched && run.lives !== null) earned([[2, "scratch"], [5, "scratch2"], [9, "scratch3"]].filter(([b]) => g.levelNumber > b).map(([, id]) => id));
+          if (run.start === 1 && g.levelNumber > 21) earned(["fever"]); // pac-man fever: past the ninth key board (21)
+          // elephantine memory: a large maze (bigger than the arcade's 28x31: the Jr. mazes, large1) completed on
+          // Blindfold: Blackout; noticed as the next board starts, from the maze the last one was played on
+          if (g.levelNumber > run.level) {
+            const m = core.maze.getMaze(run.maze);
+            if (g.config.afterDark === 5 && m && (m.w > 28 || m.h > 31)) earned(["elephant"]);
+            run.level = g.levelNumber;
+          }
+          run.maze = g.currentMaze;
         }
+        // peer pressure: the martini (the bonus on boards 9 and 10, "galaxian" in the data) eaten in a real game
+        const fruitNow = real && !!g.fruitScoreTimer;
+        if (fruitNow && !fruitShown && run && run.start === 1 && g.level && g.level.fruit && g.level.fruit.name === "galaxian") earned(["martini"]);
+        fruitShown = fruitNow;
         if (real && lastScene !== "game") { // one day at a time: a game on 7 days in a row (the player's own calendar)
           const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
           ACC.playedOn(d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate())).then((n) => { if (n >= 7) earned(["streak"]); });
         }
         if (sn === "credits" && lastScene !== "credits") earned(["respects"]);
-        if (real && g.mode === "intermission3") earned(["dedication"]);
+        if (real && g.mode === "intermission3" && run && run.start === 1) earned(["dedication"]);
         if (held.length && !livePlay()) { const h = held; held = []; showUnlocked(h); }
         lastScene = sn; }
       if (core.g.scene.name !== "profile") hideTip();

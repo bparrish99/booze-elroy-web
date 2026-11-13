@@ -96,11 +96,12 @@ test("share codes: links shared before Rewind existed still mean the same settin
 
 test("achievements: the list the server checks ids against", () => {
   const ACH = require("../src/achievements.js");
-  const MODES = ["haunted", "terror", "afterdark", "rocketman", "coke", "booze", "seven", "yolo"];
-  assert.deepEqual(ACH.LIST.map((a) => a.id), ["quarter", "respects", "stylish", "park", "kind", "dedication", "streak", "scratch", "scratch2", "clyde", "inky", "pinky", "blinky",
-    ...MODES, ...MODES.map((m) => m + "2"), "arena", "planner", "dinner", "trailblazer", "billy", "pug", "beagle", "boxer", "hound", "wake", "neil"]);
+  const MODES = ["haunted", "terror", "afterdark", "rocketman", "coke", "booze", "seven", "yolo", "photo"];
+  assert.deepEqual(ACH.LIST.map((a) => a.id), ["quarter", "respects", "stylish", "park", "kind", "dedication", "martini", "streak", "scratch", "scratch2", "scratch3", "fever", "clyde", "inky", "pinky", "blinky",
+    ...MODES.flatMap((m) => [m, m + "2", m + "3"]), "elephant", "arena", "planner", "dinner", "trailblazer", "billy", "pug", "beagle", "boxer", "hound", "wake", "neil"]);
   assert.equal(ACH.byId("yolo2").name, "yolo 2");
   assert.equal(ACH.byId("seven2").desc, "Score 20,000 points with 7 ghosts.");
+  assert.equal(ACH.byId("photo3").desc, "Score 30,000 points with Blindfold: Blackout.");
   assert.deepEqual(ACH.byId("coke").mode, { key: "plusMode", value: true });
   assert.equal(new Set(ACH.LIST.map((a) => a.id)).size, ACH.LIST.length);
   const font = "abcdefghijklmnopqrstuvwxyz0123456789!-/ ";
