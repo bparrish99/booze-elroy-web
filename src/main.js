@@ -568,7 +568,14 @@
       win.focus();
       setPoppedOut(win);
     }
-    if (window.name !== POP_NAME && matchMedia("(hover: hover) and (pointer: fine)").matches) {
+    // in the pop-out itself the controls would cover the picture (the window is sized tight round it): hidden, and
+    // faded in while the mouse is near the top (or over one of them, e.g. the volume slider hanging below)
+    if (window.name === POP_NAME) {
+      document.body.classList.add("popout");
+      const CTL = "#vol,#look,#fs,#esc", show = (on) => document.body.classList.toggle("showctl", on);
+      window.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") show(e.clientY < 70 || !!(e.target.closest && e.target.closest(CTL))); });
+      document.documentElement.addEventListener("pointerleave", () => show(false));
+    } else if (matchMedia("(hover: hover) and (pointer: fine)").matches) {
       popBtn.classList.add("on");
       popBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
       popBtn.addEventListener("click", (e) => { e.preventDefault(); popOut(); popBtn.blur(); });

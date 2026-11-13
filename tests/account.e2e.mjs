@@ -284,6 +284,11 @@ try {
     const q = await popP; q.on("pageerror", (e) => errs.push("pop-out: " + e.message));
     await q.waitForFunction(() => window.__core && window.__core.g && window.__core.g.scene && window.__core.g.scene.name === "attract", null, { timeout: 15000 });
     check(await q.evaluate(() => window.name === "booze-elroy-popout" && getComputedStyle(document.getElementById("pop")).display === "none"), "Pop out opens the game in its own window (without the button)");
+    await q.mouse.move(200, 400); await q.waitForTimeout(400);
+    const lookOpacity = () => q.evaluate(() => getComputedStyle(document.getElementById("look")).opacity);
+    const hidden = await lookOpacity();
+    await q.mouse.move(60, 30); await q.waitForTimeout(400);
+    check(hidden === "0" && await lookOpacity() !== "0", "in the pop-out the controls stay hidden until the mouse comes near the top");
     await p.evaluate(() => window.__core.setScene("attract"));
     const sel = await p.evaluate(() => window.__core.attractMenu.selectedItem);
     await p.keyboard.press("ArrowDown"); await p.waitForTimeout(200);
