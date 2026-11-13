@@ -394,21 +394,21 @@ test("accounts: achievements are earned once, per account, known ids only", asyn
   assert.equal((await acct("GET", "achievements")).status, 401);
 });
 
-test("accounts: the activity log (signups, logins, achievements, first game of the day), behind the admin password", async () => {
+test("accounts: the activity log (signups, logins, achievements, every game with its settings), behind the admin password", async () => {
   const { data: a } = await acct("POST", "signup", { name: "logged one", password: "pw12" });
   await acct("POST", "login", { name: "logged one", password: "pw12" });
   await acct("POST", "achievements", { id: "quarter" }, a.token);
   await acct("POST", "achievements", { id: "quarter" }, a.token); // already had it: not logged again
   const today = new Date().toISOString().slice(0, 10);
-  await acct("POST", "played", { day: today }, a.token);
-  await acct("POST", "played", { day: today }, a.token); // the same day: logged once
+  await acct("POST", "played", { day: today, settings: "ghosts 2  blindfold maze/dots", arena: "" }, a.token);
+  await acct("POST", "played", { day: today, settings: "default settings", arena: "FRIDAY FIGHT" }, a.token); // every game, the streak only on the first of the day
   assert.equal((await acct("GET", "activity")).status, 403);
   assert.equal((await acct("GET", "activity", undefined, null, { "x-admin-key": "nope" })).status, 403);
   const r = await acct("GET", "activity", undefined, null, { "x-admin-key": "correct horse" });
   assert.equal(r.status, 200);
   assert.ok(r.data.accounts.includes("LOGGED ONE"));
   const mine = r.data.events.filter((e) => e.name === "LOGGED ONE").map((e) => e.type + (e.detail ? ":" + e.detail : ""));
-  assert.deepEqual(mine.sort(), ["achievement:quarter", "login", "played:1", "signup"]);
+  assert.deepEqual(mine.sort(), ["achievement:quarter", 'game:["default settings",0,"FRIDAY FIGHT"]', 'game:["ghosts 2  blindfold maze/dots",1,""]', "login", "signup"]);
   // top-10 scores: on a board (with the client's summary of it) and in an arena
   await acct("POST", "placed", { board: BOARD, rank: 3, score: 12340, settings: "default settings" }, a.token);
   await acct("POST", "placed", { arena: "FRIDAY FIGHT", rank: 1, score: 8200 }, a.token);

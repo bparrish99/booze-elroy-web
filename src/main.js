@@ -654,9 +654,12 @@
         const fruitNow = real && !!g.fruitScoreTimer;
         if (fruitNow && !fruitShown && run && run.start === 1 && g.level && g.level.fruit && g.level.fruit.name === "galaxian") earned(["martini"]);
         fruitShown = fruitNow;
-        if (real && lastScene !== "game") { // one day at a time: a game on 7 days in a row (the player's own calendar)
+        if (real && lastScene !== "game") { // one week chip: a game on 7 days in a row (the player's own calendar); every
+          // game is logged for the activity page, with its settings (and starting level when it isn't 1) and arena
           const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
-          ACC.playedOn(d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate())).then((n) => { if (n >= 7) earned(["streak"]); });
+          const settings = LB.summary(200).join("  ") + (g.config.startingLevel > 1 ? "  starting level " + g.config.startingLevel : "");
+          const ar = LB.inArena() && LB.currentArena();
+          ACC.playedOn(d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()), settings, ar ? ar.name : null).then((n) => { if (n >= 7) earned(["streak"]); });
         }
         if (sn === "credits" && lastScene !== "credits") earned(["respects"]);
         if (real && g.mode === "intermission3" && run && run.start === 1) earned(["dedication"]);

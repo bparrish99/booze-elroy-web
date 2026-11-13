@@ -10,8 +10,9 @@
 //        remembered (once per board, never forgotten even if the score is pushed off later); count = boards placed on
 //        so far. With rank and score it's logged too (settings: the client's one-line summary of the board)
 //   POST /api/account/placed { arena, rank, score } (Bearer) -> { ok }   a top-10 score in an arena: only logged
-//   POST /api/account/played { day: "YYYY-MM-DD" } (Bearer) -> { streak }   a real game started on that day (the
-//        player's own calendar day, within a day of the server's); streak = days in a row ending on that day
+//   POST /api/account/played { day: "YYYY-MM-DD", settings?, arena? } (Bearer) -> { streak }   a real game started on
+//        that day (the player's own calendar day, within a day of the server's); streak = days in a row ending on that
+//        day. Every one is logged (settings: the client's one-line summary; arena: its name when it's an arena game)
 //   GET  /api/account/activity  (x-admin-key: LEADERBOARD_ADMIN_PASSWORD) -> { accounts: [names], events: [{ at, type,
 //        name, detail }] newest first, the last 1000 }   the author's secret page (public/activity.html)
 //
@@ -21,7 +22,8 @@
 // (only the token's hash is stored); blob "a/<hex of name>" = { <achievement id>: <ms earned> };
 // blob "b/<hex of name>" = [board keys placed on]; blob "d/<hex of name>" = [days played, "YYYY-MM-DD", the last 60].
 // Activity log: one empty blob per event, everything in its key, "e/<ISO time>/<type>/<hex of name>/<detail>/<rand>"
-// (type: signup | login | achievement (detail: its id) | played (the first game of a day; detail: the streak) |
+// (type: signup | login | achievement (detail: its id) | game (every game started; detail: JSON [settings, streak on
+// the first game of a day else 0, arena name or ""]) | played (before 2026-11-12: the first game of a day; detail: the streak) |
 // score (detail: JSON [rank, score, settings]) | arenascore (detail: JSON [rank, score, arena name])), so
 // listing the keys is the whole log, no reads.
 // Sessions don't expire; logging out deletes one. Achievements are trust-the-client, like scores (src/achievements.js
@@ -124,7 +126,8 @@ export async function handleAccounts(req, store, opts = {}) {
       return { value: next, result: { streak: streakOf(next, body.day), first: true } };
     });
     if (!r) return json(409, { error: "busy, try again" });
-    if (r.first) await logEvent(store, "played", s.name, r.streak, now);
+    const text = (v) => (typeof v === "string" ? v.slice(0, 160) : "");
+    await logEvent(store, "game", s.name, JSON.stringify([text(body.settings), r.first ? r.streak : 0, text(body.arena)]), now);
     return json(200, { streak: r.streak });
   }
   if (action === "placed") {

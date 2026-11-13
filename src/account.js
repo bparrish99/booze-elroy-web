@@ -135,14 +135,12 @@
     }
     /** a top-10 score on an arena board (only logged, for the activity page) */
     function arenaPlaced(arena, rank, score) { if (me) saving = saving.then(() => call("placed", { arena, rank, score })); }
-    /** a real game started on `day` (the player's "YYYY-MM-DD") -> days in a row played (null: unknown); once a day */
-    let lastDay = null;
-    async function playedOn(day) {
-      if (!me || lastDay === me.name + day) return null;
-      lastDay = me.name + day;
-      const r = await (saving = saving.then(() => call("played", { day })));
-      if (!(r.ok && r.data)) { lastDay = null; return null; }
-      return r.data.streak;
+    /** a real game started on `day` (the player's "YYYY-MM-DD"), with these settings (a one-line summary) and in this
+     *  arena (its name, or null) -> days in a row played (null: unknown). Every game (the activity page logs them) */
+    async function playedOn(day, settings, arena) {
+      if (!me) return null;
+      const r = await (saving = saving.then(() => call("played", { day, settings, arena: arena || "" })));
+      return r.ok && r.data ? r.data.streak : null;
     }
     const api_ = {
       online: !!api,
