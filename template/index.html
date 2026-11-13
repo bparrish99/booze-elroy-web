@@ -15,9 +15,8 @@ html,body{overscroll-behavior:none;margin:0;height:100%;background:#000;color:#f
 #pop.on{display:block}
 #pop svg{display:block;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #pop:hover,#pop:focus-visible{opacity:.9}
-/* in the pop-out window the controls would sit on the picture: hidden until the mouse comes near the top */
-#vol,#look,#fs,#esc{transition:opacity .25s}
-body.popout:not(.showctl) #vol,body.popout:not(.showctl) #look,body.popout:not(.showctl) #fs,body.popout:not(.showctl) #esc{opacity:0!important;pointer-events:none}
+/* in the pop-out window the controls would sit on the picture: none there (keys: C, F, Esc, M in a game) */
+body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none!important}
 #popped{display:none;position:absolute;inset:0;z-index:7;align-items:center;justify-content:center;background:rgba(0,0,0,.82)}
 #popped.on{display:flex}
 #popped .box{text-align:center}
