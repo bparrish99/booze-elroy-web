@@ -10,7 +10,8 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   // points in a mode: [id, name, how (for the description), option, value]; each comes as a 10,000-point one, a
-  // 20,000-point "2" and a 30,000-point "3" (id + "2", name + " 2", ...), listed together. Earned at game over
+  // 20,000-point "2" and a 30,000-point "3" (ids: id, id + "2", id + "3"; names: name + " 1", " 2", " 3"; the
+  // author: "This isn't the Godfather", so the first one is "1" too), listed together. Earned at game over
   // (main.js) when the option has that value
   const MODES = [
     ["haunted", "house of horrors", "in Haunted mode (Blindfold: Haunted)", "afterDark", 4],
@@ -25,9 +26,9 @@
   ];
   const TIERS = [[10000, ""], [20000, "2"], [30000, "3"]];
   const modeTiers = MODES.flatMap(([id, name, how, key, value]) => TIERS.map(([points, suffix]) =>
-    ({ id: id + suffix, name: name + (suffix ? " " + suffix : ""), desc: "Score " + points.toLocaleString("en-US") + " points " + how + ".", mode: { key, value }, points })));
+    ({ id: id + suffix, name: name + " " + (suffix || "1"), desc: "Score " + points.toLocaleString("en-US") + " points " + how + ".", mode: { key, value }, points })));
 
-  // Reaching a board (dedication, peer pressure, without a scratch 1-3, pac-man fever) counts only in a game started on
+  // Reaching a board (peer pressure, without a scratch 1-3, pac-man fever) counts only in a game started on
   // level 1 (the author: a high Starting Level mustn't skip there); main.js checks it, the descriptions say it.
   // in the profile's order, grouped: firsts, scores, points in a mode (each mode's 10,000 / 20,000 / 30,000 together),
   // arenas, leaderboards, secrets
@@ -37,10 +38,10 @@
     { id: "stylish", name: "stylish", desc: "Finish a game with a background or maze style other than the default." },
     { id: "park", name: "walk in the park", desc: "Start a game with zero ghosts." },
     { id: "kind", name: "be kind", desc: "Use Rewind in a game." },
-    { id: "dedication", name: "dedication", desc: "See the third intermission, in a game started on level 1." },
+    { id: "dedication", name: "dedication", desc: "See the third intermission." },
     { id: "martini", name: "peer pressure", desc: "Enjoy a delicious martini, in a game started on level 1." }, // the bonus on boards 9 and 10 ("galaxian")
     { id: "streak", name: "one week chip", desc: "Play a game on seven days in a row." },
-    { id: "scratch", name: "without a scratch", desc: "Make it to the first intermission without losing a life, in a game started on level 1." },
+    { id: "scratch", name: "without a scratch 1", desc: "Make it to the first intermission without losing a life, in a game started on level 1." },
     { id: "scratch2", name: "without a scratch 2", desc: "Make it to the second intermission without losing a life, in a game started on level 1." },
     { id: "scratch3", name: "without a scratch 3", desc: "Make it to the third intermission without losing a life, in a game started on level 1." },
     // the ninth key: boards 13-21 carry the key (pancakes in Plus Mode); earned past board 21

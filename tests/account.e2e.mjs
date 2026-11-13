@@ -91,7 +91,7 @@ try {
   await p.waitForTimeout(200);
   check(await p.evaluate(() => !window.__core.g.toast), "game over, still on the game screen: be kind still held");
   await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 15000 });
-  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nbe kind\nhouse of horrors\nhouse of terrors\nrocketman\ncoke and a smile\nyolo\nclyde",
+  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nbe kind\nhouse of horrors 1\nhouse of terrors 1\nrocketman 1\ncoke and a smile 1\nyolo 1\nclyde",
     "the game over: be kind; 10,000 in Haunted / Terror / Jetpack / Plus Mode / 1 life: house of horrors, house of terror, rocketman, coke and a smile, yolo (and clyde)");
   await shot("acc8-many");
   await p.keyboard.press("Escape"); await p.waitForTimeout(300);
@@ -104,9 +104,19 @@ try {
   const pg = await popup; if (pg) await pg.close();
   check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\npay respects\ntime to wake up", "credits: pay respects; the marquee link: time to wake up");
   await p.evaluate(() => { window.__core.setScene("attract"); window.__core.g.toast = null; });
+  // the "mina" cheat: dedication too (the author: however people get to see her), its popup only after the film
+  await p.keyboard.type("mina");
+  await p.waitForFunction(() => window.__core.g.scene.name === "mina", null, { timeout: 5000 });
+  await p.waitForTimeout(300);
+  check(await p.evaluate(() => !window.__core.g.toast), "the mina cheat: no popup over the film");
+  await p.keyboard.press("Escape");
+  await p.waitForFunction(() => window.__core.g.scene.name !== "mina", null, { timeout: 5000 });
+  await p.waitForTimeout(200);
+  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievement unlocked\ndedication", "after the film: dedication");
+  await p.evaluate(() => { window.__core.setScene("attract"); window.__core.g.toast = null; });
   // a game with zero ghosts, on the large pack with Blindfold: Blackout. Everything earned in it waits for the game to
   // end (the author: no popups mid-game): walk in the park (at the start), without a scratch, elephantine memory,
-  // peer pressure (the martini), pac-man fever, dedication
+  // peer pressure (the martini), pac-man fever (dedication was earned already, from the cheat)
   await p.evaluate(() => { const c = window.__core; Object.assign(c.g.config, { ghostCount: 0, mazepack: "large", afterDark: 5 }); const m = c.attractMenu; m.selectedItem = m.findIndex((i) => i.text === "Play 1P") + 1; });
   await p.keyboard.press("Enter");
   await p.waitForFunction(() => window.__core.g.scene.name === "game", null, { timeout: 15000 });
@@ -129,11 +139,11 @@ try {
   await p.waitForTimeout(200);
   await p.evaluate(() => window.__core.mode.setMode("intermission3"));
   await p.waitForTimeout(300);
-  check(await p.evaluate(() => !window.__core.g.toast), "intermission 3: dedication, still held (the game isn't over)");
+  check(await p.evaluate(() => !window.__core.g.toast), "intermission 3: nothing on screen (the game isn't over)");
   await p.keyboard.press("Escape");
   await p.waitForFunction(() => window.__core.g.scene.name === "attract", null, { timeout: 15000 });
   await p.waitForTimeout(200);
-  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nwalk in the park\nwithout a scratch\nelephantine memory\npeer pressure\npac-man fever\ndedication",
+  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nwalk in the park\nwithout a scratch 1\nelephantine memory\npeer pressure\npac-man fever",
     "leaving the game: all of them in one popup (no without a scratch 2 after the life lost): " + JSON.stringify(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text)));
   await p.evaluate(() => { const c = window.__core.g; for (const k of ["mazepack", "afterDark"]) c.config[k] = c.defaultConfig[k]; });
   await p.waitForFunction(() => window.__core.g.scene.name === "attract", null, { timeout: 15000 });
@@ -259,6 +269,21 @@ try {
   // typing in the dialog never reaches the game (no cheat codes, no menu moves)
   check(await p.evaluate(() => window.__core.g.scene.name) === "attract", "still on the title screen");
 
+  // the pop-out window: the game in a window of its own (no pop-out button there); this tab stands still under a cover,
+  // ignores keys, and picks up again when that window closes
+  {
+    const popP = ctx.waitForEvent("page");
+    await p.click("#pop");
+    const q = await popP; q.on("pageerror", (e) => errs.push("pop-out: " + e.message));
+    await q.waitForFunction(() => window.__core && window.__core.g && window.__core.g.scene && window.__core.g.scene.name === "attract", null, { timeout: 15000 });
+    check(await q.evaluate(() => window.name === "booze-elroy-popout" && getComputedStyle(document.getElementById("pop")).display === "none"), "Pop out opens the game in its own window (without the button)");
+    await p.evaluate(() => window.__core.setScene("attract"));
+    const sel = await p.evaluate(() => window.__core.attractMenu.selectedItem);
+    await p.keyboard.press("ArrowDown"); await p.waitForTimeout(200);
+    check(await p.evaluate((s0) => document.getElementById("popped").classList.contains("on") && window.__core.attractMenu.selectedItem === s0, sel), "this tab: covered, keys ignored");
+    await q.close(); await p.waitForTimeout(900);
+    check(await p.evaluate(() => !document.getElementById("popped").classList.contains("on")), "closing the pop-out: this tab plays again");
+  }
   // a token the server doesn't know logs out at start-up
   await p.evaluate(() => localStorage.setItem("booze-elroy-account", JSON.stringify({ name: "GHOST", token: "x".repeat(32) })));
   await p.reload(); await p.waitForTimeout(1500);

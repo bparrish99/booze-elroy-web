@@ -207,7 +207,8 @@
     // popup held until the game is over or left (the author: never on screen mid-game).
     // Nothing is awarded before the account's earned list is known (ACC.ready), so an old one never pops up again.
     let unlocked = [], lastScene = null, held = [], run = null, fruitShown = false;
-    const livePlay = () => core.g.scene.name === "game" && !core.g.attract && !core.g.autoplay;
+    // (and never over Mina's film: the "mina" scene holds them too)
+    const livePlay = () => (core.g.scene.name === "game" && !core.g.attract && !core.g.autoplay) || core.g.scene.name === "mina";
     function earned(ids) {
       if (!ids.length) return;
       ACC.ready().then(() => earned_(ids));
@@ -286,7 +287,9 @@
     // Reset High Scores: opened by the cheat "reset" on a menu screen (no menu item); wipes the online boards,
     // the password is checked by the server
     const rs = document.getElementById("reset"), rsForm = rs.querySelector("form"), rsMsg = rs.querySelector(".msg");
-    const dialogOpen = () => !!document.querySelector("dialog[open]"); // typing into a dialog (reset, account): no hotkeys, no game keys
+    // typing into a dialog (reset, account), or the game popped out into its own window: no hotkeys, no game keys
+    let poppedOut = false; // the game is playing in the pop-out window (below)
+    const dialogOpen = () => poppedOut || !!document.querySelector("dialog[open]");
     // the same dialog deletes an arena (cheat "delete" on an arena's page): rsMode "reset" | "arena"
     let rsMode = "reset";
     function openReset(mode) {
@@ -542,6 +545,35 @@
       document.addEventListener("webkitfullscreenchange", syncFsButton);
       window.addEventListener("keydown", (e) => { if (!dialogOpen() && core.g.scene.name !== "nameEntry" && e.code === "KeyF" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFullscreen(); } });
     }
+    // pop-out window (the button right of fullscreen; desktop only, and not in the pop-out itself): the game in a window of
+    // its own, sized to the screen's height. This tab stands still meanwhile (no updates, no sound, a "Playing in the
+    // pop-out window" cover with "Play here instead") and picks up again when that window closes. Same site, so the
+    // login and settings are shared through localStorage
+    const POP_NAME = "booze-elroy-popout", popBtn = document.getElementById("pop"), popCover = document.getElementById("popped");
+    let popWin = null, popTimer = null;
+    function setPoppedOut(w) {
+      poppedOut = !!w; popWin = w; popCover.classList.toggle("on", poppedOut);
+      clearInterval(popTimer); popTimer = null;
+      if (poppedOut) {
+        if (audio.ctx) audio.ctx.suspend().catch(() => {});
+        if (videoEl && !videoEl.paused) videoEl.pause();
+        popTimer = setInterval(() => { if (!popWin || popWin.closed) setPoppedOut(null); }, 500);
+      } else { if (audio.ctx) audio.ctx.resume().catch(() => {}); last = performance.now(); acc = 0; }
+    }
+    function popOut() {
+      const sh = (screen.availHeight || 900) - 60, h = Math.max(480, Math.min(1000, sh)), w = Math.round(h * 224 / 288);
+      const left = Math.max(0, Math.round((screen.availWidth - w) / 2)), top = Math.max(0, Math.round((screen.availHeight - h) / 2 - 20));
+      const win = window.open(location.origin + location.pathname, POP_NAME, `popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+      if (!win) { core.g.toast = { text: "pop-up blocked", until: performance.now() + 2500 }; return; }
+      win.focus();
+      setPoppedOut(win);
+    }
+    if (window.name !== POP_NAME && matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      popBtn.classList.add("on");
+      popBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
+      popBtn.addEventListener("click", (e) => { e.preventDefault(); popOut(); popBtn.blur(); });
+    }
+    document.getElementById("popBack").addEventListener("click", () => { try { if (popWin) popWin.close(); } catch { /* ignore */ } setPoppedOut(null); });
     // the look: CRT (true, the default) -> plain (false) -> 1982 living-room TV ("tv") -> CRT. The C key or the TV button
     // (between mute and fullscreen; phones have no C). Not an option on the Options page (env.crtKey); saved at once, into the player's
     // own settings even while an arena's / leaderboard's are borrowed
@@ -601,6 +633,10 @@
 
     let last = performance.now(), acc = 0;
     function frame(now) {
+      if (poppedOut) { // playing in the pop-out window: stand still (and stay quiet: a key press could wake the audio)
+        if (audio.ctx && audio.ctx.state === "running") audio.ctx.suspend().catch(() => {});
+        last = now; requestAnimationFrame(frame); return;
+      }
       let dt = (now - last) / 1000; last = now;
       if (dt > 0.1) dt = 0.1;
       acc += dt;
@@ -632,9 +668,9 @@
       // credits; intermission 3 (Mina's film) in a real game
       { const g = core.g, sn = g.scene.name, real = sn === "game" && !g.attract && !g.autoplay;
         if (real && lastScene !== "game" && g.config.ghostCount === 0) earned(["park"]);
-        // without a scratch (2, 3): past board 2 / 5 / 9 (where the intermissions come) with no life lost. By board, so
-        // Pro Mode (no intermissions) counts too. These, pac-man fever, peer pressure and dedication: games started on
-        // level 1 only (run.start)
+        // without a scratch 1-3: past board 2 / 5 / 9 (where the intermissions come) with no life lost. By board, so
+        // Pro Mode (no intermissions) counts too. These, pac-man fever and peer pressure: games started on level 1 only
+        // (run.start)
         if (real && lastScene !== "game") run = { start: g.levelNumber, lives: null, scratched: false, level: g.levelNumber, maze: g.currentMaze };
         if (real && run) {
           if (run.lives === null) { if (g.mode === "normal") run.lives = g.lives; } // the lives on hand once play starts
@@ -662,7 +698,9 @@
           ACC.playedOn(d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()), settings, ar ? ar.name : null).then((n) => { if (n >= 7) earned(["streak"]); });
         }
         if (sn === "credits" && lastScene !== "credits") earned(["respects"]);
-        if (real && g.mode === "intermission3" && run && run.start === 1) earned(["dedication"]);
+        // dedication: Mina's film, however it's reached (a game from any level, or the "mina" cheat); the author just
+        // wants people to see her
+        if ((real && g.mode === "intermission3") || (sn === "mina" && lastScene !== "mina")) earned(["dedication"]);
         if (held.length && !livePlay()) { const h = held; held = []; showUnlocked(h); }
         lastScene = sn; }
       if (core.g.scene.name !== "profile") hideTip();
