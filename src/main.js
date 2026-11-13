@@ -238,7 +238,7 @@
     R.setDebug(fpsOn); // test mode: ghost targets and paths
     window.__R = R;
     const canvas = document.getElementById("screen");
-    const P = BoozeRender.createPresenter(canvas, R.screen, () => core.g.config);
+    const P = BoozeRender.createPresenter(canvas, R.screen, () => core.g.config, () => R.filmOn());
     // CRT on (WebGL): the bezel fills the window. The live canvas is only the screen plus a margin wide enough for the rim
     // reflections to fade out; the rest of the bezel is a static image on #bezel behind it, drawn once per resize.
     // scr = the screen's rect inside the canvas, in css px

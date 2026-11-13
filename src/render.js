@@ -575,6 +575,7 @@
         print("/", (I.pinky.x - 20) / 8, (I.pinky.y + 15) / 8, 3);
       }
     }
+    let film = false; // Mina's film is on screen this frame
     function drawIntermission3(t = g.modeTimer, started = core.mode.isStarted("intermission3")) {
       const v = assets.video;
       if (t <= 780 && t > 300 && started && v && v.readyState >= 2) {
@@ -583,7 +584,10 @@
         // picture and fill the screen with it; the trim (~30 rows at this aspect) comes mostly off the bottom (blanket),
         // her hair starts ~20 rows down
         const sx = 147, sw = 186, sh = Math.round(sw * GH / GW), sy = Math.min(6, 270 - sh);
+        // smoothly (it's a photo, not pixel art); `film` tells the plain look's presenter to scale smoothly too
+        ctx.imageSmoothingEnabled = true;
         ctx.drawImage(v, sx * v.videoWidth / 480, sy * v.videoHeight / 270, sw * v.videoWidth / 480, sh * v.videoHeight / 270, 0, 0, GW, GH);
+        ctx.imageSmoothingEnabled = false; film = true;
       }
       if (t < 300 && t > 120) { setColor(1, 1, 1, Math.abs((t - 300) / 120)); print("for mina", 10, 17, 3); }
       if (t <= 120 && t > 0) { setColor(1, 1, 1, t / 120); print("for mina", 10, 17, 3); }
@@ -830,7 +834,7 @@
     }
 
     function draw() {
-      ctx.globalAlpha = 1; oyBlock = null; accountBox = null;
+      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; film = false;
       const scene = g.scene.name;
       if (scene === "game") drawGame();
       else if (scene === "attract") drawAttract();
@@ -859,13 +863,13 @@
       lines.forEach((l, i) => print(l, 14 - l.length / 2, 15 + i, 0));
     }
 
-    return { screen, draw, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
+    return { screen, draw, filmOn: () => film, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
       // account corner: fn() -> the logged-in name or null (fn.online false: no corner); hot = under the mouse
       setAccount(fn, online) { accountName = fn; accountOnline = !!online; }, accountBox: () => accountBox, setAccountHot(h) { accountHot = !!h; } };
   }
 
   // =============================================================== presenter: normal CRT + "MAX" CRT (non-canon)
-  function createPresenter(canvas, source, getConfig) {
+  function createPresenter(canvas, source, getConfig, smoothNow = () => false) { // smoothNow: Mina's film is showing
     let gl = null;
     try { gl = canvas.getContext("webgl", { alpha: false, antialias: false, preserveDrawingBuffer: true }); } catch { /* fall through */ }
     if (!gl) {
@@ -902,8 +906,10 @@
     // plain look: "sharp bilinear". Nearest-neighbour at a non-whole scale makes some game pixels a screen pixel wider than
     // others (uneven dots); this keeps every game pixel a solid block of the same size and only blends the one screen pixel
     // its edge falls inside (sampled with LINEAR, the uv pushed to the texel centre everywhere else)
-    const pP = mk(HDR + `uniform vec2 srcSize, outSize;
+    // (soft = 1: Mina's film is on screen, a photo: plain bilinear like any video player, no pixel blocks)
+    const pP = mk(HDR + `uniform vec2 srcSize, outSize; uniform float soft;
       void main(){
+        if (soft > 0.5) { gl_FragColor = vec4(texture2D(tex, vuv).rgb, 1.0); return; }
         vec2 texel = vuv * srcSize, scale = outSize / srcSize;
         vec2 cd = fract(texel) - 0.5, region = max(0.5 - 0.5 / scale, 0.0);
         vec2 f = (cd - clamp(cd, -region, region)) * scale + 0.5;
@@ -1141,7 +1147,7 @@
         const f = (!crtOn || !api.ultra) ? gl.LINEAR : gl.NEAREST; // plain: LINEAR for pP's sharp bilinear
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-        if (!crtOn) { pass(pP, null, (p) => { gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform2f(p.u("outSize"), cw, ch); }, srcTex); return; }
+        if (!crtOn) { pass(pP, null, (p) => { gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform2f(p.u("outSize"), cw, ch); gl.uniform1f(p.u("soft"), smoothNow() ? 1 : 0); }, srcTex); return; }
         const time = performance.now() / 1000;
         if (api.ultra) {
           const nxt = 1 - ph;

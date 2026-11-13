@@ -37,7 +37,7 @@ Pinback's Pac-Man variant "Booze Elroy" (original: Love2D/Lua, not in this repo)
 - The autoplayer (attract demo, autoplay) uses Rewind when a ghost gets too close, like the other abilities.
 - Menu moves on the web edition's own pages (leaderboard, arenas, arena, name-entry grid) and mouse hover alternate wakka1/wakka2 like the core menus (LB.wakka, sharing g.wakka).
 - Options and high score are saved in localStorage.
-- Intermission 3 plays `assets/video/mina.*` (a dedication to the author's daughter). Treat it with care; it only works in real browsers; render.js crops its portrait picture out of the 480x270 frame (black bars baked in) and fills the screen with it.
+- Intermission 3 plays `assets/video/mina.*` (a dedication to the author's daughter). Treat it with care; it only works in real browsers; render.js crops its portrait picture out of the 480x270 frame (black bars baked in) and fills the screen with it. The film is drawn with smoothing, and in the plain look the presenter scales smoothly while it's on screen (R.filmOn -> pP "soft"), not with the pixel-art sharp bilinear, which made the small clip blocky (2026-11-12).
 - Credits: "pinback" pulses colours and links to a mailto; the bottom marquee ("what is seeing this?", one pass every ~2 s gap; "?" only exists in font colour 3) links to https://pinback.substack.com.
 
 ## Workflow
