@@ -734,7 +734,6 @@
         center("new high score!", 4, sc.fc % 40 < 20 ? 3 : 1);
         center((sc.arenaId && sc.arenaPlace ? "arena rank " : "rank ") + sc.place + "   " + String(sc.score), 6, 0);
         if (sc.arenaId) center(sc.arenaName, 8, 2);
-        if (sc.auto) { center("saving", 13, 2); return; } // logged in: the account's name is going on, no typing
         center("enter your name", 10, 0);
       }
       for (let i = 0; i < 16; i++) {

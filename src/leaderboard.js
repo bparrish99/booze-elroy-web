@@ -460,11 +460,10 @@
         if (typeof this.entry !== "string" || !SK.cleanName(this.entry)) this.entry = "";
         this.timer = ENTRY_FRAMES; this.sending = false; this.fc = 0;
         neMenu.selectedItem = (this.entry ? END : 0) + 1; // a remembered name is one press from done
-        // logged in (opts.playerName): the account's name goes straight on the board
+        // logged in (opts.playerName): the account's name is filled in, one press from done, and can still be changed
+        // (an actual player missed putting funny names up, so the author made it a pre-fill, not an auto-save)
         const player = this.mode === "score" && opts.playerName && SK.cleanName(opts.playerName() || "");
-        // (this.auto: drawn as just the score and "saving", no letter grid)
-        this.auto = !!player;
-        if (player) { this.entry = player; this.submit(); }
+        if (player) { this.entry = player; neMenu.selectedItem = END + 1; }
       },
       update() {
         this.fc += 1;
@@ -551,7 +550,7 @@
       },
       // the name is an account's (and this isn't its login): pick another one, with the clock started over
       taken(name) {
-        this.sending = false; this.auto = false; this.message = "that name is taken";
+        this.sending = false; this.message = "that name is taken";
         if (store.get(NAME, "") === name) store.set(NAME, "");
         this.entry = ""; this.timer = ENTRY_FRAMES; neMenu.selectedItem = 1;
       },

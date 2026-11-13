@@ -17,6 +17,13 @@ try {
   const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
   const p = await ctx.newPage();
   const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+  // logged in, a top-10 game over opens name entry with the account's name filled in (still editable); take it
+  const submitPrefilled = async () => {
+    await p.waitForFunction(() => window.__core.g.scene.name === "nameEntry", null, { timeout: 15000 });
+    check(await p.evaluate(() => { const s = window.__core.g.scene; return s.entry === "PINBACK" && !s.sending; }), "logged in: name entry, the account's name filled in (not saved yet)");
+    await p.evaluate(() => window.__core.g.scene.submit());
+    await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 15000 });
+  };
   const shot = async (n) => { if (process.env.SHOTS) await p.screenshot({ path: join(process.env.SHOTS, n + ".png") }); };
   await p.goto(dev.url + "/"); await p.waitForTimeout(1500);
   // plain look, so a game pixel maps straight onto the canvas
@@ -73,7 +80,7 @@ try {
   await p.keyboard.press("Enter");
   await p.waitForFunction(() => window.__core.g.scene.name === "game" && window.__core.g.mode === "normal", null, { timeout: 15000 });
   await p.evaluate(() => { const c = window.__core; c.g.score = 9990; c.mode.setMode("gameover"); });
-  await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 15000 });
+  await submitPrefilled();
   check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nspent a quarter\ntrailblazer", "game over: achievements unlocked, named (9,990 in Haunted / Terror / Jetpack: not yet)");
   await p.keyboard.press("Escape"); await p.waitForTimeout(300);
   // the same modes plus Plus Mode, with Rewind: be kind (its popup waits for play to stop), then 10,000 points
@@ -90,7 +97,7 @@ try {
   await p.evaluate(() => { const c = window.__core; c.g.score = 10000; c.mode.setMode("gameover"); });
   await p.waitForTimeout(200);
   check(await p.evaluate(() => !window.__core.g.toast), "game over, still on the game screen: be kind still held");
-  await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 15000 });
+  await submitPrefilled();
   check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nbe kind\nhouse of horrors 1\nhouse of terrors 1\nrocketman 1\ncoke and a smile 1\nyolo 1\nclyde",
     "the game over: be kind; 10,000 in Haunted / Terror / Jetpack / Plus Mode / 1 life: house of horrors, house of terror, rocketman, coke and a smile, yolo (and clyde)");
   await shot("acc8-many");
@@ -151,16 +158,16 @@ try {
   await p.waitForTimeout(500);
   check(await p.evaluate(() => fetch("/api/account/achievements", { headers: { authorization: "Bearer " + JSON.parse(localStorage.getItem("booze-elroy-account")).token } }).then((r) => r.json()).then((d) => !!d.achievements.quarter)), "the server has it");
 
-  // a top-10 score goes on the board under the account's name, no name entry; top of the default-settings board:
+  // a top-10 score goes on the board under the account's name (filled in, then submitted); top of the default-settings board:
   // "billy mitchell"; a maze style of their own: "stylish" (style isn't in the board key, so it's still that board)
   await p.evaluate(() => { window.__core.g.config.mazeColor = 3; });
   await p.evaluate(() => { const m = window.__core.attractMenu; m.selectedItem = m.findIndex((i) => i.text === "Play 1P") + 1; });
   await p.keyboard.press("Enter");
   await p.waitForFunction(() => window.__core.g.scene.name === "game" && window.__core.g.mode === "normal", null, { timeout: 15000 });
   await p.evaluate(() => { const c = window.__core; c.g.score = 31230; c.mode.setMode("gameover"); }); // past clyde and inky
-  await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 15000 });
+  await submitPrefilled();
   const top = await p.evaluate(() => window.__core.g.scene.board().entries[0]);
-  check(top && top.name === "PINBACK" && top.score === 31230, "logged in: the score went straight on the board as PINBACK");
+  check(top && top.name === "PINBACK" && top.score === 31230, "logged in: the score went on the board as PINBACK");
   check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nstylish\ninky\nbilly mitchell", "stylish, inky (31,230), billy mitchell in one popup; no second spent a quarter, clyde or trailblazer");
   await shot("acc6-billy");
   await p.evaluate(() => { window.__core.g.config.mazeColor = 99; });
