@@ -563,7 +563,8 @@
       } else { if (audio.ctx) audio.ctx.resume().catch(() => {}); last = performance.now(); acc = 0; }
     }
     function popOut() {
-      const sh = (screen.availHeight || 900) - 60, h = Math.max(480, Math.min(1000, sh)), w = Math.round(h * 224 / 288);
+      // about half the screen's height (the author: the full height was too big a default; the window can be resized)
+      const sh = (screen.availHeight || 900) - 60, h = Math.max(360, Math.min(500, Math.round(sh / 2))), w = Math.round(h * 224 / 288);
       const left = Math.max(0, Math.round((screen.availWidth - w) / 2)), top = Math.max(0, Math.round((screen.availHeight - h) / 2 - 20));
       const win = window.open(location.origin + location.pathname, POP_NAME, `popup=yes,width=${w},height=${h},left=${left},top=${top}`);
       if (!win) { core.g.toast = { text: "pop-up blocked", until: performance.now() + 2500 }; return; }
