@@ -101,7 +101,8 @@ test("achievements: the list the server checks ids against", () => {
     ...MODES.flatMap((m) => [m, m + "2", m + "3"]), "elephant", "arena", "planner", "dinner", "trailblazer", "billy", "pug", "beagle", "boxer", "hound", "wake", "neil"]);
   assert.equal(ACH.byId("yolo2").name, "yolo 2");
   assert.equal(ACH.byId("seven2").desc, "Score 20,000 points with 7 ghosts.");
-  assert.equal(ACH.byId("photo3").desc, "Score 30,000 points with Blindfold: Blackout.");
+  assert.equal(ACH.byId("photo3").desc, "Score 30,000 points with Blindfold: Blackout, with at least 4 ghosts.");
+  assert.equal(ACH.LIST.filter((a) => a.minGhosts === 4).length, 37); // the author's list: 27 points-in-a-mode, 4 scores, 6 getting far
   assert.deepEqual(ACH.byId("coke").mode, { key: "plusMode", value: true });
   assert.equal(new Set(ACH.LIST.map((a) => a.id)).size, ACH.LIST.length);
   const font = "abcdefghijklmnopqrstuvwxyz0123456789!-/ ";

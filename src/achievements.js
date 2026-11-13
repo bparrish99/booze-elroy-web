@@ -25,8 +25,11 @@
     ["photo", "photographic memory", "with Blindfold: Blackout", "afterDark", 5],
   ];
   const TIERS = [[10000, ""], [20000, "2"], [30000, "3"]];
+  // minGhosts: counts only in a game with at least that many ghosts (the author: fewer make it too easy); main.js
+  // checks it for every achievement that has it, the description says it
+  const G4 = "at least 4 ghosts";
   const modeTiers = MODES.flatMap(([id, name, how, key, value]) => TIERS.map(([points, suffix]) =>
-    ({ id: id + suffix, name: name + " " + (suffix || "1"), desc: "Score " + points.toLocaleString("en-US") + " points " + how + ".", mode: { key, value }, points })));
+    ({ id: id + suffix, name: name + " " + (suffix || "1"), desc: "Score " + points.toLocaleString("en-US") + " points " + how + (key === "ghostCount" ? "" : ", with " + G4) + ".", mode: { key, value }, points, minGhosts: 4 })));
 
   // Reaching a board (peer pressure, without a scratch 1-3, pac-man fever) counts only in a game started on
   // level 1 (the author: a high Starting Level mustn't skip there); main.js checks it, the descriptions say it.
@@ -39,21 +42,21 @@
     { id: "park", name: "walk in the park", desc: "Start a game with zero ghosts." },
     { id: "kind", name: "be kind", desc: "Use Rewind in a game." },
     { id: "dedication", name: "dedication", desc: "See the third intermission." },
-    { id: "martini", name: "peer pressure", desc: "Enjoy a delicious martini, in a game started on level 1." }, // the bonus on boards 9 and 10 ("galaxian")
+    { id: "martini", name: "peer pressure", desc: "Enjoy a delicious martini, in a game with " + G4 + " started on level 1.", minGhosts: 4 }, // the bonus on boards 9 and 10 ("galaxian")
     { id: "streak", name: "one week chip", desc: "Play a game on seven days in a row." },
-    { id: "scratch", name: "without a scratch 1", desc: "Make it to the first intermission without losing a life, in a game started on level 1." },
-    { id: "scratch2", name: "without a scratch 2", desc: "Make it to the second intermission without losing a life, in a game started on level 1." },
-    { id: "scratch3", name: "without a scratch 3", desc: "Make it to the third intermission without losing a life, in a game started on level 1." },
+    { id: "scratch", name: "without a scratch 1", desc: "Make it to the first intermission without losing a life, in a game with " + G4 + " started on level 1.", minGhosts: 4 },
+    { id: "scratch2", name: "without a scratch 2", desc: "Make it to the second intermission without losing a life, in a game with " + G4 + " started on level 1.", minGhosts: 4 },
+    { id: "scratch3", name: "without a scratch 3", desc: "Make it to the third intermission without losing a life, in a game with " + G4 + " started on level 1.", minGhosts: 4 },
     // the ninth key: boards 13-21 carry the key (pancakes in Plus Mode); earned past board 21
-    { id: "fever", name: "pac-man fever", desc: "Complete the ninth key, in a game started on level 1." },
+    { id: "fever", name: "pac-man fever", desc: "Complete the ninth key, in a game with " + G4 + " started on level 1.", minGhosts: 4 },
 
-    { id: "clyde", name: "clyde", desc: "Score 10,000 points in a game.", score: 10000 },
-    { id: "inky", name: "inky", desc: "Score 30,000 points in a game.", score: 30000 },
-    { id: "pinky", name: "pinky", desc: "Score 60,000 points in a game.", score: 60000 },
-    { id: "blinky", name: "blinky", desc: "Score 100,000 points in a game.", score: 100000 },
+    { id: "clyde", name: "clyde", desc: "Score 10,000 points in a game with " + G4 + ".", score: 10000, minGhosts: 4 },
+    { id: "inky", name: "inky", desc: "Score 30,000 points in a game with " + G4 + ".", score: 30000, minGhosts: 4 },
+    { id: "pinky", name: "pinky", desc: "Score 60,000 points in a game with " + G4 + ".", score: 60000, minGhosts: 4 },
+    { id: "blinky", name: "blinky", desc: "Score 100,000 points in a game with " + G4 + ".", score: 100000, minGhosts: 4 },
 
     ...modeTiers,
-    { id: "elephant", name: "elephantine memory", desc: "Complete a large maze with Blindfold: Blackout." }, // the author: right after photographic memory 3
+    { id: "elephant", name: "elephantine memory", desc: "Complete a large maze with Blindfold: Blackout and " + G4 + ".", minGhosts: 4 }, // the author: right after photographic memory 3
 
     { id: "arena", name: "party animal", desc: "Finish a game in an arena." },
     { id: "planner", name: "party planner", desc: "Create an arena." },

@@ -121,38 +121,46 @@ try {
   await p.waitForTimeout(200);
   check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievement unlocked\ndedication", "after the film: dedication");
   await p.evaluate(() => { window.__core.setScene("attract"); window.__core.g.toast = null; });
-  // a game with zero ghosts, on the large pack with Blindfold: Blackout. Everything earned in it waits for the game to
-  // end (the author: no popups mid-game): walk in the park (at the start), without a scratch, elephantine memory,
-  // peer pressure (the martini), pac-man fever (dedication was earned already, from the cheat)
-  await p.evaluate(() => { const c = window.__core; Object.assign(c.g.config, { ghostCount: 0, mazepack: "large", afterDark: 5 }); const m = c.attractMenu; m.selectedItem = m.findIndex((i) => i.text === "Play 1P") + 1; });
-  await p.keyboard.press("Enter");
-  await p.waitForFunction(() => window.__core.g.scene.name === "game", null, { timeout: 15000 });
-  await p.waitForTimeout(300);
-  check(await p.evaluate(() => !window.__core.g.toast), "a zero-ghost game: walk in the park, its popup held");
-  // past board 2 with every life (on a large maze, Blackout): without a scratch, elephantine memory; then a life lost:
-  // no "2" past board 5
-  await p.waitForFunction(() => window.__core.g.mode === "normal", null, { timeout: 15000 });
-  check(await p.evaluate(() => { const m = window.__core.getCurrentMaze(); return m.w > 28 || m.h > 31; }), "(playing a large maze: " + await p.evaluate(() => window.__core.g.currentMaze) + ")");
-  await p.evaluate(() => { const g = window.__core.g; g.toast = null; g.levelNumber = 3; });
-  await p.waitForTimeout(200);
-  check(await p.evaluate(() => !window.__core.g.toast), "past board 2 without losing a life: without a scratch, held while play goes on");
-  await p.evaluate(() => { const c = window.__core, g = c.g; g.level = { ...g.level, fruit: c.fruits.galaxian }; g.fruitScoreTimer = 120; }); // the martini eaten
-  await p.waitForTimeout(200);
-  await p.evaluate(() => { const g = window.__core.g; g.toast = null; g.lives -= 1; });
-  await p.waitForTimeout(100);
-  await p.evaluate(() => { window.__core.g.levelNumber = 6; });
-  await p.waitForTimeout(200);
-  await p.evaluate(() => { window.__core.g.levelNumber = 22; }); // past the ninth key (board 21), from board 1: pac-man fever
-  await p.waitForTimeout(200);
-  await p.evaluate(() => window.__core.mode.setMode("intermission3"));
-  await p.waitForTimeout(300);
-  check(await p.evaluate(() => !window.__core.g.toast), "intermission 3: nothing on screen (the game isn't over)");
-  await p.keyboard.press("Escape");
-  await p.waitForFunction(() => window.__core.g.scene.name === "attract", null, { timeout: 15000 });
-  await p.waitForTimeout(200);
-  check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "achievements unlocked\nwalk in the park\nwithout a scratch 1\nelephantine memory\npeer pressure\npac-man fever",
-    "leaving the game: all of them in one popup (no without a scratch 2 after the life lost): " + JSON.stringify(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text)));
-  await p.evaluate(() => { const c = window.__core.g; for (const k of ["mazepack", "afterDark"]) c.config[k] = c.defaultConfig[k]; });
+  // the same far-reaching game twice, on the large pack with Blindfold: Blackout. Everything earned in it waits for the
+  // game to end (the author: no popups mid-game). Past board 2 (without a scratch 1, elephantine memory), the martini
+  // (peer pressure), a life lost, past board 21 (pac-man fever; no without a scratch 2/3 after the life lost). With 0
+  // ghosts only walk in the park counts (the rest need at least 4 ghosts); with 4 the rest do (dedication was earned
+  // already, from the cheat)
+  const farGame = async (ghosts, expected) => {
+    const tag = ghosts + " ghosts: ";
+    await p.evaluate((n) => { const c = window.__core; Object.assign(c.g.config, { ghostCount: n, mazepack: "large", afterDark: 5 }); const m = c.attractMenu; m.selectedItem = m.findIndex((i) => i.text === "Play 1P") + 1; }, ghosts);
+    await p.keyboard.press("Enter");
+    await p.waitForFunction(() => window.__core.g.scene.name === "game", null, { timeout: 15000 });
+    await p.waitForTimeout(300);
+    check(await p.evaluate(() => !window.__core.g.toast), tag + "nothing on screen as it starts");
+    // past board 2 with every life (on a large maze, Blackout): without a scratch, elephantine memory; then a life lost:
+    // no "2" past board 5
+    await p.waitForFunction(() => window.__core.g.mode === "normal", null, { timeout: 15000 });
+    check(await p.evaluate(() => { const m = window.__core.getCurrentMaze(); return m.w > 28 || m.h > 31; }), tag + "(playing a large maze: " + await p.evaluate(() => window.__core.g.currentMaze) + ")");
+    await p.evaluate(() => { const g = window.__core.g; g.toast = null; g.levelNumber = 3; });
+    await p.waitForTimeout(200);
+    check(await p.evaluate(() => !window.__core.g.toast), tag + "past board 2: nothing on screen while play goes on");
+    await p.evaluate(() => { const c = window.__core, g = c.g; g.level = { ...g.level, fruit: c.fruits.galaxian }; g.fruitScoreTimer = 120; }); // the martini eaten
+    await p.waitForTimeout(200);
+    await p.evaluate(() => { const g = window.__core.g; g.toast = null; g.lives -= 1; });
+    await p.waitForTimeout(100);
+    await p.evaluate(() => { window.__core.g.levelNumber = 6; });
+    await p.waitForTimeout(200);
+    await p.evaluate(() => { window.__core.g.levelNumber = 22; }); // past the ninth key (board 21), from board 1: pac-man fever
+    await p.waitForTimeout(200);
+    await p.evaluate(() => window.__core.mode.setMode("intermission3"));
+    await p.waitForTimeout(300);
+    check(await p.evaluate(() => !window.__core.g.toast), tag + "intermission 3: nothing on screen (the game isn't over)");
+    await p.keyboard.press("Escape");
+    await p.waitForFunction(() => window.__core.g.scene.name === "attract", null, { timeout: 15000 });
+    await p.waitForTimeout(200);
+    check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === expected,
+      tag + "leaving the game: " + JSON.stringify(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text)));
+    await p.evaluate(() => { const c = window.__core.g; for (const k of ["mazepack", "afterDark"]) c.config[k] = c.defaultConfig[k]; });
+  };
+  await farGame(0, "achievement unlocked\nwalk in the park");
+  await p.evaluate(() => { window.__core.g.toast = null; });
+  await farGame(4, "achievements unlocked\nwithout a scratch 1\nelephantine memory\npeer pressure\npac-man fever");
   await p.waitForFunction(() => window.__core.g.scene.name === "attract", null, { timeout: 15000 });
   await p.evaluate(() => { const c = window.__core.g; c.config.ghostCount = c.defaultConfig.ghostCount; c.toast = null; });
   await p.waitForTimeout(500);

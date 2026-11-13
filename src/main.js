@@ -210,6 +210,8 @@
     // (and never over Mina's film: the "mina" scene holds them too)
     const livePlay = () => (core.g.scene.name === "game" && !core.g.attract && !core.g.autoplay) || core.g.scene.name === "mina";
     function earned(ids) {
+      // a ghost minimum (src/achievements.js minGhosts): judged on the settings in play now, when it's earned
+      ids = ids.filter((id) => { const a = BoozeAchievements.byId(id); return !(a && a.minGhosts && !(core.g.config.ghostCount >= a.minGhosts)); });
       if (!ids.length) return;
       ACC.ready().then(() => earned_(ids));
     }
