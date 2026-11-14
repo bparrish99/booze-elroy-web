@@ -1470,6 +1470,10 @@
         for (let si = 0; si < sw.length; si++) {
           const switchTime = sw[si];
           if (g.level.timer === switchTime) {
+            // web edition (the author, watching a real Ms. Pac-Man machine, 2026-11-14): in MSPAC only the first two
+            // switches do anything (to chase and reverse, then reverse again, still chasing); after that the ghosts
+            // never reverse on the timer again
+            if (g.config.scatterOption === 2 && si > 1) break;
             if (!g.config.scatterOption || g.config.scatterOption !== 2 || si === 0) g.level.chase = !g.level.chase;
             for (const name of charKeys()) {
               const c = g.chars[name];
