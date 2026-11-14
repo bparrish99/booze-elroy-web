@@ -546,17 +546,18 @@
         ctx.restore();
       }
       // the rings: the blue stun rings from the first Star Wars film (the author's picture): concentric rings of electric
-      // blue, each a soft glow with a bright core, rippling in from the vacuum's reach, staggered, shimmering a little
+      // blue, each a soft glow with a brighter core, rippling in from the vacuum's reach, one after the other (darker and
+      // calmer than the first try: two rings, no shimmer)
       const cx = camX() + tx, cy = camY() + ty;
       ctx.save();
-      for (let i = 0; i < 4; i++) {
-        const p = k * 1.6 - i * 0.2;                                        // each ring starts a little after the last
+      for (let i = 0; i < 2; i++) {
+        const p = k * 1.4 - i * 0.4;                                        // the second ring follows the first
         if (p <= 0 || p >= 1) continue;
-        const R = 6 * TILE * (1 - p) + Math.sin((k * 40 + i * 2.1)) * 0.6; // closing in, with a shimmer
+        const R = 6 * TILE * (1 - p);                                       // closing in
         const fade = Math.sin(p * Math.PI);                                 // in, then out
-        ctx.strokeStyle = "rgb(60,140,255)"; ctx.globalAlpha = 0.28 * fade; ctx.lineWidth = 4;
+        ctx.strokeStyle = "rgb(20,50,190)"; ctx.globalAlpha = 0.35 * fade; ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(cx, cy, Math.max(1, R), 0, Math.PI * 2); ctx.stroke();
-        ctx.strokeStyle = "rgb(150,210,255)"; ctx.globalAlpha = 0.85 * fade; ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgb(60,100,230)"; ctx.globalAlpha = 0.85 * fade; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(cx, cy, Math.max(1, R), 0, Math.PI * 2); ctx.stroke();
       }
       ctx.restore();
