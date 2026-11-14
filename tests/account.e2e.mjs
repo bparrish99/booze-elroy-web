@@ -309,6 +309,8 @@ try {
   await p.goto(dev.url + "/activity.html#nope"); await p.waitForTimeout(500);
   check(await p.evaluate(() => !document.getElementById("ask").hidden && /Wrong/.test(document.getElementById("askMsg").textContent)), "activity page: a wrong password just asks again");
   await p.goto(dev.url + "/activity.html#dev"); await p.reload(); await p.waitForTimeout(800);
+  check(await p.evaluate(() => { const t = ["log", "accts", "stats"].map((id) => document.getElementById(id).textContent).join(" "); return !/PINBACK/.test(t) && document.getElementById("log").rows.length > 0; }), "activity page: the author's own account (PINBACK) is left out");
+  await p.goto(dev.url + "/activity.html?all#dev"); await p.reload(); await p.waitForTimeout(800); // ?all shows it
   const log = await p.evaluate(() => document.getElementById("log").textContent);
   check(/PINBACK\s*created an account/.test(log) && /earned SPENT A QUARTER/.test(log) && /logged in/.test(log) && /played blindfold Haunted {2}sonar Terror {2}speed Jetpack \(first game today\)/.test(log) && /played in the arena TEST ARENA: classic Pac-Man/.test(log) && /placed #1 with 31,230 on classic Pac-Man/.test(log), "activity page: signups, logins, scores, achievements (by name) and games");
   await shot("acc9-activity");

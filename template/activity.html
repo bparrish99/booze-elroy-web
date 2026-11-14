@@ -57,6 +57,9 @@ tr.new td{animation:glow 6s ease-out}
   const ACH = Object.fromEntries(/*ACHIEVEMENTS*/);
   const $ = (id) => document.getElementById(id);
   let key = decodeURIComponent(location.hash.slice(1)), data = null, who = null;
+  // the author's own account is left out of everything here (events, accounts, stats), old events included: it made the
+  // page look like they were the only player (2026-11-14). activity.html?all#<key> shows it
+  const HIDE = new Set(new URLSearchParams(location.search).has("all") ? [] : ["PINBACK"]);
   // auto-refresh: every 30 s (and at once when the tab comes back); events not seen before light up, and while the tab
   // is in the background the title counts them
   const EVERY = 30000, TITLE = document.title;
@@ -109,6 +112,10 @@ tr.new td{animation:glow 6s ease-out}
     try { r = await fetch("/api/account/activity", { headers: { "x-admin-key": key }, cache: "no-store" }); } catch { r = null; }
     if (r && r.ok) {
       data = await r.json();
+      if (HIDE.size) { // the author's own activity left out (?all shows it)
+        data.events = data.events.filter((e) => !HIDE.has(e.name));
+        data.accounts = data.accounts.filter((n) => !HIDE.has(n));
+      }
       const ids = data.events.map(idOf);
       fresh = seen ? new Set(ids.filter((i) => !seen.has(i))) : new Set(); // nothing lights up on the first load
       seen = new Set(ids);
