@@ -18,6 +18,15 @@
     screen.width = GW; screen.height = GH;
     const ctx = screen.getContext("2d");
     ctx.imageSmoothingEnabled = false;
+    // web edition: the vector look draws the font as plain pixels, not outlines (the traced letters looked odd). Every
+    // text glyph (not the logo's pieces) is also drawn into this mask, which the presenter's vector pass reads; only
+    // kept up while that look is on
+    const textMask = document.createElement("canvas");
+    textMask.width = GW; textMask.height = GH;
+    const mctx = textMask.getContext("2d");
+    mctx.imageSmoothingEnabled = false;
+    let masking = false;
+    const LOGO_PIECES = "$%^&*()_";
 
     const sheets = {};
     function addSheet(name, img, fw, fh) {
@@ -109,6 +118,12 @@
       for (let i = 0; i < up.length; i++) {
         const idx = TEXT_CHARS.indexOf(up[i]) + 1;
         if (idx > 0) drawSprite("text8", o * 64 + idx, x * TILE, y * TILE, maze);
+        if (idx > 0 && masking && up[i] !== " " && !LOGO_PIECES.includes(up[i])) {
+          const s = sheets.text8, j = o * 64 + idx - 1;
+          mctx.globalAlpha = col[3];
+          mctx.drawImage(s.img, (j % s.cols) * 8, Math.floor(j / s.cols) * 8, 8, 8, (maze ? camX() : 0) + x * TILE, (maze ? camY() : 0) + y * TILE, 8, 8);
+          mctx.globalAlpha = 1;
+        }
         x += 1;
       }
     }
@@ -836,6 +851,8 @@
 
     function draw() {
       ctx.globalAlpha = 1; oyBlock = null; accountBox = null; film = false;
+      if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
+      masking = g.config.crtEffect === "vector";
       const scene = g.scene.name;
       if (scene === "game") drawGame();
       else if (scene === "attract") drawAttract();
@@ -858,19 +875,20 @@
       const lines = tt.text.split("\n"), n = lines.length;
       const w = (Math.max(...lines.map((l) => l.length)) + 2) * 8, h = n * 8 + 8, x = Math.floor((GW - w) / 2), y = 15 * 8 - 4;
       ctx.globalAlpha = 0.9; ctx.fillStyle = "#000"; ctx.fillRect(x, y, w, h);
+      if (masking) mctx.clearRect(x, y, w, h); // the text it covers is gone
       ctx.globalAlpha = 1; ctx.fillStyle = "#ffb8ff"; // pink frame, like the maze-wall highlights
       ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1); ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
       setColor(1, 1, 1);
       lines.forEach((l, i) => print(l, 14 - l.length / 2, 15 + i, 0));
     }
 
-    return { screen, draw, filmOn: () => film, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
+    return { screen, textMask, draw, filmOn: () => film, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
       // account corner: fn() -> the logged-in name or null (fn.online false: no corner); hot = under the mouse
       setAccount(fn, online) { accountName = fn; accountOnline = !!online; }, accountBox: () => accountBox, setAccountHot(h) { accountHot = !!h; } };
   }
 
   // =============================================================== presenter: normal CRT + "MAX" CRT (non-canon)
-  function createPresenter(canvas, source, getConfig, smoothNow = () => false) { // smoothNow: Mina's film is showing
+  function createPresenter(canvas, source, getConfig, smoothNow = () => false, textMask = null) { // smoothNow: Mina's film is showing; textMask: where text is (vector look)
     let gl = null;
     try { gl = canvas.getContext("webgl", { alpha: false, antialias: false, preserveDrawingBuffer: true }); } catch { /* fall through */ }
     if (!gl) {
@@ -928,13 +946,15 @@
     // afterglow (new = max(beam, previous * decay)). The dim backgrounds don't make it (below the beam's threshold).
     // Drawn at 3x the game's size into VH; pU then puts it behind the same glass, without scanlines or a grille.
     // film = 1: Mina's film, shown as it is (no outlines, no trails)
-    const pV = mk(HDR + `uniform sampler2D prev; uniform vec2 srcSize; uniform float decay, film;
+    // text (the renderer's textMask) is drawn as plain pixels, at the strokes' brightness, not traced
+    const pV = mk(HDR + `uniform sampler2D prev, mask; uniform vec2 srcSize; uniform float decay, film;
       vec3 px(vec2 t){ return texture2D(tex, (t + 0.5) / srcSize).rgb; }
+      float isText(vec2 t){ return texture2D(mask, (t + 0.5) / srcSize).a; }
       float mx(vec3 c){ return max(c.r, max(c.g, c.b)); }
       vec3 edge(vec2 t){
         vec3 c = px(t); float m = mx(c);
         float lit = smoothstep(0.3, 0.45, m);
-        if (lit <= 0.0) return vec3(0.0);
+        if (lit <= 0.0 || isText(t) > 0.5) return vec3(0.0);
         float e = 0.0;
         vec3 n0 = px(t + vec2(1.0, 0.0)), n1 = px(t - vec2(1.0, 0.0)), n2 = px(t + vec2(0.0, 1.0)), n3 = px(t - vec2(0.0, 1.0));
         e = max(e, step(mx(n0), 0.3)); e = max(e, step(mx(n1), 0.3)); e = max(e, step(mx(n2), 0.3)); e = max(e, step(mx(n3), 0.3));
@@ -954,6 +974,8 @@
         // saturating stroke, keeps its hue; dimmed and a small white core, for a crisp line (brighter looked washed out)
         vec3 beam = acc / max(k, 1e-4) * (1.0 - exp(-k * 1.8)) * 0.85;
         beam += vec3(0.3) * smoothstep(0.9, 1.3, k) * (1.0 - exp(-k));
+        float tm = isText(b);
+        if (tm > 0.0) { vec3 c = px(b); beam = mix(beam, c / max(max(c.r, max(c.g, c.b)), 0.7) * 0.85, tm); }
         gl_FragColor = vec4(max(beam, texture2D(prev, vuv).rgb * decay), 1.0);
       }`);
     // the MAX CRT: heavy barrel, rounded glass, RGB convergence error, horizontal bleed, beam-width scanlines,
@@ -1134,7 +1156,7 @@
     const newTex = (filter) => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter); return t; };
-    const srcTex = newTex(gl.LINEAR);
+    const srcTex = newTex(gl.LINEAR), maskTex = newTex(gl.NEAREST);
     const mkTarget = (w, h) => { const t = newTex(gl.LINEAR); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
       gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); return { t, f, w, h }; };
@@ -1194,7 +1216,8 @@
           let pic;
           if (vec) { // the beam's afterglow fades by time, not by frame (same trails at 60 or 144 Hz)
             const nxt = 1 - vh, film = smoothNow();
-            pass(pV, VH[nxt], (p) => { gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.3, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t);
+            if (textMask) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, maskTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textMask); }
+            pass(pV, VH[nxt], (p) => { gl.uniform1i(p.u("mask"), 2); gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.3, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t, maskTex);
             vh = nxt; pic = VH[vh].t;
           } else {
             const nxt = 1 - ph;
