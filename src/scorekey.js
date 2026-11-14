@@ -20,7 +20,7 @@
     ["radar", [false, 30, 60, 90, 120]],
     ["startingLives", [1, 3, 5]],
     ["freeGuy", [1, 2, 3, 4, 5]],
-    ["ability", [false, 1, 2, 3, 4, 5]], // 4 = Rewind, 5 = Pause (web edition, appended later; see LEGACY_LENGTHS)
+    ["ability", [false, 1, 2, 3, 4, 5, 6]], // 4 = Rewind, 5 = Pause, 6 = Vacuum (web edition, appended later; see LEGACY_LENGTHS)
     ["movement", [0, 1, 2, 3]],
     ["ghostCount", range(0, 7)],
     ["pinkyBug", [true, false]],
@@ -61,10 +61,12 @@
   //  - 6 characters (5 + check): the original format, frozen. It packs only the values that existed when it shipped
   //    (LEGACY_LENGTHS), so every link shared since then keeps working.
   //  - 7 characters (6 + check): the Rewind ability's format, frozen the same way (REWIND_LENGTHS).
-  //  - 8 characters (7 + check): settings neither can hold (values appended since, e.g. the Pause ability). Its lengths
-  //    follow FIELDS; appending another value later means freezing these too and adding a 9-character format.
+  //  - 8 characters (7 + check): the Pause ability's format, frozen too (PAUSE_LENGTHS).
+  //  - 9 characters (8 + check): settings none of those can hold (values appended since, e.g. the Vacuum ability). Its
+  //    lengths follow FIELDS; appending another value later means freezing these too and adding a 10-character format.
   const LEGACY_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 4, 4, 8, 2, 4, 2]; // never change: the 6-character format depends on it
   const REWIND_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 5, 4, 8, 2, 4, 2]; // never change: the 7-character format depends on it
+  const PAUSE_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 6, 4, 8, 2, 4, 2];  // never change: the 8-character format depends on it
   const LENGTHS = FIELDS.map(([, vals]) => vals.length);
   const prod = (ls) => ls.reduce((n, l) => n * l, 1);
   const COMBOS = prod(LEGACY_LENGTHS);
@@ -76,7 +78,7 @@
     return ((t0 % m) + m) % m;
   };
   const FORMATS = {};
-  [[6, LEGACY_LENGTHS], [7, REWIND_LENGTHS], [8, LENGTHS]].forEach(([len, lengths]) => {
+  [[6, LEGACY_LENGTHS], [7, REWIND_LENGTHS], [8, PAUSE_LENGTHS], [9, LENGTHS]].forEach(([len, lengths]) => {
     const combos = prod(lengths);
     FORMATS[len] = { len, lengths, combos, inv: inverse(combos) };
   });
@@ -86,7 +88,7 @@
   function shareCode(config) {
     const idx = [];
     for (const [k, vals] of FIELDS) { const i = indexOf(vals, config[k]); if (i < 0) return null; idx.push(i); }
-    const f = FORMATS[fits(idx, 6) ? 6 : fits(idx, 7) ? 7 : 8];
+    const f = FORMATS[fits(idx, 6) ? 6 : fits(idx, 7) ? 7 : fits(idx, 8) ? 8 : 9];
     let n = 0;
     idx.forEach((i, k) => { n = n * f.lengths[k] + i; });
     const body = ((mulmod(n, MUL, f.combos) + ADD) % f.combos).toString(36).padStart(f.len - 1, "0");
@@ -94,7 +96,7 @@
   }
   /** the gameplay settings a share code stands for, or null if it isn't a valid code */
   function configFromCode(s) {
-    if (typeof s !== "string" || !/^[0-9a-z]{6,8}$/i.test(s)) return null;
+    if (typeof s !== "string" || !/^[0-9a-z]{6,9}$/i.test(s)) return null;
     s = s.toLowerCase();
     const f = FORMATS[s.length], body = s.slice(0, -1);
     if (check(body) !== s[s.length - 1]) return null;

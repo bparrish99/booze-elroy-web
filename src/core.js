@@ -124,7 +124,14 @@
     // the abilities' way: > 0 while held (frames left), counting down from 0 to -PAUSE_COOLDOWN while it reloads.
     // Like Rewind, every gameplay check sees it as "Off"; only Pac-Man's own movement stops
     const PAUSE = 5, PAUSE_MAX = 90, PAUSE_COOLDOWN = 60;
-    function ability() { return g.config.ability === REWIND || g.config.ability === PAUSE ? false : g.config.ability; }
+    // web edition: the Vacuum ability (author's design, 2026-11-14): one charge per life and per board (refilled at every
+    // READY, like Rewind; g.vacuumSpent). The button sucks up everything within VACUUM_RADIUS tiles in a straight line,
+    // through walls: energizers first (so a ghost they turn blue is eaten, not deadly), then dots, the fruit, and ghosts
+    // (not eyes, not ones in the house): a blue one is eaten, one at a time with the usual pause and score chain (the rest
+    // wait in g.vacuumQueue, eaten as each ateGhost pause ends); a ghost that isn't blue catches him. Each thing eaten
+    // goes through the normal eating code, as if he were standing on it. Like Rewind and Pause, gameplay checks see it as Off
+    const VACUUM = 6, VACUUM_RADIUS = 6;
+    function ability() { return g.config.ability === REWIND || g.config.ability === PAUSE || g.config.ability === VACUUM ? false : g.config.ability; }
     const pausing = () => g.config.ability === PAUSE && T(g.chars.pac.phased) && g.chars.pac.phased > 0;
     const pausePac = () => {
       g.chars.pac.phased = PAUSE_MAX;
@@ -681,6 +688,37 @@
         }
       }
     };
+    function vacuum() {
+      if (g.vacuumSpent || g.mode !== "normal" || !g.state.running) return;
+      g.vacuumSpent = true; g.vacuumFx = 24;
+      if (g.sounds.phase.isPlaying()) g.sounds.phase.stop();
+      g.sounds.phase.play();
+      const cm = getCurrentMaze();
+      const [pX, , pY] = cm.getLoc(g.chars.pac);
+      const near = (x, y) => (x - pX) * (x - pX) + (y - pY) * (y - pY) <= VACUUM_RADIUS * VACUUM_RADIUS;
+      for (const p of g.powers.filter((it) => near(it.x, it.y))) checkCollisions(g.powers, p.x, p.y);
+      for (const d of g.dots.filter((it) => near(it.x, it.y))) checkCollisions(g.dots, d.x, d.y);
+      const fl = cm.fruitLoc;
+      if (T(g.fruitTimer) && near(fl.x / 8, fl.y / 8)) eatFruit(true);
+      const blue = [];
+      for (const name of charKeys()) {
+        const ch = g.chars[name];
+        if (!ch.target || T(ch.dead) || ch.hidden || ch.housing || ch.entering) continue;
+        const [gX, , gY] = cm.getLoc(ch);
+        if (!near(gX, gY)) continue;
+        if (T(ch.frightened)) blue.push(ch);
+        else if (handleGhostCollision(ch, gX, gY, gX, gY)) { g.vacuumQueue = []; return; } // not blue: caught
+      }
+      g.vacuumQueue = blue;
+      vacuumNext();
+    }
+    // the next blue ghost the vacuum caught, if it's still blue (one per ateGhost pause)
+    function vacuumNext() {
+      while (g.vacuumQueue && g.vacuumQueue.length) {
+        const ch = g.vacuumQueue.shift();
+        if (T(ch.frightened) && !T(ch.dead) && handleGhostCollision(ch, 0, 0, 0, 0)) return;
+      }
+    }
     const handleGhostCollision = (ghost, pacX, pacY, ghostX, ghostY) => {
       if (phaseActive()) return false;
       if (T(ghost.stunned) && !ghost.frightened) return false;
@@ -848,9 +886,9 @@
     };
 
     // the fruit, eaten when Pac-Man is on its spot (not while phased through things); in Plus Mode it frightens the ghosts
-    function eatFruit() {
+    function eatFruit(vacuumed) {
       const fl = getCurrentMaze().fruitLoc;
-      if (T(g.fruitTimer) && g.chars.pac.x === fl.x && g.chars.pac.y === fl.y &&
+      if (T(g.fruitTimer) && (vacuumed || (g.chars.pac.x === fl.x && g.chars.pac.y === fl.y)) &&
         (!T(ability()) || ability() >= 2 || (!T(g.chars.pac.phased) || g.chars.pac.phased <= 0))) {
         score(g.level.fruit.score);
         g.fruitTimer = false;
@@ -980,6 +1018,7 @@
               g.fruitTimer = false; g.fruitScoreTimer = false;
               g.state = { showPac: true, showGhosts: true, showReady: true };
               g.starvation = 0;
+              g.vacuumSpent = false; g.vacuumQueue = []; g.vacuumFx = 0; // the Vacuum's charge, back at every READY
               characters.reset();
               levels.resetLevel();
             }
@@ -997,6 +1036,8 @@
             g.sounds.scared.stop();
             if (!g.sounds.dead.isPlaying()) g.sounds.dead.play();
             logic.eatOverlappingFrightened();
+            if (g.mode === "ateGhost") return;
+            vacuumNext(); // the Vacuum's next ghost, if it caught more (the mode is already back to normal here)
           },
         },
         caught: {
@@ -1619,6 +1660,7 @@
       update() {
         if (g.paused) return;
         gameFc += 1;
+        if (g.vacuumFx > 0) g.vacuumFx -= 1; // the Vacuum's swirl (render.js)
         mode.handle();
         if (T(g.fruitScoreTimer)) {
           g.fruitScoreTimer -= 1;
@@ -1758,12 +1800,14 @@
         }
         if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === REWIND && env.rewind) env.rewind();
         if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
+        if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === VACUUM) vacuum();
         if (g.state.running && (key === "space" || key === "lalt") && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (key === "tab" || key === "p") togglePause();
       },
       gamepadpressed(button) {
         if (g.state.running && button === "a" && g.config.ability === REWIND && env.rewind) env.rewind();
         if (g.state.running && button === "a" && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
+        if (g.state.running && button === "a" && g.config.ability === VACUUM) vacuum();
         if (g.state.running && button === "a" && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (button === "x") togglePause();
       },
@@ -1806,7 +1850,7 @@
       Object.assign(opt("radar", [false, 30, 60, 90, 120], ["Off", "Tame", "Tricky", "Tough", "Terror"]), { y: 9 }),
       Object.assign(opt("startingLives", [1, 3, 5]), { y: 12 }),
       Object.assign(opt("freeGuy", [1, 2, 3, 4, 5], ["10000", "20000", "every 10k", "every 5k", "none"]), { y: 13 }),
-      Object.assign(opt("ability", [false, 1, 2, 3, 4, 5], ["Off", "Phase", "Boost", "Stun", "Rewind", "Pause"]), { y: 14 }),
+      Object.assign(opt("ability", [false, 1, 2, 3, 4, 5, 6], ["Off", "Phase", "Boost", "Stun", "Rewind", "Pause", "Vacuum"]), { y: 14 }),
       Object.assign(opt("movement", [0, 1, 2, 3], ["Normal", "Faster", "Fastest", "Jetpack"]), { y: 15 }),
       Object.assign(opt("ghostCount", range(0, 7)), { y: 18 }),
       Object.assign(ON_OFF("pinkyBug"), { y: 19 }),
@@ -1850,7 +1894,7 @@
     const OPT_VALUES = {
       mazepack: PACKS, startingLevel: range(1, 21), difficulty: [0, 1, 2], plusMode: [false, true],
       afterDark: [false, 1, 2, 3, 4, 5], radar: [false, 30, 60, 90, 120], startingLives: [1, 3, 5], freeGuy: [1, 2, 3, 4, 5],
-      ability: [false, 1, 2, 3, 4, 5], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
+      ability: [false, 1, 2, 3, 4, 5, 6], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
       scatterOption: [false, 1, 2, 3], freeGhost: [true, false], background: bgNames, mazeColor: MAZE_COLORS,
       crtEffect: [true, false], volume: range(0, 10), proMode: [false, true],
     };
@@ -1943,7 +1987,7 @@
 
     return {
       g, init, setScene, keypressed, update: () => g.scene.update(FIXED_DT),
-      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND, PAUSE,
+      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND, PAUSE, VACUUM,
       // web edition (rewind.js): put the looping sounds back in line with the game state, the way the game itself picks
       // them: eyes heading home -> "dead", any ghost frightened -> "scared", otherwise the siren for the dots left
       resyncLoops() {

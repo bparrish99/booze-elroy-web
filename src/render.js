@@ -170,6 +170,8 @@
           setHollow();
         }
       }
+      // web edition: the Vacuum's charge, the same way: solid until it's used, hollow until the next READY
+      if (inGame && o === g.chars.pac && g.config.ability === core.VACUUM && g.vacuumSpent) setHollow();
       // web edition: the Rewind ability's charge shows the abilities' way: solid when ready, hollow once used
       if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent && !g.rewinding) setHollow(); // full while it plays back; spent once it's done
       let angle = 0;
@@ -496,6 +498,7 @@
       const routes = debug && g.state.showGhosts && !g.state.hideMaze ? ghostRoutes() : null;
       if (routes) drawRoutes(routes);
       if (g.state.showPac) drawChar(g.chars.pac, g.chars.pac.x, g.chars.pac.y, g.chars.pac.phased, true);
+      if (g.vacuumFx > 0 && g.config.ability === core.VACUUM) drawVacuum();
       if (g.state.showGhosts) {
         for (const name of core.charKeys()) { const c = g.chars[name]; if (c.target && !c.hidden) drawChar(c, c.x, c.y, false, true); }
       }
@@ -521,6 +524,25 @@
       else if (g.mode === "intermission2") drawIntermission2();
       else if (g.mode === "intermission3") drawIntermission3();
       if (g.rewinding) drawRewindTape();
+    }
+
+    // web edition: the Vacuum's swirl: a ring closing in on Pac-Man from the vacuum's reach (6 tiles), with streaks
+    // spiralling in behind it, fading as it closes (24 frames)
+    function drawVacuum() {
+      const pac = g.chars.pac, k = 1 - g.vacuumFx / 24;                 // 0 -> 1 as it closes
+      const cx = camX() + pac.x, cy = camY() + pac.y + 24, R = 6 * TILE * (1 - k * k);
+      ctx.save();
+      ctx.globalAlpha = 0.85 * (1 - k * 0.6);
+      ctx.strokeStyle = "rgb(222,222,255)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(cx, cy, Math.max(0.5, R), 0, Math.PI * 2); ctx.stroke();
+      for (let i = 0; i < 10; i++) {
+        const a0 = i * Math.PI / 5 + k * 3, r0 = R + 10 * (1 - k), r1 = Math.max(0, R - 6);
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a0) * r0, cy + Math.sin(a0) * r0);
+        ctx.lineTo(cx + Math.cos(a0 + 0.5) * r1, cy + Math.sin(a0 + 0.5) * r1);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     // web edition: the Rewind ability plays back like a VCR rewinding: the picture tears sideways in bands, a noise bar
