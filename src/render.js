@@ -1139,7 +1139,7 @@
                  + texture2D(tex, ruv - nb).rgb * 0.12;
           // a dark gap at the rim, then a fade; top/bottom much fainter (text rows sit right against the glass there)
           float fall = exp(-d / 0.035) * smoothstep(0.008, 0.02, d);
-          bez += r * vec3(0.95, 0.92, 0.88) * 0.42 * fall * (0.3 + 0.7 * side);
+          bez += r * vec3(0.95, 0.92, 0.88) * (vec > 0.5 ? 0.62 : 0.42) * fall * (0.3 + 0.7 * side); // vector: shinier plastic
         }
         gl_FragColor = vec4(mix(bez, c, inside), 1.0);
       }`);
@@ -1158,10 +1158,27 @@
         q += (q.yx * q.yx) * q * (vec > 0.5 ? vec2(${VEC_BEND}) : vec2(0.04, 0.055)); // vector: nearly flat glass
         float d = vec > 0.5 ? sdChamfer(q) : sdBox(q, vec2(1.0), 0.06);
         // the CRT's dark plastic; the ratty TV's (C key) is the same, just dark brown
-        vec3 col = tv > 0.5 ? vec3(0.2, 0.12, 0.065) : vec > 0.5 ? vec3(0.045, 0.045, 0.05) : vec3(0.11, 0.1, 0.086); // TV: 1982 wood-panelling brown; vector: a black cabinet
+        vec3 col = tv > 0.5 ? vec3(0.2, 0.12, 0.065) : vec > 0.5 ? vec3(0.03, 0.03, 0.034) : vec3(0.11, 0.1, 0.086); // TV: 1982 wood-panelling brown; vector: a black cabinet
         float grain = vec > 0.5 ? 1.0 : 0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)); // vector: smooth, solid plastic
         vec3 bez = col * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * grain;
         bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));
+        if (vec > 0.5) { // smooth, shiny black plastic: the light from above caught in it
+          float outside = smoothstep(0.0, 0.004, d);
+          float facing = clamp(q.y * 0.6 + 0.4, 0.0, 1.0);                   // top edges 1, sides 0.4, bottom 0
+          // the bevel where the plastic turns into the screen: a crisp highlight along it
+          float bev = smoothstep(0.004, 0.01, d) * (1.0 - smoothstep(0.016, 0.03, d));
+          bez += vec3(0.2, 0.2, 0.22) * bev * (0.2 + 0.8 * facing);
+          // a soft gloss band across the top, an overhead light reflected
+          float band = exp(-pow((q.y - 1.13) / 0.045, 2.0)) * exp(-pow(q.x / 0.85, 4.0));
+          bez += vec3(0.075, 0.075, 0.085) * band * outside;
+          // and a faint long sheen down each side
+          float sheen = exp(-pow((abs(q.x) - 1.1 + 0.04 * q.y) / 0.03, 2.0)) * smoothstep(-1.2, 0.8, q.y);
+          bez += vec3(0.035, 0.035, 0.04) * sheen * outside;
+          // a broad soft streak of light across the side panels, glancing down from the upper left, fading away from the screen
+          float panel = smoothstep(1.02, 1.12, abs(q.x)) * exp(-pow((abs(q.x) - 1.0) / 1.8, 2.0));
+          float streak = exp(-pow((q.x * 0.45 + q.y * 0.9 - 0.95) / 0.16, 2.0)) + 0.6 * exp(-pow((q.x * 0.45 + q.y * 0.9 + 0.55) / 0.1, 2.0));
+          bez += vec3(0.055, 0.055, 0.062) * streak * panel;
+        }
         gl_FragColor = vec4(bez, 1.0);
       }`);
 
