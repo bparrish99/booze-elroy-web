@@ -172,6 +172,7 @@
       }
       // web edition: the Vacuum's charge, the same way: solid until it's used, hollow until the next READY
       if (inGame && o === g.chars.pac && g.config.ability === core.VACUUM && g.vacuumSpent) setHollow();
+      if (inGame && o === g.chars.pac && g.config.ability === core.PUSH && g.pushSpent) setHollow();
       // web edition: the Rewind ability's charge shows the abilities' way: solid when ready, hollow once used
       if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent && !g.rewinding) setHollow(); // full while it plays back; spent once it's done
       let angle = 0;
@@ -499,6 +500,7 @@
       if (routes) drawRoutes(routes);
       if (g.state.showPac) drawChar(g.chars.pac, g.chars.pac.x, g.chars.pac.y, g.chars.pac.phased, true);
       if (g.vacuumFx > 0 && g.config.ability === core.VACUUM) drawVacuum();
+      if (g.pushFx > 0 && g.config.ability === core.PUSH) drawPush();
       if (g.state.showGhosts) {
         for (const name of core.charKeys()) { const c = g.chars[name]; if (c.target && !c.hidden) drawChar(c, c.x, c.y, false, true); }
       }
@@ -553,6 +555,23 @@
         if (p <= 0 || p >= 1) continue;
         const R = 6 * TILE * (1 - p);                                       // closing in
         const fade = Math.sin(p * Math.PI);                                 // in, then out
+        ctx.strokeStyle = "rgb(20,50,190)"; ctx.globalAlpha = 0.35 * fade; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(cx, cy, Math.max(1, R), 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = "rgb(60,100,230)"; ctx.globalAlpha = 0.85 * fade; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(cx, cy, Math.max(1, R), 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // web edition: the Push, the Vacuum's rings the other way: two dark blue rings rippling out from Pac-Man to the
+    // push's furthest reach (core.PUSH_MAX tiles) while the ghosts fly (the ghosts themselves are moved by the core)
+    function drawPush() {
+      const pac = g.chars.pac, k = 1 - g.pushFx / core.PUSH_FX, cx = camX() + pac.x, cy = camY() + pac.y + 24;
+      ctx.save();
+      for (let i = 0; i < 2; i++) {
+        const p = k * 1.4 - i * 0.4;
+        if (p <= 0 || p >= 1) continue;
+        const R = core.PUSH_MAX * TILE * p, fade = Math.sin(p * Math.PI);
         ctx.strokeStyle = "rgb(20,50,190)"; ctx.globalAlpha = 0.35 * fade; ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(cx, cy, Math.max(1, R), 0, Math.PI * 2); ctx.stroke();
         ctx.strokeStyle = "rgb(60,100,230)"; ctx.globalAlpha = 0.85 * fade; ctx.lineWidth = 1;

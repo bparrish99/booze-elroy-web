@@ -131,7 +131,13 @@
     // wait in g.vacuumQueue, eaten as each ateGhost pause ends); a ghost that isn't blue catches him. Each thing eaten
     // goes through the normal eating code, as if he were standing on it. Like Rewind and Pause, gameplay checks see it as Off
     const VACUUM = 6, VACUUM_RADIUS = 6, VACUUM_FX = 48; // VACUUM_FX: frames of the picture of it sucking (render only)
-    function ability() { return g.config.ability === REWIND || g.config.ability === PAUSE || g.config.ability === VACUUM ? false : g.config.ability; }
+    // web edition: the Push ability (author's design, 2026-11-14), the Vacuum's opposite: one charge per life and per board
+    // (refilled at every READY; g.pushSpent). Ghosts within PUSH_REACH tiles (blue ones too; not eyes, not ones in the
+    // house) are flung straight away from Pac-Man, over walls, landing on the open corridor tile (one he could walk to:
+    // a flood fill from him, the house and tunnels left out) that best lies along that line, at most PUSH_MAX tiles from
+    // him, facing away. Play stops while they fly (mode "push", PUSH_FX frames). No daze (the author)
+    const PUSH = 7, PUSH_REACH = 4, PUSH_MAX = 8, PUSH_FX = 40;
+    function ability() { const a = g.config.ability; return a === REWIND || a === PAUSE || a === VACUUM || a === PUSH ? false : a; }
     const pausing = () => g.config.ability === PAUSE && T(g.chars.pac.phased) && g.chars.pac.phased > 0;
     const pausePac = () => {
       g.chars.pac.phased = PAUSE_MAX;
@@ -719,6 +725,62 @@
       }
       mode.setMode("vacuum");
     }
+    // the Push: where each ghost in reach lands, then play stops while they fly there (pushStep / pushEnd)
+    function push() {
+      if (g.pushSpent || g.mode !== "normal" || !g.state.running) return;
+      g.pushSpent = true; g.pushFx = PUSH_FX;
+      if (g.sounds.phase.isPlaying()) g.sounds.phase.stop();
+      g.sounds.phase.play();
+      const cm = getCurrentMaze(), hc = cm.houseCenter, pac = g.chars.pac;
+      const [pX, , pY] = cm.getLoc(pac);
+      // the tiles he could walk to (flood fill), leaving out the house and the tunnels
+      const inHouse = (x, y) => Math.abs(x - hc.x) <= 4 && y >= hc.y - 2 && y <= hc.y + 2;
+      const open = new Set(), stack = [[pX, pY]];
+      while (stack.length) {
+        const [x, y] = stack.pop(), key = x + "," + y;
+        if (open.has(key) || x < 0 || y < 0 || x >= cm.w || y >= cm.h || cm.isWall(x, y) || cm.isTunnel(x, y) || inHouse(x, y)) continue;
+        open.add(key);
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+      }
+      const back = DELTAS[(pac.dir + 2) % 4];
+      g.pushGhosts = [];
+      for (const name of charKeys()) {
+        const ch = g.chars[name];
+        if (!ch.target || T(ch.dead) || ch.hidden || ch.housing || ch.entering || ch.leaving) continue;
+        const [gX, , gY] = cm.getLoc(ch);
+        const d0 = Math.hypot(gX - pX, gY - pY);
+        if (d0 > PUSH_REACH) continue;
+        let ux = gX - pX, uy = gY - pY;                                    // away from him (on his tile: behind him)
+        if (!ux && !uy) { ux = back.x; uy = back.y; }
+        const ul = Math.hypot(ux, uy); ux /= ul; uy /= ul;
+        let best = null, bestScore = -Infinity;
+        for (const key of open) {
+          const [x, y] = key.split(",").map(Number), dx = x - pX, dy = y - pY, dd = Math.hypot(dx, dy);
+          if (dd > PUSH_MAX || dd <= d0) continue;
+          const align = (dx * ux + dy * uy) / dd, score = align * 3 + dd * 0.25;
+          if (score > bestScore) { bestScore = score; best = [x, y]; }
+        }
+        if (!best) continue;                                               // nowhere further to go: stays put
+        // facing away: the open way out of the landing tile that best follows the push
+        let dir = ch.dir, bestA = -Infinity;
+        for (let i = 0; i < 4; i++) {
+          if (cm.isWall(best[0] + DELTAS[i].x, best[1] + DELTAS[i].y)) continue;
+          const a = DELTAS[i].x * ux + DELTAS[i].y * uy;
+          if (a > bestA) { bestA = a; dir = i; }
+        }
+        g.pushGhosts.push({ ch, x0: ch.x, y0: ch.y, x1: best[0] * TILE + CENTER, y1: best[1] * TILE + CENTER, dir });
+      }
+      mode.setMode("push");
+    }
+    // while it pushes: the ghosts fly out, fast at first, easing as they land
+    function pushStep() {
+      const k = 1 - g.modeTimer / PUSH_FX, e = 1 - (1 - k) * (1 - k);
+      for (const v of g.pushGhosts || []) { v.ch.x = Math.round(v.x0 + (v.x1 - v.x0) * e); v.ch.y = Math.round(v.y0 + (v.y1 - v.y0) * e); }
+    }
+    function pushEnd() {
+      for (const v of g.pushGhosts || []) { v.ch.x = v.x1; v.ch.y = v.y1; v.ch.dir = v.dir; v.ch.facing = v.dir; v.ch.accum16 = 0; }
+      g.pushGhosts = [];
+    }
     // while it sucks: the ghosts it caught slide in toward Pac-Man, faster as they come
     function vacuumStep() {
       const k = 1 - g.modeTimer / VACUUM_FX, e = k * k * (3 - 2 * k), pac = g.chars.pac;
@@ -1040,6 +1102,7 @@
               g.state = { showPac: true, showGhosts: true, showReady: true };
               g.starvation = 0;
               g.vacuumSpent = false; g.vacuumQueue = []; g.vacuumFx = 0; g.vacuumFly = []; g.vacuumGhosts = []; // the Vacuum's charge, back at every READY
+              g.pushSpent = false; g.pushGhosts = []; g.pushFx = 0;             // and the Push's
               characters.reset();
               levels.resetLevel();
             }
@@ -1055,6 +1118,11 @@
         vacuum: {
           state: { running: false, showPac: true, showGhosts: true }, frames: VACUUM_FX, nextMode: "normal",
           endFunc() { vacuumEnd(); },
+        },
+        // web edition: the Push flinging ghosts away (play stopped meanwhile)
+        push: {
+          state: { running: false, showPac: true, showGhosts: true }, frames: PUSH_FX, nextMode: "normal",
+          endFunc() { pushEnd(); },
         },
         ateGhost: {
           state: { running: false, showPac: false, showGhosts: true }, frames: 60, nextMode: "normal",
@@ -1688,8 +1756,10 @@
         if (g.paused) return;
         gameFc += 1;
         if (g.vacuumFx > 0) g.vacuumFx -= 1; // the Vacuum's swirl (render.js)
+        if (g.pushFx > 0) g.pushFx -= 1;     // the Push's rings
         mode.handle();
         if (g.mode === "vacuum") vacuumStep(); // (after the mode has started: its timer is the vacuum's)
+        if (g.mode === "push") pushStep();
         if (T(g.fruitScoreTimer)) {
           g.fruitScoreTimer -= 1;
           if (g.fruitScoreTimer <= 0) g.fruitScoreTimer = false;
@@ -1829,6 +1899,7 @@
         if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === REWIND && env.rewind) env.rewind();
         if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
         if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === VACUUM) vacuum();
+        if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === PUSH) push();
         if (g.state.running && (key === "space" || key === "lalt") && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (key === "tab" || key === "p") togglePause();
       },
@@ -1836,6 +1907,7 @@
         if (g.state.running && button === "a" && g.config.ability === REWIND && env.rewind) env.rewind();
         if (g.state.running && button === "a" && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
         if (g.state.running && button === "a" && g.config.ability === VACUUM) vacuum();
+        if (g.state.running && button === "a" && g.config.ability === PUSH) push();
         if (g.state.running && button === "a" && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (button === "x") togglePause();
       },
@@ -1878,7 +1950,7 @@
       Object.assign(opt("radar", [false, 30, 60, 90, 120], ["Off", "Tame", "Tricky", "Tough", "Terror"]), { y: 9 }),
       Object.assign(opt("startingLives", [1, 3, 5]), { y: 12 }),
       Object.assign(opt("freeGuy", [1, 2, 3, 4, 5], ["10000", "20000", "every 10k", "every 5k", "none"]), { y: 13 }),
-      Object.assign(opt("ability", [false, 1, 2, 3, 4, 5, 6], ["Off", "Phase", "Boost", "Stun", "Rewind", "Pause", "Vacuum"]), { y: 14 }),
+      Object.assign(opt("ability", [false, 1, 2, 3, 4, 5, 6, 7], ["Off", "Phase", "Boost", "Stun", "Rewind", "Pause", "Vacuum", "Push"]), { y: 14 }),
       Object.assign(opt("movement", [0, 1, 2, 3], ["Normal", "Faster", "Fastest", "Jetpack"]), { y: 15 }),
       Object.assign(opt("ghostCount", range(0, 7)), { y: 18 }),
       Object.assign(ON_OFF("pinkyBug"), { y: 19 }),
@@ -1922,7 +1994,7 @@
     const OPT_VALUES = {
       mazepack: PACKS, startingLevel: range(1, 21), difficulty: [0, 1, 2], plusMode: [false, true],
       afterDark: [false, 1, 2, 3, 4, 5], radar: [false, 30, 60, 90, 120], startingLives: [1, 3, 5], freeGuy: [1, 2, 3, 4, 5],
-      ability: [false, 1, 2, 3, 4, 5, 6], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
+      ability: [false, 1, 2, 3, 4, 5, 6, 7], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
       scatterOption: [false, 1, 2, 3], freeGhost: [true, false], background: bgNames, mazeColor: MAZE_COLORS,
       crtEffect: [true, false], volume: range(0, 10), proMode: [false, true],
     };
@@ -2015,7 +2087,7 @@
 
     return {
       g, init, setScene, keypressed, update: () => g.scene.update(FIXED_DT),
-      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND, PAUSE, VACUUM, VACUUM_FX,
+      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND, PAUSE, VACUUM, VACUUM_FX, PUSH, PUSH_FX, PUSH_MAX,
       // web edition (rewind.js): put the looping sounds back in line with the game state, the way the game itself picks
       // them: eyes heading home -> "dead", any ghost frightened -> "scared", otherwise the siren for the dots left
       resyncLoops() {
