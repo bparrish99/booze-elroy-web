@@ -351,7 +351,7 @@
       clip(ACCT_COL * TILE, 0, ACCT_W * TILE, TILE);
       const x = ACCT_COL - d / TILE;
       print(name, x, 0, 3); print(name, x + name.length + gap, 0, 3);
-      ctx.restore();
+      unclip();
     }
     // HIGH SCORE value; the online leader's name scrolls through it while the value shown is the leader's score
     // (so not once a game, or an autoplay run, has gone past it)
@@ -375,13 +375,15 @@
       print(score, x, 1);
       print(name, x + score.length + gap, 1, 4);
       print(score, x + score.length + gap + name.length + gap, 1);
-      ctx.restore();
+      unclip();
     }
     function begin(withBg) {
       ctx.globalAlpha = 1; setColor(1, 1, 1);
       clearScreen(); if (withBg) drawBackground();
     }
-    const clip = (x, y, w, h) => { ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); };
+    // (the vector look's text mask is clipped the same way, or text scrolled out of sight would still mark it)
+    const clip = (x, y, w, h) => { for (const c of [ctx, mctx]) { c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip(); } };
+    const unclip = () => { ctx.restore(); mctx.restore(); };
 
     // ---- scenes
     function drawAttract() {
@@ -399,7 +401,7 @@
         for (const name of ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"]) { const c = g.ghosts[name]; if (c) drawChar(c, c.x, c.y); }
         if (g.modeTimer > 135) ctx.drawImage(assets.banner, g.ghosts.blinky.x - 100, g.ghosts.blinky.y + 7);
         else ctx.drawImage(assets.banner, 12, 97);
-        ctx.restore();
+        unclip();
         if (g.modeTimer < 560 && g.attractPac) {
           drawParticles();
           print("pac-man", 3, 19, 6);
@@ -463,7 +465,7 @@
         }
         if (g.mode === "playerUp") setColor(1, 1, 1);
         drawParticles();
-        ctx.restore();
+        unclip();
         if (!g.state.hideLives) {
           for (let i = 1; i <= Math.min(5, g.lives); i++) drawSpriteAtTile("spr16", 85, i * 2, 34);
         }
@@ -494,7 +496,7 @@
       if (g.state.showGhosts) {
         for (const name of core.charKeys()) { const c = g.chars[name]; if (c.target && !c.hidden) drawChar(c, c.x, c.y, false, true); }
       }
-      ctx.restore();
+      unclip();
       if (routes) drawTargets(routes);
 
       const pac = g.chars.pac;
