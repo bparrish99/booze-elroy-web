@@ -1217,7 +1217,7 @@
           if (vec) { // the beam's afterglow fades by time, not by frame (same trails at 60 or 144 Hz)
             const nxt = 1 - vh, film = smoothNow();
             if (textMask) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, maskTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textMask); }
-            pass(pV, VH[nxt], (p) => { gl.uniform1i(p.u("mask"), 2); gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.3, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t, maskTex);
+            pass(pV, VH[nxt], (p) => { gl.uniform1i(p.u("mask"), 2); gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.55, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t, maskTex);
             vh = nxt; pic = VH[vh].t;
           } else {
             const nxt = 1 - ph;
