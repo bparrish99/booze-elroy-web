@@ -1179,34 +1179,25 @@
               // schmutz on the glass: greasy smudges hazing the picture, a dried drip from the top, a water-stain ring,
               // dust specks (applied after the scanlines too)
               float smudge = smoothstep(0.5, 0.75, fbm(fuv * vec2(2.6, 3.4) + 11.0)) * 0.75;
-              float dx = fuv.x - 0.31 - 0.006 * sin(fuv.y * 23.0) - 0.004 * sin(fuv.y * 61.0);
-              float drip = (1.0 - smoothstep(0.004, 0.011, abs(dx))) * smoothstep(0.42, 0.6, fuv.y) * (0.6 + 0.4 * vnoise(vec2(fuv.y * 40.0, 1.0)));
-              drip = max(drip, (1.0 - smoothstep(0.009, 0.017, length((fuv - vec2(0.31 + 0.006 * sin(0.42 * 23.0), 0.425)) * vec2(1.0, 1.4)))) * 0.9); // its bead
+              // dried drips running down from the top (the author liked the first one: more of them), each wobbling its
+              // own way and ending in a bead; some older and fainter
+              float drip = 0.0;
+              for (int dI = 0; dI < 6; dI++) {
+                float fd = float(dI);
+                float x0 = 0.08 + 0.84 * hash(vec2(fd, 41.0)), yEnd = 0.2 + 0.6 * hash(vec2(fd, 42.0));
+                float wd = 0.003 + 0.004 * hash(vec2(fd, 43.0)), age = 0.45 + 0.55 * hash(vec2(fd, 44.0));
+                float wob = (0.004 + 0.004 * hash(vec2(fd, 45.0))) * sin(fuv.y * (17.0 + 12.0 * hash(vec2(fd, 46.0))) + fd) + 0.003 * sin(fuv.y * 61.0 + fd * 2.0);
+                float dx = fuv.x - x0 - wob;
+                float run = (1.0 - smoothstep(wd, wd + 0.007, abs(dx))) * smoothstep(yEnd, yEnd + 0.12, fuv.y) * (0.6 + 0.4 * vnoise(vec2(fuv.y * 40.0, fd)));
+                float wobEnd = (0.004 + 0.004 * hash(vec2(fd, 45.0))) * sin(yEnd * (17.0 + 12.0 * hash(vec2(fd, 46.0))) + fd) + 0.003 * sin(yEnd * 61.0 + fd * 2.0);
+                float bead = 1.0 - smoothstep(wd + 0.004, wd + 0.011, length((fuv - vec2(x0 + wobEnd, yEnd + 0.004)) * vec2(1.0, 1.4)));
+                drip = max(drip, max(run, bead * 0.9) * age);
+              }
               float stain = (1.0 - smoothstep(0.0, 0.006, abs(length((fuv - vec2(0.27, 0.2)) * vec2(0.7778, 1.0)) - 0.07))) * (0.5 + 0.5 * vnoise(fuv * 60.0));
               ruinHaze = clamp(smudge + drip * 0.8 + stain * 0.7, 0.0, 0.9);
-              // fingerprints (soft ovals with faint whorled ridges) and a couple of swipe smears: greasy, hazing the
-              // picture and catching a little light (single bright dust specks looked like dead pixels: replaced)
-              float grease = 0.0;
-              for (int f = 0; f < 6; f++) {
-                float ff = float(f);
-                vec2 fc = vec2(0.12 + 0.76 * hash(vec2(ff, 21.0)), 0.1 + 0.8 * hash(vec2(ff, 22.0)));
-                float fa = hash(vec2(ff, 23.0)) * 3.14159, fcs = cos(fa), fsn = sin(fa);
-                vec2 fl = (fuv - fc) * vec2(0.7778, 1.0); fl = vec2(fcs * fl.x + fsn * fl.y, -fsn * fl.x + fcs * fl.y);
-                float e = length(fl / vec2(0.03, 0.04));
-                float ridge = 0.5 + 0.5 * sin(e * 22.0 + vnoise(fl * 90.0) * 2.5);
-                grease = max(grease, (1.0 - smoothstep(0.55, 1.0, e)) * (0.3 + 0.7 * ridge) * (0.5 + 0.5 * hash(vec2(ff, 24.0))));
-              }
-              for (int f = 0; f < 2; f++) {
-                float ff = float(f);
-                vec2 fc = vec2(0.25 + 0.5 * hash(vec2(ff, 31.0)), 0.25 + 0.5 * hash(vec2(ff, 32.0)));
-                float fa = -0.6 + 1.2 * hash(vec2(ff, 33.0)), fcs = cos(fa), fsn = sin(fa);
-                vec2 fl = (fuv - fc) * vec2(0.7778, 1.0); fl = vec2(fcs * fl.x + fsn * fl.y, -fsn * fl.x + fcs * fl.y);
-                float e = length(fl / vec2(0.13, 0.022));
-                float streak = vnoise(vec2(fl.y * 160.0, fl.x * 6.0 + ff * 9.0));
-                grease = max(grease, (1.0 - smoothstep(0.4, 1.0, e)) * (0.25 + 0.75 * streak) * 0.8);
-              }
-              ruinHaze = clamp(ruinHaze + grease * 0.85, 0.0, 0.9);
-              ruinLight += vec3(0.09, 0.085, 0.075) * grease;
+              ruinLight += vec3(0.075, 0.06, 0.04) * drip;                   // dried residue catching the light
+              // (fingerprints and swipe smears were tried: "fake crabmeat". Single bright dust specks before them looked
+              // like dead pixels)
             }
             c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b;
             if (ruin > 0.5) {
