@@ -1024,6 +1024,12 @@
       float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
       float fbm(vec2 p){ return 0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03 + 7.1) + 0.125 * vnoise(p * 4.1 + 3.3) + 0.0625 * vnoise(p * 8.3 + 1.7); }
+      // the discarded look's cracks: point i of radial crack k (at set distances out, each a little off the crack's line)
+      vec2 crackPt(float k, float i){
+        float R = i < 0.5 ? 0.0 : 0.05 * (pow(1.62, i) - 1.0) / 0.62;
+        float th = 6.2832 * (k + 0.6 * hash(vec2(k, 1.3))) / 11.0 + (i < 0.5 ? 0.0 : (hash(vec2(k, i + 0.7)) - 0.5) * 0.32);
+        return R * vec2(cos(th), sin(th));
+      }
       // web edition: the C key's third look, a ratty old living-room TV on an RF cable. Brightness stays fairly sharp,
       // colour smears sideways and drifts (composite video), a ghost trails to the right, faint diagonal interference, wonky geometry now and then,
       // a torn tracking band drifting down (no vertical-hold jumps or rolls: tried, too cheesy)
@@ -1096,7 +1102,7 @@
         float d = vec > 0.5 ? sdChamfer(q) : sdBox(q, vec2(1.0), 0.06);
         float inside = 1.0 - smoothstep(-0.004, 0.012, d);
         vec2 uv = (q + 1.0) * 0.5;
-        vec3 c = vec3(0.0), backdrop = vec3(0.0);
+        vec3 c = vec3(0.0), backdrop = vec3(0.0), ruinLight = vec3(0.0); float ruinHaze = 0.0, ruinDim = 1.0;
         if (inside > 0.0) { // the tube's effects only where the glass shows
           float ty = 1.0 - uv.y;
           float tick = floor(time * 7.0);
@@ -1118,42 +1124,81 @@
             }
           }
           else {
-            float crack = 0.0, halo = 0.0, crackAng = 0.0;
+            float halo = 0.0;
             if (ruin > 0.5) {
-              // broken glass: an impact low on the right, radial cracks out from it (wiggling, some to the edge), broken
-              // rings round it, a crushed spot in the middle. Each shard bends the picture a little its own way
+              // broken glass, the way glass breaks: an impact low on the right; radial cracks running out from it in
+              // straight runs with sharp kinks (polylines through points at set distances, each a little off its line),
+              // and the rings between them as straight chords from crack to crack, so the web is angular. A crack
+              // segment catches the light depending on its angle: some bright, some barely there. Each shard bends the
+              // picture a little its own way. (Drawn after the scanlines: it's on the glass.)
               vec2 cp = (fuv - vec2(0.7, 0.32)) * vec2(0.7778, 1.0);
-              float r = length(cp), a = atan(cp.y, cp.x); crackAng = a;
+              float r = length(cp), a = atan(cp.y, cp.x);
+              vec2 LD = normalize(vec2(0.75, 0.66));
+              float best = 1.0, light = 0.0;
               for (int k = 0; k < 11; k++) {
-                float fk = float(k);
-                float ak = 6.2832 * (fk + 0.6 * hash(vec2(fk, 1.3))) / 11.0 + 0.05 * sin(r * 31.0 + fk) + 0.025 * sin(r * 77.0 + fk * 3.0);
-                float len = 0.18 + 0.75 * hash(vec2(fk, 2.9));
-                float da = a - ak; da = mod(da + 3.14159, 6.28318) - 3.14159;
-                float dk = abs(r * sin(da)) / 0.7778;
-                float on = step(abs(da), 1.4) * (1.0 - smoothstep(len * 0.85, len, r));
-                crack = max(crack, on * (1.0 - smoothstep(0.0009, 0.0022, dk)));
-                halo = max(halo, on * (1.0 - smoothstep(0.002, 0.006, dk)));
+                float fk = float(k), nk = 2.0 + floor(4.0 * hash(vec2(fk, 2.9)));
+                for (int i = 0; i < 5; i++) {
+                  float fi = float(i);
+                  if (fi >= nk) break;
+                  vec2 A = crackPt(fk, fi), B = crackPt(fk, fi + 1.0);
+                  vec2 pa = cp - A, ba = B - A; float t = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+                  float dd = length(pa - ba * t) / 0.7778;
+                  float w = 0.0011 * (1.0 - 0.45 * clamp(length(A + ba * t) / 0.8, 0.0, 1.0));
+                  float ln = 1.0 - smoothstep(w, w + 0.0012, dd);
+                  light = max(light, ln * (0.12 + 0.88 * pow(abs(dot(normalize(ba), LD)), 3.0)));
+                  halo = max(halo, 1.0 - smoothstep(0.0015, 0.005, dd));
+                  // the ring chord from this crack to the next, at this point (not every one)
+                  if (fi >= 1.0 && fi <= 3.0 && fi < 2.0 + floor(4.0 * hash(vec2(mod(fk + 1.0, 11.0), 2.9))) && hash(vec2(fk * 7.0 + fi, 4.4)) > 0.35) {
+                    vec2 C = crackPt(mod(fk + 1.0, 11.0), fi);
+                    vec2 pc = cp - A, cb = C - A; float tc = clamp(dot(pc, cb) / dot(cb, cb), 0.0, 1.0);
+                    float dc = length(pc - cb * tc) / 0.7778;
+                    float lc = 1.0 - smoothstep(0.0009, 0.0021, dc);
+                    light = max(light, lc * (0.12 + 0.88 * pow(abs(dot(normalize(cb), LD)), 3.0)));
+                    halo = max(halo, 1.0 - smoothstep(0.0015, 0.005, dc));
+                  }
+                }
               }
               float sector = floor((a + 3.14159) / 6.28318 * 11.0);
-              for (int i = 0; i < 4; i++) {
-                float fi = float(i), ri = (0.035 + 0.055 * fi * (1.0 + 0.3 * fi)) * (1.0 + 0.07 * sin(a * 5.0 + fi * 2.0));
-                float seg = step(0.4, hash(vec2(sector + fi * 13.0, 4.4)));
-                float dr = abs(r - ri);
-                crack = max(crack, seg * (1.0 - smoothstep(0.0009, 0.0022, dr)));
-                halo = max(halo, seg * (1.0 - smoothstep(0.002, 0.006, dr)));
-              }
-              float ring = r < 0.035 ? 0.0 : r < 0.09 ? 1.0 : r < 0.19 ? 2.0 : r < 0.34 ? 3.0 : 4.0;
-              uv += (vec2(hash(vec2(sector, ring)), hash(vec2(ring, sector + 0.5))) - 0.5) * 0.007 * (1.0 - smoothstep(0.08, 0.7, r));
-              if (r < 0.03) crack = max(crack, step(0.55, hash(floor(fuv * 260.0))) * (1.0 - r / 0.03)); // crushed
+              float ring = r < 0.05 ? 0.0 : r < 0.131 ? 1.0 : r < 0.262 ? 2.0 : r < 0.474 ? 3.0 : 4.0;
+              uv += (vec2(hash(vec2(sector, ring)), hash(vec2(ring, sector + 0.5))) - 0.5) * 0.008 * (1.0 - smoothstep(0.08, 0.7, r));
+              if (r < 0.028) light = max(light, step(0.5, hash(floor(fuv * 300.0))) * (1.0 - r / 0.028) * 0.9); // crushed
+              ruinLight = vec3(0.5, 0.52, 0.55) * light;
+              // the tube itself, failing (the author: "like the CRT ain't quite workin' right anymore"):
+              //   the vertical deflection weak at the bottom: the lowest part of the picture squashed
+              if (uv.y < 0.2) uv.y = 0.2 * pow(max(uv.y, 0.0) / 0.2, 1.35);
+              //   (a hum band creeping up the screen was tried: the author didn't want it)
+              //   now and then a jolt, a brownout, and the picture torn sideways below a bright line
+              float slot = floor(time * 2.5), ev = step(0.93, hash(vec2(slot, 5.0)));
+              float tearY = hash(vec2(slot, 7.0));
+              uv.y += ev * (hash(vec2(slot, 6.0)) - 0.5) * 0.012;
+              uv.x += ev * step(uv.y, tearY) * (hash(vec2(slot, 8.0)) - 0.3) * 0.03;
+              ruinDim = 1.0 - ev * 0.3;
+              ruinLight += vec3(0.35, 0.36, 0.4) * ev * (1.0 - smoothstep(0.0, 0.002, abs(uv.y - tearY)));
+              ca *= 3.5;                                                   // convergence long gone
+              // schmutz on the glass: greasy smudges hazing the picture, a dried drip from the top, a water-stain ring,
+              // dust specks (applied after the scanlines too)
+              float smudge = smoothstep(0.5, 0.75, fbm(fuv * vec2(2.6, 3.4) + 11.0)) * 0.75;
+              float dx = fuv.x - 0.31 - 0.006 * sin(fuv.y * 23.0) - 0.004 * sin(fuv.y * 61.0);
+              float drip = (1.0 - smoothstep(0.004, 0.011, abs(dx))) * smoothstep(0.42, 0.6, fuv.y) * (0.6 + 0.4 * vnoise(vec2(fuv.y * 40.0, 1.0)));
+              drip = max(drip, (1.0 - smoothstep(0.009, 0.017, length((fuv - vec2(0.31 + 0.006 * sin(0.42 * 23.0), 0.425)) * vec2(1.0, 1.4)))) * 0.9); // its bead
+              float stain = (1.0 - smoothstep(0.0, 0.006, abs(length((fuv - vec2(0.27, 0.2)) * vec2(0.7778, 1.0)) - 0.07))) * (0.5 + 0.5 * vnoise(fuv * 60.0));
+              ruinHaze = clamp(smudge + drip * 0.8 + stain * 0.7, 0.0, 0.9);
+              ruinLight += vec3(0.16, 0.15, 0.13) * step(0.9965, hash(floor(fuv * vec2(620.0, 800.0))));
             }
             c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b;
             if (ruin > 0.5) {
-              // neglect: dimmer, dusty (brownish film, thicker in blotches), the cracks dark at their sides and catching
-              // the light along their edge
-              float dust = fbm(fuv * vec2(6.0, 7.7) + 3.0);
-              c *= 0.8 * (1.0 - 0.45 * halo);
-              c = mix(c, c * vec3(1.0, 0.93, 0.8), 0.6) + vec3(0.05, 0.045, 0.035) * smoothstep(0.35, 0.8, dust);
-              c += vec3(0.42, 0.44, 0.46) * crack * (0.45 + 0.55 * hash(vec2(floor(crackAng * 40.0), 2.0)));
+              c += samp(uv - vec2(0.012, 0.0), vec2(0.0)) * 0.18;           // a ghost image to the right
+              float rr = length((fuv - vec2(0.18, 0.78)) * vec2(0.7778, 1.0));
+              // a magnetised corner (purity gone): a purple stain with a green fringe
+              float blot = 1.0 - smoothstep(0.08, 0.42, rr);
+              c *= mix(vec3(1.0), mix(vec3(1.5, 0.5, 1.4), vec3(0.75, 1.4, 0.75), smoothstep(0.14, 0.34, rr)), blot);
+              c += vec3(0.05, 0.0, 0.05) * blot;                           // the stain shows even where it's dark
+              // a failing band at the top: dimmer, with a bright retrace line; and a few dead scanlines
+              c *= 1.0 - 0.45 * smoothstep(0.915, 0.93, uv.y);
+              c += vec3(0.25, 0.27, 0.3) * (1.0 - smoothstep(0.0, 0.0018, abs(uv.y - 0.925)));
+              c *= 1.0 - 0.7 * step(0.988, hash(vec2(floor(uv.y * 288.0), 3.3)));
+              c *= 0.82 * (1.0 - 0.4 * halo);
+              c = mix(c, c * vec3(1.0, 0.93, 0.8), 0.6);                   // yellowed
             }
           }
           if (vec < 0.5) { // a vector monitor has no scanlines and no grille: the beam draws the lines themselves
@@ -1182,6 +1227,11 @@
           // the vector backdrop: after the grain (no shimmer: the author didn't like it), flickering with the beam at
           // half its strength (full strength was jarring on a bright backdrop; none at all, the author missed it)
           c += backdrop * (1.0 - 0.035 * hash(vec2(floor(time * 60.0), 1.0)));
+          if (ruin > 0.5) { // the discarded look's glass: grime hazing the picture, then the cracks and specks catching the light
+            c *= ruinDim;
+            c = mix(c, c * 0.55 + vec3(0.07, 0.062, 0.048), ruinHaze);
+            c += ruinLight;
+          }
           // glass: glare at the top-right (web edition: moved off the 1UP score), faint dust streak, darkening near the rim
           float gl1 = exp(-pow(length((fuv - vec2(0.8, 0.84)) * vec2(1.0, 1.25)) / 0.30, 2.0));
           float gl2 = exp(-pow(((1.0 - fuv.x) * 0.9 + fuv.y * 0.55 - 0.78) / 0.05, 2.0)) * 0.5;
@@ -1236,6 +1286,12 @@
       float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
       float fbm(vec2 p){ return 0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03 + 7.1) + 0.125 * vnoise(p * 4.1 + 3.3) + 0.0625 * vnoise(p * 8.3 + 1.7); }
+      // the discarded look's cracks: point i of radial crack k (at set distances out, each a little off the crack's line)
+      vec2 crackPt(float k, float i){
+        float R = i < 0.5 ? 0.0 : 0.05 * (pow(1.62, i) - 1.0) / 0.62;
+        float th = 6.2832 * (k + 0.6 * hash(vec2(k, 1.3))) / 11.0 + (i < 0.5 ? 0.0 : (hash(vec2(k, i + 0.7)) - 0.5) * 0.32);
+        return R * vec2(cos(th), sin(th));
+      }
       void main(){
         vec2 fuv = (vuv - frame.xy) / frame.zw;
         if (ruin > 0.5) fuv = tilt(fuv);
@@ -1274,9 +1330,9 @@
           vec2 pp = gl_FragCoord.xy / max(dpr, 1.0);                       // css px, the window's own (untilted)
           float bd = sdBox(q, vec2(1.17, 1.12), 0.1);
           float scuff = fbm(q * 9.0) * 0.5 + 0.5 * step(0.985, vnoise(vec2(q.x * 3.0 + q.y * 9.0, q.y * 140.0)));
-          vec3 plastic = vec3(0.12, 0.11, 0.095) * (0.6 + 0.5 * clamp(fuv.y, -0.15, 1.15)) * (0.75 + 0.35 * scuff);
+          vec3 plastic = vec3(0.2, 0.045, 0.04) * (0.6 + 0.5 * clamp(fuv.y, -0.15, 1.15)) * (0.75 + 0.35 * scuff); // dark red (the author)
           plastic += vec3(0.07) * smoothstep(-0.02, 0.0, bd) * (1.0 - smoothstep(0.0, 0.01, bd)) * clamp(q.y * 0.4 + 0.6, 0.0, 1.0); // its edge
-          bez = mix(bez, plastic, 0.55) * vec3(1.0, 0.97, 0.9);
+          bez = mix(bez, plastic, 0.85) * vec3(1.0, 0.97, 0.9);
           vec3 ground = vec3(0.15, 0.135, 0.11) * (0.55 + 0.6 * fbm(pp / 140.0)) * (0.85 + 0.25 * vnoise(pp / 9.0)) * (0.9 + 0.2 * hash(floor(pp / 1.5)));
           ground = mix(ground, vec3(0.1, 0.085, 0.07), smoothstep(0.55, 0.8, fbm(pp / 60.0 + 9.0)) * 0.6); // patches of dirt
           // rocks: one maybe per cell, a lumpy disc shaded by a light from the upper left, with a shadow to the lower right
@@ -1285,7 +1341,7 @@
             vec2 cell = floor(pp / 64.0) + vec2(float(i), float(j));
             float h = hash(cell * 1.7 + 0.3);
             float clump = fbm(cell * 0.23 + 4.0);                          // rubble gathers in some places, not others
-            if (h < 1.15 - clump * 1.1) continue;
+            if (h < 0.95 - clump * 1.1) continue;                          // (more rubble: the author)
             vec2 pt = (cell + 0.15 + 0.7 * vec2(hash(cell + 5.1), hash(cell + 9.7))) * 64.0;
             float sz = hash(cell + 2.2);
             float rad = 3.0 + 9.0 * sz + 26.0 * pow(hash(cell + 3.3), 4.0); // mostly pebbles and stones, a few big chunks
@@ -1320,6 +1376,49 @@
             float tri = max(abs(sp.x) * 0.87 + sp.y * 0.5, -sp.y) - 1.5 - 1.5 * hash(sc + 4.4);
             float glint = step(0.8, hash(sc + 6.6));                        // most are dull; now and then one catches the light
             ground = mix(ground, vec3(0.3, 0.31, 0.32) * (0.6 + 0.3 * hash(sc + 8.8)) + vec3(0.35) * glint, (1.0 - smoothstep(-0.5, 0.5, tri)) * (1.0 - rockA) * 0.8);
+          }
+          // litter: soda cans lying on their sides (some crushed) and crumpled wrappers, each with a shadow
+          for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+            vec2 cell = floor(pp / 170.0) + vec2(float(i), float(j));
+            float h = hash(cell * 2.3 + 0.9);
+            vec2 pt = (cell + 0.15 + 0.7 * vec2(hash(cell + 1.4), hash(cell + 8.2))) * 170.0;
+            float ang = hash(cell + 3.9) * 6.2832, cs = cos(ang), sn = sin(ang);
+            vec2 rel = pp - pt, lp = vec2(cs * rel.x + sn * rel.y, -sn * rel.x + cs * rel.y);
+            vec2 sl = lp - vec2(cs * 3.0 - sn * 3.0, -sn * 3.0 - cs * 3.0) * vec2(1.0, -1.0); // the shadow, down and right
+            if (h > 0.62) { // a can
+              float L = 15.0 + 4.0 * hash(cell + 2.7), R = 8.5, crushed = step(0.6, hash(cell + 6.1));
+              float dent = crushed * 1.6 * sin(lp.x * 0.7 + h * 9.0);
+              float d = length(vec2(max(abs(lp.x) - L, 0.0), lp.y + dent * 0.5)) - (R - abs(dent) * 0.4);
+              float ds = length(vec2(max(abs(sl.x) - L, 0.0), sl.y)) - R;
+              ground *= 1.0 - 0.45 * (1.0 - smoothstep(-1.0, 3.0, ds));
+              if (d < 0.0) {
+                float v = clamp((lp.y + dent * 0.5) / R, -1.0, 1.0);
+                vec3 n = vec3(0.0, v, sqrt(1.0 - v * v)); n.xy = vec2(cs * n.x - sn * n.y, sn * n.x + cs * n.y);
+                float lit = clamp(dot(n, normalize(vec3(-0.55, 0.6, 0.6))), 0.0, 1.0);
+                float pick = hash(cell + 5.5);
+                vec3 body = pick < 0.3 ? vec3(0.55, 0.07, 0.06) : pick < 0.55 ? vec3(0.08, 0.35, 0.13) : pick < 0.8 ? vec3(0.1, 0.18, 0.5) : vec3(0.5, 0.5, 0.53);
+                body = mix(body, vec3(0.62, 0.6, 0.55), (1.0 - smoothstep(3.0, 4.5, abs(lp.x))) * 0.6);           // the label band
+                body = mix(body, vec3(0.5, 0.5, 0.52), step(L - 1.5, abs(lp.x)));                                 // the ends
+                vec3 can = body * (0.3 + 0.8 * lit) + vec3(0.3) * pow(lit, 12.0);                                  // with a metal shine
+                ground = mix(ground, can * (0.7 + 0.3 * vnoise(pp / 2.0)), 1.0 - smoothstep(-1.0, 0.0, d));
+              }
+            } else if (h > 0.38) { // a crumpled wrapper
+              float rad = 12.0 + 10.0 * hash(cell + 4.6), dd = -1.0, sd = -1.0;
+              for (int k = 0; k < 6; k++) {
+                float fk = float(k), ak = 6.2832 * fk / 6.0 + h * 7.0;
+                vec2 dk = vec2(cos(ak), sin(ak)); float reach = rad * (0.6 + 0.6 * hash(cell * 1.9 + fk));
+                dd = max(dd, dot(lp, dk) / reach); sd = max(sd, dot(sl, dk) / reach);
+              }
+              ground *= 1.0 - 0.35 * (1.0 - smoothstep(0.9, 1.3, sd));
+              if (dd < 1.0) {
+                float pick = hash(cell + 7.3);
+                vec3 paper = pick < 0.3 ? vec3(0.62, 0.52, 0.12) : pick < 0.55 ? vec3(0.58, 0.28, 0.08) : pick < 0.8 ? vec3(0.55, 0.55, 0.52) : vec3(0.52, 0.09, 0.08);
+                float crinkle = vnoise(lp / 2.2 + h * 30.0) * 0.6 + vnoise(lp / 5.0) * 0.4;
+                paper *= 0.45 + 0.75 * crinkle;
+                paper = mix(paper, paper * 0.5, step(0.75, fract(lp.x / 7.0 + 0.3)) * 0.5);                     // a printed stripe
+                ground = mix(ground, paper, 1.0 - smoothstep(0.92, 1.0, dd));
+              }
+            }
           }
           // the monitor's shadow on the ground, to the lower right
           float sh = sdBox(q - vec2(0.07, -0.09), vec2(1.17, 1.12), 0.1);
