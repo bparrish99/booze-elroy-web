@@ -123,7 +123,7 @@
     // tracks, up to PAUSE_MAX frames; then it reloads for PAUSE_COOLDOWN frames, like Phase and Boost. Uses pac.phased
     // the abilities' way: > 0 while held (frames left), counting down from 0 to -PAUSE_COOLDOWN while it reloads.
     // Like Rewind, every gameplay check sees it as "Off"; only Pac-Man's own movement stops
-    const PAUSE = 5, PAUSE_MAX = 120, PAUSE_COOLDOWN = 120;
+    const PAUSE = 5, PAUSE_MAX = 120, PAUSE_COOLDOWN = 60;
     function ability() { return g.config.ability === REWIND || g.config.ability === PAUSE ? false : g.config.ability; }
     const pausing = () => g.config.ability === PAUSE && T(g.chars.pac.phased) && g.chars.pac.phased > 0;
     const pausePac = () => {
