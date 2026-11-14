@@ -696,8 +696,9 @@
       const cm = getCurrentMaze();
       const [pX, , pY] = cm.getLoc(g.chars.pac);
       const near = (x, y) => (x - pX) * (x - pX) + (y - pY) * (y - pY) <= VACUUM_RADIUS * VACUUM_RADIUS;
-      // what it takes, for the picture of it all flying in (render.js drawVacuum; it's all eaten right now regardless)
-      const fly = g.powers.concat(g.dots).filter((it) => near(it.x, it.y))
+      // what it takes, for the picture of it flying in (render.js drawVacuum; it's all eaten right now regardless): the
+      // energizers and the fruit (the dots just vanish: flying in, they looked like particles to the author)
+      const fly = g.powers.filter((it) => near(it.x, it.y))
         .map((it) => ({ item: it, x: it.x * 8 + 4, y: it.y * 8 + 4, d: Math.hypot(it.x - pX, it.y - pY) }));
       for (const p of g.powers.filter((it) => near(it.x, it.y))) checkCollisions(g.powers, p.x, p.y);
       for (const d of g.dots.filter((it) => near(it.x, it.y))) checkCollisions(g.dots, d.x, d.y);
