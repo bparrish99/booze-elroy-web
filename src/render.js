@@ -1175,10 +1175,12 @@
           float panel = smoothstep(1.02, 1.12, abs(q.x)) * exp(-pow((abs(q.x) - 1.0) / 1.8, 2.0));
           float streak = exp(-pow((q.x * 0.45 + q.y * 0.9 - 0.95) / 0.16, 2.0)) + 0.6 * exp(-pow((q.x * 0.45 + q.y * 0.9 + 0.55) / 0.1, 2.0));
           bez += vec3(0.055, 0.055, 0.062) * streak * panel;
-          // 80s flair: a thin neon tube in green (fuchsia was tried: too close to the blue maze) just outside the bevel, following the screen's shape, with a soft glow
-          float nd = abs(d - 0.045);
-          vec3 NEON = vec3(0.2, 0.95, 0.22);
+          // 80s flair: two thin neon tubes following the screen's shape, each with a soft glow: green just outside the
+          // bevel (it goes with the blue maze), and a dark fuchsia one shadowing it, a little further out and dimmer
+          float nd = abs(d - 0.045), nd2 = abs(d - 0.07);
+          vec3 NEON = vec3(0.2, 0.95, 0.22), NEON2 = vec3(0.62, 0.1, 0.55);
           bez += NEON * (0.4 * (1.0 - smoothstep(0.0015, 0.0045, nd)) + 0.14 * exp(-nd / 0.012) + 0.05 * exp(-nd / 0.05));
+          bez += NEON2 * (0.42 * (1.0 - smoothstep(0.0015, 0.0045, nd2)) + 0.12 * exp(-nd2 / 0.012) + 0.04 * exp(-nd2 / 0.05));
         }
         gl_FragColor = vec4(bez, 1.0);
       }`);
