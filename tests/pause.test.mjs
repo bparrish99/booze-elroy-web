@@ -1,5 +1,5 @@
 // The Pause ability (ability 5; web edition, 2026-11-13): holding the ability button stops Pac-Man in his tracks, up
-// to 1.5 seconds; letting go (or the 1.5 seconds running out) starts a 1-second reload, during which it can't be used.
+// to 1.5 seconds; letting go (or the 1.5 seconds running out) leaves it spent until a new life, a new board or an energizer.
 // Everything else keeps moving.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -23,7 +23,7 @@ function start() {
 const pos = (g) => g.chars.pac.x + "," + g.chars.pac.y;
 const press = (core, input) => { input.held = true; core.keypressed("space"); };
 
-test("Pause: held, Pac-Man stands still for at most 1.5 seconds, then reloads for 1", () => {
+test("Pause: held, Pac-Man stands still for at most 1.5 seconds, then stays spent", () => {
   const { core, g, input } = start();
   const p0 = pos(g);
   core.update();
@@ -35,13 +35,15 @@ test("Pause: held, Pac-Man stands still for at most 1.5 seconds, then reloads fo
   assert.notEqual(pos(g), here, "moves again after 1.5 seconds, though still held");
   assert.ok(g.chars.pac.phased < 0, "reloading");
   input.held = false;
-  // during the reload a press does nothing
+  // spent: a press does nothing, and it stays spent (no reload timer) until an energizer, a new life or a new board
   press(core, input);
   const p1 = pos(g); core.update();
   assert.notEqual(pos(g), p1);
   input.held = false;
-  for (let f = 0; f < 70 && g.chars.pac.phased !== false; f++) core.update();
-  assert.equal(g.chars.pac.phased, false, "ready again");
+  for (let f = 0; f < 200; f++) core.update();
+  assert.ok(g.chars.pac.phased < 0, "still spent");
+  const e = g.powers.shift(); e.action(e.x, e.y);
+  assert.equal(g.chars.pac.phased, false, "an energizer recharges it");
 });
 
 test("Pause: letting go early ends it and starts the reload", () => {

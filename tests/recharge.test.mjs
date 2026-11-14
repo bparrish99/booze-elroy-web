@@ -1,6 +1,7 @@
 // Every ability recharges on a new life, a new board and, since 2026-11-14 (the author), on eating an energizer:
 // Phase / Boost / Stun / Pause reloading are ready at once (one in use carries on); a spent Rewind / Suck / Blow is back.
-// Energizers the Suck swallows don't recharge the Suck itself.
+// There are no reload timers: once used, an ability stays spent until one of those. Energizers the Suck swallows
+// recharge the Suck too.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -48,11 +49,18 @@ test("Rewind, Suck and Blow: a spent charge comes back with an energizer", () =>
   }
 });
 
-test("Suck: energizers it swallows itself don't recharge it", () => {
+test("Phase: once its second is over it stays spent (no reload timer)", () => {
+  const { core, g } = start(1);
+  core.keypressed("space");
+  for (let f = 0; f < 300; f++) core.update();
+  assert.ok(g.chars.pac.phased < 0, "still spent after 5 s");
+});
+
+test("Suck: an energizer it swallows recharges it", () => {
   const { core, g } = start(6);
   const e = g.powers[0];
   Object.assign(g.chars.pac, { x: e.x * 8 + 4 + 16, y: e.y * 8 + 4 });
   core.keypressed("space");
   assert.ok(!g.powers.includes(e), "it swallowed the energizer");
-  assert.equal(g.vacuumSpent, true, "and stays spent");
+  assert.equal(g.vacuumSpent, false, "and is ready again");
 });

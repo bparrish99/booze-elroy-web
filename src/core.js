@@ -120,10 +120,10 @@
     // only the ability button behaves differently
     const REWIND = 4;
     // web edition: the Pause ability (author's design, 2026-11-13). Holding the ability button stops Pac-Man in his
-    // tracks, up to PAUSE_MAX frames; then it reloads for PAUSE_COOLDOWN frames, like Phase and Boost. Uses pac.phased
-    // the abilities' way: > 0 while held (frames left), counting down from 0 to -PAUSE_COOLDOWN while it reloads.
+    // tracks, up to PAUSE_MAX frames; then it's spent until a new life, board or energizer, like every ability. Uses
+    // pac.phased the abilities' way: > 0 while held (frames left), -1 once spent.
     // Like Rewind, every gameplay check sees it as "Off"; only Pac-Man's own movement stops
-    const PAUSE = 5, PAUSE_MAX = 90, PAUSE_COOLDOWN = 60;
+    const PAUSE = 5, PAUSE_MAX = 90;
     // web edition: the Vacuum ability (author's design, 2026-11-14): one charge per life and per board (refilled at every
     // READY, like Rewind; g.vacuumSpent). The button sucks up everything within VACUUM_RADIUS tiles in a straight line,
     // through walls: energizers first (so a ghost they turn blue is eaten, not deadly), then dots, the fruit, and ghosts
@@ -698,13 +698,13 @@
     // web edition (the author, 2026-11-14): every ability recharges on a new life, a new board (both already did: Pac-Man
     // is reset, and Rewind / Suck / Blow refill at READY) and, new, on eating an energizer: Phase / Boost / Stun / Pause
     // reloading are ready at once (one in use carries on), a spent Rewind / Suck / Blow is back. The reload sound says
-    // so. Energizers the Suck swallows don't recharge the Suck itself (it would hand out a free second Suck)
+    // so. Energizers the Suck swallows recharge it too (the author)
     function rechargeAbilities() {
       const pac = g.chars.pac, a = g.config.ability;
       let did = false;
       if ((a === 1 || a === 2 || a === 3 || a === PAUSE) && T(pac.phased) && pac.phased < 0) { pac.phased = false; did = true; }
       if (a === REWIND && g.rewindSpent && !g.rewinding) { g.rewindSpent = false; did = true; }
-      if (a === VACUUM && g.vacuumSpent && !g.vacuuming) { g.vacuumSpent = false; did = true; }
+      if (a === VACUUM && g.vacuumSpent) { g.vacuumSpent = false; did = true; }
       if (a === PUSH && g.pushSpent) { g.pushSpent = false; did = true; }
       if (did) g.sounds.reload.play();
     }
@@ -719,9 +719,7 @@
       // what it takes, for the picture of it being sucked in (render.js drawVacuum; it's all eaten right now regardless)
       const fly = g.powers.concat(g.dots).filter((it) => near(it.x, it.y))
         .map((it) => ({ item: it, x: it.x * 8 + 4, y: it.y * 8 + 4, d: Math.hypot(it.x - pX, it.y - pY) }));
-      g.vacuuming = true; // (its own energizers don't recharge it)
-      for (const p of g.powers.filter((it) => near(it.x, it.y))) checkCollisions(g.powers, p.x, p.y);
-      g.vacuuming = false;
+      for (const p of g.powers.filter((it) => near(it.x, it.y))) checkCollisions(g.powers, p.x, p.y); // (recharging it, if any)
       for (const d of g.dots.filter((it) => near(it.x, it.y))) checkCollisions(g.dots, d.x, d.y);
       const fl = cm.fruitLoc;
       if (T(g.fruitTimer) && near(fl.x / 8, fl.y / 8)) {
@@ -1797,13 +1795,14 @@
               g.radarTimer -= 1;
             }
           }
+          // web edition (the author, 2026-11-14): no reload timers: once an ability's effect is over it stays spent (phased
+          // -1, Pac-Man hollow) until a new life, a new board or an energizer (rechargeAbilities). (The Lua reloaded it
+          // after 60 frames)
           if (g.config.ability === PAUSE && T(pac.phased)) {
-            if (pac.phased > 0 && !abilityHeld()) pac.phased = 1; // let go: the reload starts now
+            if (pac.phased > 0 && !abilityHeld()) pac.phased = 1; // let go: it's spent now
+            if (pac.phased >= 0) pac.phased -= 1;
+          } else if (T(pac.phased) && pac.phased >= 0) {
             pac.phased -= 1;
-            if (pac.phased === -PAUSE_COOLDOWN) { pac.phased = false; g.sounds.reload.play(); }
-          } else if (T(pac.phased)) {
-            pac.phased -= 1;
-            if (pac.phased === -60) { pac.phased = false; g.sounds.reload.play(); }
             if (pac.phased === 0 && (g.config.movement === 0 || g.config.movement === 1) && ability() === 2) pac.speed = logic.getPacSpeed();
           }
           if (g.fadeTimer > 0) g.fadeTimer -= 1;
