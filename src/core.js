@@ -819,6 +819,10 @@
             const [pX, , pY] = cm.getLoc(g.chars.pac);
             checkCollisions(g.powers, pX, pY);
             checkCollisions(g.dots, pX, pY);
+            // web edition (author's call, 2026-11-13): in Plus Mode the fruit frightens the ghosts like an energizer, so
+            // it wins a tie with a ghost the same way: eaten before the ghosts are checked (it used to come after, and a
+            // ghost reached on the same step caught him). Elsewhere the fruit is still eaten after them, as before
+            if (g.config.plusMode) eatFruit();
             for (const name of charKeys()) {
               const ch = g.chars[name];
               if (ch.target) {
@@ -829,20 +833,7 @@
           }
 
           logic.turn(c);
-
-          const fl = getCurrentMaze().fruitLoc;
-          if (T(g.fruitTimer) && g.chars.pac.x === fl.x && g.chars.pac.y === fl.y &&
-            (!T(ability()) || ability() >= 2 || (!T(g.chars.pac.phased) || g.chars.pac.phased <= 0))) {
-            score(g.level.fruit.score);
-            g.fruitTimer = false;
-            g.fruitScoreTimer = 120;
-            g.sounds.fruit.play();
-            if (g.config.plusMode) {
-              g.fruitFrightened = true; g.mazeFrightened = false;
-              if (g.config.afterDark === 4) g.fadeTimer = g.fadeLength();
-              handlers.activateFrightenedMode(true);
-            }
-          }
+          eatFruit();
         } else if (isPac && g.config.movement === 3) {
           if (g.chars.pac.speed > MAX_THRUST) {
             mode.setMode("destroyed");
@@ -855,6 +846,23 @@
         }
       }
     };
+
+    // the fruit, eaten when Pac-Man is on its spot (not while phased through things); in Plus Mode it frightens the ghosts
+    function eatFruit() {
+      const fl = getCurrentMaze().fruitLoc;
+      if (T(g.fruitTimer) && g.chars.pac.x === fl.x && g.chars.pac.y === fl.y &&
+        (!T(ability()) || ability() >= 2 || (!T(g.chars.pac.phased) || g.chars.pac.phased <= 0))) {
+        score(g.level.fruit.score);
+        g.fruitTimer = false;
+        g.fruitScoreTimer = 120;
+        g.sounds.fruit.play();
+        if (g.config.plusMode) {
+          g.fruitFrightened = true; g.mazeFrightened = false;
+          if (g.config.afterDark === 4) g.fadeTimer = g.fadeLength();
+          handlers.activateFrightenedMode(true);
+        }
+      }
+    }
 
     logic.turn = (c) => {
       const isPac = c === g.chars.pac;
