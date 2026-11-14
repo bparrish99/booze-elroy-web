@@ -43,7 +43,8 @@
     // web edition: an ability not ready ("out of gas") draws Pac-Man hollow: a darker yellow at his edge fading smoothly to a very dark yellow in the middle
     // (each pixel's shade from its distance to the nearest empty pixel), instead of the original flat dark tint. Baked once per sprite frame.
     let hollow = false;
-    const setHollow = () => { col = [1, 1, 1, 1]; hollow = true; };
+    // (the vector look only draws outlines, so there he has no inside to hollow out: a dimmer yellow instead)
+    const setHollow = () => { if (g.config.crtEffect === "vector") { col = [0.42, 0.42, 0.42, 1]; hollow = false; } else { col = [1, 1, 1, 1]; hollow = true; } };
     const HOLLOW_EDGE = [150, 146, 0], HOLLOW_MID = [62, 58, 0], HOLLOW_FADE = 3; // pixels from the edge to the darkest shade
     const hollowCache = new WeakMap(); // sheet -> Map(frame -> canvas)
     function hollowFrame(s, sx, sy) {
@@ -1158,7 +1159,8 @@
         float d = vec > 0.5 ? sdChamfer(q) : sdBox(q, vec2(1.0), 0.06);
         // the CRT's dark plastic; the ratty TV's (C key) is the same, just dark brown
         vec3 col = tv > 0.5 ? vec3(0.2, 0.12, 0.065) : vec > 0.5 ? vec3(0.045, 0.045, 0.05) : vec3(0.11, 0.1, 0.086); // TV: 1982 wood-panelling brown; vector: a black cabinet
-        vec3 bez = col * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
+        float grain = vec > 0.5 ? 1.0 : 0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)); // vector: smooth, solid plastic
+        vec3 bez = col * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * grain;
         bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));
         gl_FragColor = vec4(bez, 1.0);
       }`);
