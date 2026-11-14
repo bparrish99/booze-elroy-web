@@ -404,6 +404,7 @@
       },
       handlePowerEaten() {
         if (g.wakka) { g.sounds.wakka2.play(); g.wakka = false; } else { g.sounds.wakka1.play(); g.wakka = true; }
+        rechargeAbilities();
         handlers.activateFrightenedMode();
         if (g.config.afterDark === 4) g.fadeTimer = g.fadeLength();
       },
@@ -694,6 +695,19 @@
         }
       }
     };
+    // web edition (the author, 2026-11-14): every ability recharges on a new life, a new board (both already did: Pac-Man
+    // is reset, and Rewind / Suck / Blow refill at READY) and, new, on eating an energizer: Phase / Boost / Stun / Pause
+    // reloading are ready at once (one in use carries on), a spent Rewind / Suck / Blow is back. The reload sound says
+    // so. Energizers the Suck swallows don't recharge the Suck itself (it would hand out a free second Suck)
+    function rechargeAbilities() {
+      const pac = g.chars.pac, a = g.config.ability;
+      let did = false;
+      if ((a === 1 || a === 2 || a === 3 || a === PAUSE) && T(pac.phased) && pac.phased < 0) { pac.phased = false; did = true; }
+      if (a === REWIND && g.rewindSpent && !g.rewinding) { g.rewindSpent = false; did = true; }
+      if (a === VACUUM && g.vacuumSpent && !g.vacuuming) { g.vacuumSpent = false; did = true; }
+      if (a === PUSH && g.pushSpent) { g.pushSpent = false; did = true; }
+      if (did) g.sounds.reload.play();
+    }
     function vacuum() {
       if (g.vacuumSpent || g.mode !== "normal" || !g.state.running) return;
       g.vacuumSpent = true; g.vacuumFx = VACUUM_FX;
@@ -705,7 +719,9 @@
       // what it takes, for the picture of it being sucked in (render.js drawVacuum; it's all eaten right now regardless)
       const fly = g.powers.concat(g.dots).filter((it) => near(it.x, it.y))
         .map((it) => ({ item: it, x: it.x * 8 + 4, y: it.y * 8 + 4, d: Math.hypot(it.x - pX, it.y - pY) }));
+      g.vacuuming = true; // (its own energizers don't recharge it)
       for (const p of g.powers.filter((it) => near(it.x, it.y))) checkCollisions(g.powers, p.x, p.y);
+      g.vacuuming = false;
       for (const d of g.dots.filter((it) => near(it.x, it.y))) checkCollisions(g.dots, d.x, d.y);
       const fl = cm.fruitLoc;
       if (T(g.fruitTimer) && near(fl.x / 8, fl.y / 8)) {
@@ -1950,7 +1966,7 @@
       Object.assign(opt("radar", [false, 30, 60, 90, 120], ["Off", "Tame", "Tricky", "Tough", "Terror"]), { y: 9 }),
       Object.assign(opt("startingLives", [1, 3, 5]), { y: 12 }),
       Object.assign(opt("freeGuy", [1, 2, 3, 4, 5], ["10000", "20000", "every 10k", "every 5k", "none"]), { y: 13 }),
-      Object.assign(opt("ability", [false, 1, 2, 3, 4, 5, 6, 7], ["Off", "Phase", "Boost", "Stun", "Rewind", "Pause", "Vacuum", "Push"]), { y: 14 }),
+      Object.assign(opt("ability", [false, 1, 2, 3, 4, 5, 6, 7], ["Off", "Phase", "Boost", "Stun", "Rewind", "Pause", "Suck", "Blow"]), { y: 14 }),
       Object.assign(opt("movement", [0, 1, 2, 3], ["Normal", "Faster", "Fastest", "Jetpack"]), { y: 15 }),
       Object.assign(opt("ghostCount", range(0, 7)), { y: 18 }),
       Object.assign(ON_OFF("pinkyBug"), { y: 19 }),
