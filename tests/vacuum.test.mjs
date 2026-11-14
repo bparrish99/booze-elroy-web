@@ -86,9 +86,11 @@ test("Vacuum: an energizer in reach turns a ghost in reach blue first, so it's e
   assert.ok(!g.powers.includes(e), "and the energizer is gone");
 });
 
-test("Vacuum: no ghost in reach, no stop", () => {
+test("Vacuum: play stops while it sucks, ghosts or not, then goes on", () => {
   const { core, g } = start();
   core.keypressed("space");
+  assert.equal(g.mode, "vacuum");
+  settle(core);
   assert.equal(g.mode, "normal");
 });
 

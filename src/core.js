@@ -707,9 +707,9 @@
         eatFruit(true);
       }
       g.vacuumFly = fly;
-      // ghosts in reach are dragged in for real, so you can see what's coming (the author: it wasn't clear why you died):
-      // play stops (mode "vacuum", VACUUM_FX frames) while they're pulled across the maze into Pac-Man (already blue if
-      // an energizer in reach frightened them); vacuumEnd settles it when they arrive. No ghosts: no stop
+      // play stops while it sucks (mode "vacuum", VACUUM_FX frames; the author: so you see what's happening), and ghosts
+      // in reach are dragged in for real, so you can see what's coming (it wasn't clear why you died): pulled across the
+      // maze into Pac-Man (already blue if an energizer in reach frightened them); vacuumEnd settles it when they arrive
       g.vacuumGhosts = [];
       for (const name of charKeys()) {
         const ch = g.chars[name];
@@ -717,7 +717,7 @@
         const [gX, , gY] = cm.getLoc(ch);
         if (near(gX, gY)) g.vacuumGhosts.push({ ch, x0: ch.x, y0: ch.y });
       }
-      if (g.vacuumGhosts.length) mode.setMode("vacuum");
+      mode.setMode("vacuum");
     }
     // while it sucks: the ghosts it caught slide in toward Pac-Man, faster as they come
     function vacuumStep() {
