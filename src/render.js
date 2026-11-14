@@ -1184,7 +1184,29 @@
               drip = max(drip, (1.0 - smoothstep(0.009, 0.017, length((fuv - vec2(0.31 + 0.006 * sin(0.42 * 23.0), 0.425)) * vec2(1.0, 1.4)))) * 0.9); // its bead
               float stain = (1.0 - smoothstep(0.0, 0.006, abs(length((fuv - vec2(0.27, 0.2)) * vec2(0.7778, 1.0)) - 0.07))) * (0.5 + 0.5 * vnoise(fuv * 60.0));
               ruinHaze = clamp(smudge + drip * 0.8 + stain * 0.7, 0.0, 0.9);
-              ruinLight += vec3(0.16, 0.15, 0.13) * step(0.9965, hash(floor(fuv * vec2(620.0, 800.0))));
+              // fingerprints (soft ovals with faint whorled ridges) and a couple of swipe smears: greasy, hazing the
+              // picture and catching a little light (single bright dust specks looked like dead pixels: replaced)
+              float grease = 0.0;
+              for (int f = 0; f < 6; f++) {
+                float ff = float(f);
+                vec2 fc = vec2(0.12 + 0.76 * hash(vec2(ff, 21.0)), 0.1 + 0.8 * hash(vec2(ff, 22.0)));
+                float fa = hash(vec2(ff, 23.0)) * 3.14159, fcs = cos(fa), fsn = sin(fa);
+                vec2 fl = (fuv - fc) * vec2(0.7778, 1.0); fl = vec2(fcs * fl.x + fsn * fl.y, -fsn * fl.x + fcs * fl.y);
+                float e = length(fl / vec2(0.03, 0.04));
+                float ridge = 0.5 + 0.5 * sin(e * 22.0 + vnoise(fl * 90.0) * 2.5);
+                grease = max(grease, (1.0 - smoothstep(0.55, 1.0, e)) * (0.3 + 0.7 * ridge) * (0.5 + 0.5 * hash(vec2(ff, 24.0))));
+              }
+              for (int f = 0; f < 2; f++) {
+                float ff = float(f);
+                vec2 fc = vec2(0.25 + 0.5 * hash(vec2(ff, 31.0)), 0.25 + 0.5 * hash(vec2(ff, 32.0)));
+                float fa = -0.6 + 1.2 * hash(vec2(ff, 33.0)), fcs = cos(fa), fsn = sin(fa);
+                vec2 fl = (fuv - fc) * vec2(0.7778, 1.0); fl = vec2(fcs * fl.x + fsn * fl.y, -fsn * fl.x + fcs * fl.y);
+                float e = length(fl / vec2(0.13, 0.022));
+                float streak = vnoise(vec2(fl.y * 160.0, fl.x * 6.0 + ff * 9.0));
+                grease = max(grease, (1.0 - smoothstep(0.4, 1.0, e)) * (0.25 + 0.75 * streak) * 0.8);
+              }
+              ruinHaze = clamp(ruinHaze + grease * 0.85, 0.0, 0.9);
+              ruinLight += vec3(0.09, 0.085, 0.075) * grease;
             }
             c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b;
             if (ruin > 0.5) {
