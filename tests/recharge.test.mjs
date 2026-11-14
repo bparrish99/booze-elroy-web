@@ -1,7 +1,6 @@
-// Every ability recharges on a new life, a new board and, since 2026-11-14 (the author), on eating an energizer:
-// Phase / Boost / Stun / Pause reloading are ready at once (one in use carries on); a spent Rewind / Suck / Blow is back.
-// There are no reload timers: once used, an ability stays spent until one of those. Energizers the Suck swallows
-// recharge the Suck too.
+// The one-charge abilities (Rewind, Suck, Blow) refill at every READY (a new life, a new board) and, since 2026-11-14
+// (the author), when Pac-Man eats an energizer; energizers the Suck swallows recharge it too, so they chain. Phase /
+// Boost / Stun / Pause keep their own reload timers, and an energizer doesn't touch them.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -21,25 +20,6 @@ function start(ability) {
 }
 const eatEnergizer = (g) => { const e = g.powers.shift(); e.action(e.x, e.y); };
 
-for (const [name, ab] of [["Phase", 1], ["Boost", 2], ["Stun", 3]]) {
-  test(name + ": reloading, an energizer makes it ready; in use, it carries on", () => {
-    const { g } = start(ab);
-    g.chars.pac.phased = -20;
-    eatEnergizer(g);
-    assert.equal(g.chars.pac.phased, false);
-    g.chars.pac.phased = 30;
-    eatEnergizer(g);
-    assert.equal(g.chars.pac.phased, 30);
-  });
-}
-
-test("Pause: reloading, an energizer makes it ready", () => {
-  const { g } = start(5);
-  g.chars.pac.phased = -10;
-  eatEnergizer(g);
-  assert.equal(g.chars.pac.phased, false);
-});
-
 test("Rewind, Suck and Blow: a spent charge comes back with an energizer", () => {
   for (const [ab, flag] of [[4, "rewindSpent"], [6, "vacuumSpent"], [7, "pushSpent"]]) {
     const { g } = start(ab);
@@ -49,18 +29,20 @@ test("Rewind, Suck and Blow: a spent charge comes back with an energizer", () =>
   }
 });
 
-test("Phase: once its second is over it stays spent (no reload timer)", () => {
-  const { core, g } = start(1);
-  core.keypressed("space");
-  for (let f = 0; f < 300; f++) core.update();
-  assert.ok(g.chars.pac.phased < 0, "still spent after 5 s");
-});
-
-test("Suck: an energizer it swallows recharges it", () => {
+test("Suck: an energizer it swallows recharges it (they chain)", () => {
   const { core, g } = start(6);
   const e = g.powers[0];
   Object.assign(g.chars.pac, { x: e.x * 8 + 4 + 16, y: e.y * 8 + 4 });
   core.keypressed("space");
   assert.ok(!g.powers.includes(e), "it swallowed the energizer");
   assert.equal(g.vacuumSpent, false, "and is ready again");
+});
+
+test("Phase / Boost / Stun / Pause: an energizer leaves their reload alone (their own timers)", () => {
+  for (const ab of [1, 2, 3, 5]) {
+    const { g } = start(ab);
+    g.chars.pac.phased = -20;
+    eatEnergizer(g);
+    assert.equal(g.chars.pac.phased, -20, "ability " + ab);
+  }
 });
