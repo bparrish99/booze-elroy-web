@@ -107,7 +107,7 @@
       const r = Math.random();
       if (r < 0.34) blip("crack"); else if (r < 0.38) blip("hiss");           // a crack every ~0.75 s, a hiss every ~6 s
       else if (r < 0.392 && ctx.currentTime > stuckUntil) stick();            // stuck every ~20 s
-      else if (r < 0.423) buzz();                                             // a buzz every ~8 s
+      else if (r < 0.413) buzz();                                             // a buzz every ~12 s
       if (Math.random() < 0.05) {
         const t = ctx.currentTime, g = ruin.wire.gain;
         // dead silence, cut and back at once (a dip and a fade back was too gentle)
