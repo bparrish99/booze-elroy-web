@@ -1377,49 +1377,7 @@
             float glint = step(0.8, hash(sc + 6.6));                        // most are dull; now and then one catches the light
             ground = mix(ground, vec3(0.3, 0.31, 0.32) * (0.6 + 0.3 * hash(sc + 8.8)) + vec3(0.35) * glint, (1.0 - smoothstep(-0.5, 0.5, tri)) * (1.0 - rockA) * 0.8);
           }
-          // litter: soda cans lying on their sides (some crushed) and crumpled wrappers, each with a shadow
-          for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-            vec2 cell = floor(pp / 170.0) + vec2(float(i), float(j));
-            float h = hash(cell * 2.3 + 0.9);
-            vec2 pt = (cell + 0.15 + 0.7 * vec2(hash(cell + 1.4), hash(cell + 8.2))) * 170.0;
-            float ang = hash(cell + 3.9) * 6.2832, cs = cos(ang), sn = sin(ang);
-            vec2 rel = pp - pt, lp = vec2(cs * rel.x + sn * rel.y, -sn * rel.x + cs * rel.y);
-            vec2 sl = lp - vec2(cs * 3.0 - sn * 3.0, -sn * 3.0 - cs * 3.0) * vec2(1.0, -1.0); // the shadow, down and right
-            if (h > 0.62) { // a can
-              float L = 15.0 + 4.0 * hash(cell + 2.7), R = 8.5, crushed = step(0.6, hash(cell + 6.1));
-              float dent = crushed * 1.6 * sin(lp.x * 0.7 + h * 9.0);
-              float d = length(vec2(max(abs(lp.x) - L, 0.0), lp.y + dent * 0.5)) - (R - abs(dent) * 0.4);
-              float ds = length(vec2(max(abs(sl.x) - L, 0.0), sl.y)) - R;
-              ground *= 1.0 - 0.45 * (1.0 - smoothstep(-1.0, 3.0, ds));
-              if (d < 0.0) {
-                float v = clamp((lp.y + dent * 0.5) / R, -1.0, 1.0);
-                vec3 n = vec3(0.0, v, sqrt(1.0 - v * v)); n.xy = vec2(cs * n.x - sn * n.y, sn * n.x + cs * n.y);
-                float lit = clamp(dot(n, normalize(vec3(-0.55, 0.6, 0.6))), 0.0, 1.0);
-                float pick = hash(cell + 5.5);
-                vec3 body = pick < 0.3 ? vec3(0.55, 0.07, 0.06) : pick < 0.55 ? vec3(0.08, 0.35, 0.13) : pick < 0.8 ? vec3(0.1, 0.18, 0.5) : vec3(0.5, 0.5, 0.53);
-                body = mix(body, vec3(0.62, 0.6, 0.55), (1.0 - smoothstep(3.0, 4.5, abs(lp.x))) * 0.6);           // the label band
-                body = mix(body, vec3(0.5, 0.5, 0.52), step(L - 1.5, abs(lp.x)));                                 // the ends
-                vec3 can = body * (0.3 + 0.8 * lit) + vec3(0.3) * pow(lit, 12.0);                                  // with a metal shine
-                ground = mix(ground, can * (0.7 + 0.3 * vnoise(pp / 2.0)), 1.0 - smoothstep(-1.0, 0.0, d));
-              }
-            } else if (h > 0.38) { // a crumpled wrapper
-              float rad = 12.0 + 10.0 * hash(cell + 4.6), dd = -1.0, sd = -1.0;
-              for (int k = 0; k < 6; k++) {
-                float fk = float(k), ak = 6.2832 * fk / 6.0 + h * 7.0;
-                vec2 dk = vec2(cos(ak), sin(ak)); float reach = rad * (0.6 + 0.6 * hash(cell * 1.9 + fk));
-                dd = max(dd, dot(lp, dk) / reach); sd = max(sd, dot(sl, dk) / reach);
-              }
-              ground *= 1.0 - 0.35 * (1.0 - smoothstep(0.9, 1.3, sd));
-              if (dd < 1.0) {
-                float pick = hash(cell + 7.3);
-                vec3 paper = pick < 0.3 ? vec3(0.62, 0.52, 0.12) : pick < 0.55 ? vec3(0.58, 0.28, 0.08) : pick < 0.8 ? vec3(0.55, 0.55, 0.52) : vec3(0.52, 0.09, 0.08);
-                float crinkle = vnoise(lp / 2.2 + h * 30.0) * 0.6 + vnoise(lp / 5.0) * 0.4;
-                paper *= 0.45 + 0.75 * crinkle;
-                paper = mix(paper, paper * 0.5, step(0.75, fract(lp.x / 7.0 + 0.3)) * 0.5);                     // a printed stripe
-                ground = mix(ground, paper, 1.0 - smoothstep(0.92, 1.0, dd));
-              }
-            }
-          }
+          // (soda cans and wrappers were tried: they looked like pills and hexagons, so they went)
           // the monitor's shadow on the ground, to the lower right
           float sh = sdBox(q - vec2(0.07, -0.09), vec2(1.17, 1.12), 0.1);
           ground *= 0.45 + 0.55 * smoothstep(-0.02, 0.22, sh);
