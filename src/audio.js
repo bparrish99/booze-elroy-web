@@ -74,12 +74,14 @@
       clearTimeout(dropTimer);
       if (!ruinOn) return;
       const r = Math.random();
-      if (r < 0.17) blip("crack"); else if (r < 0.185) blip("hiss");          // a crack every ~1.5 s, a hiss every ~17 s
-      else if (r < 0.197 && ctx.currentTime > stuckUntil) stick();            // stuck every ~20 s
+      if (r < 0.17) blip("crack"); else if (r < 0.21) blip("hiss");           // a crack every ~1.5 s, a hiss every ~6 s
+      else if (r < 0.222 && ctx.currentTime > stuckUntil) stick();            // stuck every ~20 s
       if (Math.random() < 0.05) {
         const t = ctx.currentTime, g = ruin.wire.gain;
-        g.cancelScheduledValues(t); g.setValueAtTime(1, t); g.linearRampToValueAtTime(0.08, t + 0.02);
-        g.setValueAtTime(0.08, t + 0.06 + Math.random() * 0.18); g.linearRampToValueAtTime(1, t + 0.3);
+        // dead silence, cut and back at once (a dip and a fade back was too gentle)
+        const back = t + 0.06 + Math.random() * 0.25;
+        g.cancelScheduledValues(t); g.setValueAtTime(1, t); g.linearRampToValueAtTime(0, t + 0.002);
+        g.setValueAtTime(0, back); g.linearRampToValueAtTime(1, back + 0.003);
       }
       dropTimer = setTimeout(dropouts, 250);
     }
