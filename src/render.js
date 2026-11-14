@@ -236,9 +236,10 @@
     function drawBackground() {
       if (!g.currentBackground) g.currentBackground = g.config.background;
       const bg = assets.backgrounds[g.currentBackground];
-      // (not in the vector look: a vector monitor has no pictures, and leaving them out lets the beam pick up dim lines,
-      // like maze style 9's dark grey, which a picture's brightness would otherwise hide among)
-      if (bg && g.config.crtEffect !== "vector") ctx.drawImage(bg, 0, 0, GW, GH);   // already dimmed to 40% at build time
+      // (not in the picture in the vector look, where the beam would trace it and it would hide dim lines like maze style
+      // 9's dark grey; there it's handed to the presenter instead as a backdrop behind the glass: R.backdrop)
+      if (bg && g.config.crtEffect === "vector") backdrop = bg;
+      else if (bg) ctx.drawImage(bg, 0, 0, GW, GH);   // already dimmed to 40% at build time
     }
 
     // Elroy's drunk bubbles (web edition). The core still emits its particles exactly as the Lua does (same RNG use);
@@ -598,6 +599,7 @@
       }
     }
     let film = false; // Mina's film is on screen this frame
+    let backdrop = null; // the vector look: the background picture drawn this frame, shown behind the beam (not traced)
     function drawIntermission3(t = g.modeTimer, started = core.mode.isStarted("intermission3")) {
       const v = assets.video;
       if (t <= 780 && t > 300 && started && v && v.readyState >= 2) {
@@ -855,7 +857,7 @@
     }
 
     function draw() {
-      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; film = false;
+      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; film = false; backdrop = null;
       if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
       masking = g.config.crtEffect === "vector";
       const scene = g.scene.name;
@@ -887,13 +889,13 @@
       lines.forEach((l, i) => print(l, 14 - l.length / 2, 15 + i, 0));
     }
 
-    return { screen, textMask, draw, filmOn: () => film, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
+    return { screen, textMask, draw, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
       // account corner: fn() -> the logged-in name or null (fn.online false: no corner); hot = under the mouse
       setAccount(fn, online) { accountName = fn; accountOnline = !!online; }, accountBox: () => accountBox, setAccountHot(h) { accountHot = !!h; } };
   }
 
   // =============================================================== presenter: normal CRT + "MAX" CRT (non-canon)
-  function createPresenter(canvas, source, getConfig, smoothNow = () => false, textMask = null) { // smoothNow: Mina's film is showing; textMask: where text is (vector look)
+  function createPresenter(canvas, source, getConfig, smoothNow = () => false, textMask = null, getBackdrop = () => null) { // smoothNow: Mina's film is showing; textMask: where text is (vector look)
     let gl = null;
     try { gl = canvas.getContext("webgl", { alpha: false, antialias: false, preserveDrawingBuffer: true }); } catch { /* fall through */ }
     if (!gl) {
@@ -997,8 +999,9 @@
     const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
     // the vector look's glass: nearly flat (barrel bend, also in main.js toGame via presenter.vecBend) and angular
     const VEC_BEND_XY = [0.012, 0.016], VEC_BEND = VEC_BEND_XY.join(", "), VEC_CHAMFER = "0.09";
+    const VEC_BACKDROP = "0.3"; // the backdrop's brightness (the pictures are already at 25%)
     const pU = mk(HDR + `
-      uniform sampler2D bezTex; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv, vec; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV; vec: 1 = vector
+      uniform sampler2D bezTex, back; uniform float backOn; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv, vec; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV; vec: 1 = vector
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
       // the vector look's angular screen: straight edges, the corners cut off at 45 degrees (a vector cabinet's bezel)
@@ -1074,7 +1077,7 @@
         float d = vec > 0.5 ? sdChamfer(q) : sdBox(q, vec2(1.0), 0.06);
         float inside = 1.0 - smoothstep(-0.004, 0.012, d);
         vec2 uv = (q + 1.0) * 0.5;
-        vec3 c = vec3(0.0);
+        vec3 c = vec3(0.0), backdrop = vec3(0.0);
         if (inside > 0.0) { // the tube's effects only where the glass shows
           float ty = 1.0 - uv.y;
           float tick = floor(time * 7.0);
@@ -1082,7 +1085,19 @@
           float rim = smoothstep(-0.25, 0.0, d);          // 0 in the middle, 1 at the glass edge
           vec2 ca = q * (0.003 + 0.002 * rim);
           if (tv > 0.5) c = rfTV(uv);
-          else if (vec > 0.5) { c.r = texture2D(tex, uv + ca * 0.6).r; c.g = texture2D(tex, uv).g; c.b = texture2D(tex, uv - ca * 0.6).b; }
+          else if (vec > 0.5) {
+            c.r = texture2D(tex, uv + ca * 0.6).r; c.g = texture2D(tex, uv).g; c.b = texture2D(tex, uv - ca * 0.6).b;
+            // the vector look's backdrop (the background picture, never traced; added here, not in pV, so it stays out of
+            // the afterglow): like the painted backdrops some vector cabinets lit behind a half-silvered mirror (Star
+            // Castle, Space Fury): dim, soft and a little cool, behind the lines, never over them
+            if (backOn > 0.5) {
+              vec2 bp = vec2(1.5 / 224.0, 1.5 / 288.0);
+              vec3 bd = texture2D(back, uv).rgb * 0.4 + (texture2D(back, uv + vec2(bp.x, 0.0)).rgb + texture2D(back, uv - vec2(bp.x, 0.0)).rgb
+                + texture2D(back, uv + vec2(0.0, bp.y)).rgb + texture2D(back, uv - vec2(0.0, bp.y)).rgb) * 0.15;
+              bd = mix(vec3(dot(bd, vec3(0.299, 0.587, 0.114))), bd, 0.7) * vec3(0.85, 0.92, 1.1);
+              backdrop = bd * ${VEC_BACKDROP} * (1.0 - clamp(max(c.r, max(c.g, c.b)) * 1.5, 0.0, 1.0)); // added after the flicker
+            }
+          }
           else { c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b; }
           if (vec < 0.5) { // a vector monitor has no scanlines and no grille: the beam draws the lines themselves
           // scanlines: bright beams widen and fill the gap, dim ones leave dark lines
@@ -1104,6 +1119,7 @@
           // mains flicker, rolling hum bar
           c *= 1.0 - (vec > 0.5 ? 0.07 : 0.05) * hash(vec2(floor(time * 60.0), 1.0)); // a vector's refresh flickers a bit more
           if (vec < 0.5) c *= 1.0 + 0.1 * pow(0.5 + 0.5 * sin(6.2832 * (ty * 1.0 - time * 0.09)), 10.0);
+          c += backdrop; // the vector backdrop: lit by a steady lamp, it doesn't flicker with the beam
           // static grain + sparse bright speckles
           float n = hash(gl_FragCoord.xy + fract(time) * 91.7);
           c += (n - 0.5) * (vec > 0.5 ? 0.02 : 0.075);
@@ -1195,7 +1211,8 @@
     const newTex = (filter) => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter); return t; };
-    const srcTex = newTex(gl.LINEAR), maskTex = newTex(gl.NEAREST);
+    const srcTex = newTex(gl.LINEAR), maskTex = newTex(gl.NEAREST), backTex = newTex(gl.LINEAR);
+    let backImg = null; // the picture backTex holds
     const mkTarget = (w, h) => { const t = newTex(gl.LINEAR); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
       gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); return { t, f, w, h }; };
@@ -1252,10 +1269,12 @@
         const time = performance.now() / 1000;
         const dt = Math.min(0.1, Math.max(0, time - (lastPresent || time))); lastPresent = time;
         if (api.ultra) {
-          let pic;
+          let pic, bdImg = null;
           if (vec) { // the beam's afterglow fades by time, not by frame (same trails at 60 or 144 Hz)
             const nxt = 1 - vh, film = smoothNow();
             if (textMask) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, maskTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textMask); }
+            bdImg = film ? null : getBackdrop();
+            if (bdImg && bdImg !== backImg) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, backTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bdImg); backImg = bdImg; }
             pass(pV, VH[nxt], (p) => { gl.uniform1i(p.u("mask"), 2); gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.65, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t, maskTex);
             vh = nxt; pic = VH[vh].t;
           } else {
@@ -1263,7 +1282,7 @@
             pass(pH, PH[nxt], (p) => gl.uniform1f(p.u("decay"), 0.58), srcTex, PH[ph].t);
             ph = nxt; pic = PH[ph].t;
           }
-          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), vec ? 1 : 0); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); }, pic, Z.t);
+          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), vec ? 1 : 0); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); gl.uniform1i(p.u("back"), 2); gl.uniform1f(p.u("backOn"), bdImg ? 1 : 0); }, pic, Z.t, backTex);
           pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), vec ? 0.3 : 0.72), A.t);
           pass(pB, B2, (p) => { gl.uniform2f(p.u("dir"), 1 / BW, 0); gl.uniform1f(p.u("sigma"), 3.5); }, B1.t);
           pass(pB, B1, (p) => { gl.uniform2f(p.u("dir"), 0, 1 / BH); gl.uniform1f(p.u("sigma"), 3.5); }, B2.t);
