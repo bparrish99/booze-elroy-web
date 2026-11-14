@@ -527,8 +527,8 @@
     }
 
     // web edition: the Vacuum, sucking: everything it took (g.vacuumFly: dots, energizers, the fruit, eaten already)
-    // flies in from where it was, spiralling toward Pac-Man and shrinking, the nearest first; and a ring closing in from
-    // the vacuum's reach (6 tiles) with streaks spiralling in behind it, fading as it closes (core.VACUUM_FX frames)
+    // flies in from where it was, spiralling toward Pac-Man and shrinking, the nearest first; and blue stun rings
+    // rippling in from the vacuum's reach (6 tiles) (core.VACUUM_FX frames)
     function drawVacuum() {
       const pac = g.chars.pac, total = core.VACUUM_FX, k = 1 - g.vacuumFx / total; // 0 -> 1
       const tx = pac.x, ty = pac.y + 24;                                    // where he is now (he keeps moving)
@@ -545,18 +545,19 @@
         else { const a = f.item.animator(); drawSprite(a.spr, a.frames[(f.item.frame || 1) - 1], cx - 4, cy - 4, true); }
         ctx.restore();
       }
-      const R = 6 * TILE * (1 - k * k);
-      ctx.save();
-      ctx.globalAlpha = 0.8 * (1 - k * 0.7);
-      ctx.strokeStyle = "rgb(222,222,255)"; ctx.lineWidth = 1;
+      // the rings: the blue stun rings from the first Star Wars film (the author's picture): concentric rings of electric
+      // blue, each a soft glow with a bright core, rippling in from the vacuum's reach, staggered, shimmering a little
       const cx = camX() + tx, cy = camY() + ty;
-      ctx.beginPath(); ctx.arc(cx, cy, Math.max(0.5, R), 0, Math.PI * 2); ctx.stroke();
-      for (let i = 0; i < 10; i++) {
-        const a0 = i * Math.PI / 5 + k * 5, r0 = R + 10 * (1 - k), r1 = Math.max(0, R - 6);
-        ctx.beginPath();
-        ctx.moveTo(cx + Math.cos(a0) * r0, cy + Math.sin(a0) * r0);
-        ctx.lineTo(cx + Math.cos(a0 + 0.5) * r1, cy + Math.sin(a0 + 0.5) * r1);
-        ctx.stroke();
+      ctx.save();
+      for (let i = 0; i < 4; i++) {
+        const p = k * 1.6 - i * 0.2;                                        // each ring starts a little after the last
+        if (p <= 0 || p >= 1) continue;
+        const R = 6 * TILE * (1 - p) + Math.sin((k * 40 + i * 2.1)) * 0.6; // closing in, with a shimmer
+        const fade = Math.sin(p * Math.PI);                                 // in, then out
+        ctx.strokeStyle = "rgb(60,140,255)"; ctx.globalAlpha = 0.28 * fade; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(cx, cy, Math.max(1, R), 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = "rgb(150,210,255)"; ctx.globalAlpha = 0.85 * fade; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(cx, cy, Math.max(1, R), 0, Math.PI * 2); ctx.stroke();
       }
       ctx.restore();
     }
