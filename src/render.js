@@ -527,23 +527,21 @@
     }
 
     // web edition: the Vacuum, sucking: everything it took (g.vacuumFly: dots, energizers, the fruit, eaten already)
-    // flies in from where it was, spiralling toward Pac-Man and shrinking, the nearest first; and blue stun rings
+    // pulled straight into Pac-Man, real size, the nearest first; and blue stun rings
     // rippling in from the vacuum's reach (6 tiles) (core.VACUUM_FX frames)
     function drawVacuum() {
       const pac = g.chars.pac, total = core.VACUUM_FX, k = 1 - g.vacuumFx / total; // 0 -> 1
       const tx = pac.x, ty = pac.y + 24;                                    // where he is now (he keeps moving)
+      // the real things, at their real size, pulled straight in: they all start moving at once and speed up as they
+      // come (suction), the nearest reaching him first, gone as they arrive (shrunk and swung along curves, they looked
+      // like a particle effect to the author)
       for (const f of g.vacuumFly || []) {
-        const t0 = Math.min(0.45, f.d / 6 * 0.45), t = Math.max(0, Math.min(1, (k - t0) / 0.5)); // the nearest go first
+        const t = Math.min(1, k / (0.35 + 0.6 * f.d / 6));
         if (t >= 1) continue;
-        const e = t * t * (3 - 2 * t), sx = f.x, sy = f.y + 24;
-        const dx = tx - sx, dy = ty - sy, len = Math.hypot(dx, dy) || 1;
-        const swirl = Math.sin(e * Math.PI) * Math.min(14, len * 0.35);   // bows out sideways: a spiral in
-        const cx = sx + dx * e - dy / len * swirl, cy = sy + dy * e + dx / len * swirl, sc = 1 - 0.75 * e;
-        ctx.save();
-        ctx.translate(camX() + cx, camY() + cy); ctx.scale(sc, sc); ctx.translate(-camX() - cx, -camY() - cy);
+        const e = t * t, sx = f.x, sy = f.y + 24;
+        const cx = sx + (tx - sx) * e, cy = sy + (ty - sy) * e;
         if (f.fruit) drawSprite(f.fruit.sheet, f.fruit.quad, cx - 8, cy - 8, true);
         else { const a = f.item.animator(); drawSprite(a.spr, a.frames[(f.item.frame || 1) - 1], cx - 4, cy - 4, true); }
-        ctx.restore();
       }
       // the rings: the blue stun rings from the first Star Wars film (the author's picture): concentric rings of electric
       // blue, each a soft glow with a brighter core, rippling in from the vacuum's reach, one after the other (darker and
