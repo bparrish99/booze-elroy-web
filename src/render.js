@@ -948,11 +948,12 @@
         vec3 acc = vec3(0.0);
         for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
           vec2 t = b + vec2(float(dx), float(dy)), d = p - t;
-          acc += edge(t) * exp(-dot(d, d) / 0.3);
+          acc += edge(t) * exp(-dot(d, d) / 0.2); // a thin beam (wider looked soft)
         }
         float k = max(acc.r, max(acc.g, acc.b));
-        vec3 beam = acc / max(k, 1e-4) * (1.0 - exp(-k * 2.2));          // saturating stroke, keeps its hue
-        beam += vec3(0.55) * smoothstep(0.85, 1.25, k) * (1.0 - exp(-k)); // white-hot core
+        // saturating stroke, keeps its hue; dimmed and a small white core, for a crisp line (brighter looked washed out)
+        vec3 beam = acc / max(k, 1e-4) * (1.0 - exp(-k * 1.8)) * 0.85;
+        beam += vec3(0.3) * smoothstep(0.9, 1.3, k) * (1.0 - exp(-k));
         gl_FragColor = vec4(max(beam, texture2D(prev, vuv).rgb * decay), 1.0);
       }`);
     // the MAX CRT: heavy barrel, rounded glass, RGB convergence error, horizontal bleed, beam-width scanlines,
@@ -1201,10 +1202,10 @@
             ph = nxt; pic = PH[ph].t;
           }
           pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), vec ? 1 : 0); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); }, pic, Z.t);
-          pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), vec ? 0.12 : 0.72), A.t);
+          pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), vec ? 0.3 : 0.72), A.t);
           pass(pB, B2, (p) => { gl.uniform2f(p.u("dir"), 1 / BW, 0); gl.uniform1f(p.u("sigma"), 3.5); }, B1.t);
           pass(pB, B1, (p) => { gl.uniform2f(p.u("dir"), 0, 1 / BH); gl.uniform1f(p.u("sigma"), 3.5); }, B2.t);
-          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS); gl.uniform1f(p.u("glowK"), vec ? 0.9 : 0.55); }, A.t, B1.t);
+          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS); gl.uniform1f(p.u("glowK"), vec ? 0.4 : 0.55); }, A.t, B1.t);
         } else {
           pass(pA, A, (p) => { gl.uniform2f(p.u("distortion"), 1.03, 1.04); gl.uniform1f(p.u("feather"), 0.02);
             gl.uniform1f(p.u("widthPx"), 2); gl.uniform1f(p.u("thickness"), 0.5); gl.uniform1f(p.u("opacity"), 0.4); gl.uniform1f(p.u("screenH"), cssH); }, srcTex);
