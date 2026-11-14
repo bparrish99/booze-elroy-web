@@ -1008,7 +1008,7 @@
     const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
     // the vector look's glass: nearly flat (barrel bend, also in main.js toGame via presenter.vecBend) and angular
     const VEC_BEND_XY = [0.012, 0.016], VEC_BEND = VEC_BEND_XY.join(", "), VEC_CHAMFER = "0.09";
-    const VEC_BACKDROP = "0.7"; // the backdrop's brightness (the pictures are already at 25%)
+    const VEC_BACKDROP = "1.0"; // the backdrop's brightness (the pictures are already at 25%)
     const pU = mk(HDR + `
       uniform sampler2D bezTex, back; uniform float backOn; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv, vec; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV; vec: 1 = vector
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
