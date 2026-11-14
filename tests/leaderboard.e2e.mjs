@@ -49,12 +49,14 @@ try {
   await p.keyboard.press("c");
   check(await ev(() => window.__core.g.config.crtEffect === "vector" && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === "vector" && document.getElementById("look").title.startsWith("Visuals: vector")), "C again: the vector monitor");
   await p.keyboard.press("c");
+  check(await ev(() => window.__core.g.config.crtEffect === "discarded" && document.getElementById("look").title.startsWith("Visuals: discarded")), "C again: the discarded CRT in a ruin");
+  await p.keyboard.press("c");
   check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "and once more: back to the CRT");
   check(await ev(() => !window.__core.optMenu.some((i) => i.key === "crtEffect" || i.key === "volume")), "no CRT or volume rows on the Options page");
   await p.click("#look");
   check(await ev(() => window.__core.g.config.crtEffect === false && document.getElementById("look").title.startsWith("Visuals: clean")), "the TV button changes the look too (for phones)");
-  await p.click("#look"); await p.click("#look"); await p.click("#look");
-  check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "round the four looks and back to CRT, saved");
+  await p.click("#look"); await p.click("#look"); await p.click("#look"); await p.click("#look");
+  check(await ev(() => window.__core.g.config.crtEffect === true && JSON.parse(localStorage.getItem("booze-elroy-options")).crtEffect === true), "round the five looks and back to CRT, saved");
   check(await g("g.config.volume === 8"), "the game plays at a fixed volume (8)");
   // the mute button (next to fullscreen): mutes the page, remembered; M does it too, but only during gameplay
   check(await ev(() => !document.getElementById("mute").classList.contains("muted") && document.getElementById("volume").value === "60"), "not muted to begin with, volume 60");
