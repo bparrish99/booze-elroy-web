@@ -236,7 +236,9 @@
     function drawBackground() {
       if (!g.currentBackground) g.currentBackground = g.config.background;
       const bg = assets.backgrounds[g.currentBackground];
-      if (bg) ctx.drawImage(bg, 0, 0, GW, GH);   // already dimmed to 40% at build time
+      // (not in the vector look: a vector monitor has no pictures, and leaving them out lets the beam pick up dim lines,
+      // like maze style 9's dark grey, which a picture's brightness would otherwise hide among)
+      if (bg && g.config.crtEffect !== "vector") ctx.drawImage(bg, 0, 0, GW, GH);   // already dimmed to 40% at build time
     }
 
     // Elroy's drunk bubbles (web edition). The core still emits its particles exactly as the Lua does (same RNG use);
@@ -956,11 +958,11 @@
       float mx(vec3 c){ return max(c.r, max(c.g, c.b)); }
       vec3 edge(vec2 t){
         vec3 c = px(t); float m = mx(c);
-        float lit = smoothstep(0.3, 0.45, m);
+        float lit = smoothstep(0.08, 0.18, m); // low: dim lines count (no background pictures here to drop)
         if (lit <= 0.0 || isText(t) > 0.5) return vec3(0.0);
         float e = 0.0;
         vec3 n0 = px(t + vec2(1.0, 0.0)), n1 = px(t - vec2(1.0, 0.0)), n2 = px(t + vec2(0.0, 1.0)), n3 = px(t - vec2(0.0, 1.0));
-        e = max(e, step(mx(n0), 0.3)); e = max(e, step(mx(n1), 0.3)); e = max(e, step(mx(n2), 0.3)); e = max(e, step(mx(n3), 0.3));
+        e = max(e, step(mx(n0), 0.08)); e = max(e, step(mx(n1), 0.08)); e = max(e, step(mx(n2), 0.08)); e = max(e, step(mx(n3), 0.08));
         e = max(e, step(0.35, distance(c, n0))); e = max(e, step(0.35, distance(c, n1)));
         e = max(e, step(0.35, distance(c, n2))); e = max(e, step(0.35, distance(c, n3)));
         return c / max(m, 0.7) * lit * e;
