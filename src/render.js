@@ -946,7 +946,7 @@
     // afterglow (new = max(beam, previous * decay)). The dim backgrounds don't make it (below the beam's threshold).
     // Drawn at 3x the game's size into VH; pU then puts it behind the same glass, without scanlines or a grille.
     // film = 1: Mina's film, shown as it is (no outlines, no trails)
-    // text (the renderer's textMask) is drawn as plain pixels, at the strokes' brightness, not traced
+    // text (the renderer's textMask) isn't traced: its pixels are drawn as CRT-style dots, with scanlines
     const pV = mk(HDR + `uniform sampler2D prev, mask; uniform vec2 srcSize; uniform float decay, film;
       vec3 px(vec2 t){ return texture2D(tex, (t + 0.5) / srcSize).rgb; }
       float isText(vec2 t){ return texture2D(mask, (t + 0.5) / srcSize).a; }
@@ -974,8 +974,15 @@
         // saturating stroke, keeps its hue; dimmed and a small white core, for a crisp line (brighter looked washed out)
         vec3 beam = acc / max(k, 1e-4) * (1.0 - exp(-k * 1.8)) * 0.85;
         beam += vec3(0.3) * smoothstep(0.9, 1.3, k) * (1.0 - exp(-k));
-        float tm = isText(b);
-        if (tm > 0.0) { vec3 c = px(b); beam = mix(beam, c / max(max(c.r, max(c.g, c.b)), 0.7) * 0.85, tm); }
+        // text: the CRT's way, each pixel a soft dot of light that runs into its neighbours sideways and leaves a dark
+        // scanline between rows (flat blocks looked too clean)
+        vec3 txt = vec3(0.0);
+        for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+          vec2 t = b + vec2(float(dx), float(dy)), d = p - t;
+          float m = isText(t);
+          if (m > 0.0) { vec3 c = px(t); txt += c / max(max(c.r, max(c.g, c.b)), 0.7) * m * exp(-d.x * d.x / 0.45 - d.y * d.y / 0.11); }
+        }
+        beam = max(beam, min(txt, vec3(1.0)) * 0.9);
         gl_FragColor = vec4(max(beam, texture2D(prev, vuv).rgb * decay), 1.0);
       }`);
     // the MAX CRT: heavy barrel, rounded glass, RGB convergence error, horizontal bleed, beam-width scanlines,

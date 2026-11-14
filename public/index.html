@@ -129,8 +129,15 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
         // saturating stroke, keeps its hue; dimmed and a small white core, for a crisp line (brighter looked washed out)
         vec3 beam = acc / max(k, 1e-4) * (1.0 - exp(-k * 1.8)) * 0.85;
         beam += vec3(0.3) * smoothstep(0.9, 1.3, k) * (1.0 - exp(-k));
-        float tm = isText(b);
-        if (tm > 0.0) { vec3 c = px(b); beam = mix(beam, c / max(max(c.r, max(c.g, c.b)), 0.7) * 0.85, tm); }
+        // text: the CRT's way, each pixel a soft dot of light that runs into its neighbours sideways and leaves a dark
+        // scanline between rows (flat blocks looked too clean)
+        vec3 txt = vec3(0.0);
+        for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+          vec2 t = b + vec2(float(dx), float(dy)), d = p - t;
+          float m = isText(t);
+          if (m > 0.0) { vec3 c = px(t); txt += c / max(max(c.r, max(c.g, c.b)), 0.7) * m * exp(-d.x * d.x / 0.45 - d.y * d.y / 0.11); }
+        }
+        beam = max(beam, min(txt, vec3(1.0)) * 0.9);
         gl_FragColor = vec4(max(beam, texture2D(prev, vuv).rgb * decay), 1.0);
       }`),C=()=>{const X=new Date;return(X.getHours()%12+X.getMinutes()/60)/12*2*Math.PI},N=1.075,j=Te(Oe+`
       uniform sampler2D bezTex; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv, vec; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV; vec: 1 = vector
