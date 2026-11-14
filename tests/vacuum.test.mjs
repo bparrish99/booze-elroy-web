@@ -1,6 +1,7 @@
 // The Vacuum ability (ability 6; web edition, 2026-11-14): once per life / board, it sucks up everything within 6
 // tiles, straight through walls: energizers first (a ghost they turn blue is eaten, not deadly), dots, the fruit, and
-// ghosts: blue ones eaten one at a time (the usual pause and 200/400/... chain), a ghost that isn't blue catches him.
+// ghosts: dragged in for real while play stops (mode "vacuum"), then blue ones eaten one at a time (the usual pause and
+// 200/400/... chain), and a ghost that isn't blue catches him when it arrives.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -24,6 +25,8 @@ function start(ghostCount = 4) {
   return { core, g, pX, pY };
 }
 const at = (ch, x, y) => Object.assign(ch, { x: x * 8 + 4, y: y * 8 + 4 });
+// let the vacuum drag its ghosts in
+const settle = (core) => { for (let f = 0; f < 100 && core.g.mode === "vacuum"; f++) core.update(); };
 const dist2 = (a, x, y) => (a.x - x) ** 2 + (a.y - y) ** 2;
 
 test("Vacuum: dots and energizers within 6 tiles go (straight line), farther ones stay; one charge until READY", () => {
@@ -44,8 +47,13 @@ test("Vacuum: dots and energizers within 6 tiles go (straight line), farther one
 test("Vacuum: a ghost that isn't blue, in reach, catches him", () => {
   const { core, g, pX, pY } = start();
   at(g.chars.blinky, pX + 3, pY);
+  const x0 = g.chars.blinky.x;
   core.keypressed("space");
-  assert.equal(g.mode, "caught");
+  assert.equal(g.mode, "vacuum", "play stops while it drags the ghost in");
+  for (let f = 0; f < 20; f++) core.update();
+  assert.ok(Math.abs(g.chars.blinky.x - g.chars.pac.x) < Math.abs(x0 - g.chars.pac.x), "the ghost is on its way in");
+  settle(core);
+  assert.equal(g.mode, "caught", "and catches him when it arrives");
 });
 
 test("Vacuum: blue ghosts in reach are eaten one at a time, 200 then 400", () => {
@@ -56,6 +64,7 @@ test("Vacuum: blue ghosts in reach are eaten one at a time, 200 then 400", () =>
   g.frightened = 400;
   const before = g.score;
   core.keypressed("space");
+  settle(core);
   assert.equal(g.mode, "ateGhost");
   assert.ok(T(g.chars.blinky.dead) !== T(g.chars.pinky.dead), "one eaten at first");
   for (let f = 0; f < 200 && !(T(g.chars.blinky.dead) && T(g.chars.pinky.dead)); f++) core.update();
@@ -70,9 +79,17 @@ test("Vacuum: an energizer in reach turns a ghost in reach blue first, so it's e
   const [x, y] = [e.x + 2, e.y];
   at(g.chars.blinky, x + 3, y);
   core.keypressed("space");
+  assert.ok(T(g.chars.blinky.frightened), "blue as it's dragged in");
+  settle(core);
   assert.notEqual(g.mode, "caught");
   assert.ok(T(g.chars.blinky.dead), "eaten");
   assert.ok(!g.powers.includes(e), "and the energizer is gone");
+});
+
+test("Vacuum: no ghost in reach, no stop", () => {
+  const { core, g } = start();
+  core.keypressed("space");
+  assert.equal(g.mode, "normal");
 });
 
 test("Vacuum: the fruit in reach is eaten", () => {

@@ -707,16 +707,30 @@
         eatFruit(true);
       }
       g.vacuumFly = fly;
-      const blue = [];
+      // ghosts in reach are dragged in for real, so you can see what's coming (the author: it wasn't clear why you died):
+      // play stops (mode "vacuum", VACUUM_FX frames) while they're pulled across the maze into Pac-Man (already blue if
+      // an energizer in reach frightened them); vacuumEnd settles it when they arrive. No ghosts: no stop
+      g.vacuumGhosts = [];
       for (const name of charKeys()) {
         const ch = g.chars[name];
         if (!ch.target || T(ch.dead) || ch.hidden || ch.housing || ch.entering) continue;
         const [gX, , gY] = cm.getLoc(ch);
-        if (!near(gX, gY)) continue;
-        if (T(ch.frightened)) blue.push(ch);
-        else if (handleGhostCollision(ch, gX, gY, gX, gY)) { g.vacuumQueue = []; return; } // not blue: caught
+        if (near(gX, gY)) g.vacuumGhosts.push({ ch, x0: ch.x, y0: ch.y });
       }
-      g.vacuumQueue = blue;
+      if (g.vacuumGhosts.length) mode.setMode("vacuum");
+    }
+    // while it sucks: the ghosts it caught slide in toward Pac-Man, faster as they come
+    function vacuumStep() {
+      const k = 1 - g.modeTimer / VACUUM_FX, e = k * k * (3 - 2 * k), pac = g.chars.pac;
+      for (const v of g.vacuumGhosts || []) { v.ch.x = Math.round(v.x0 + (pac.x - v.x0) * e); v.ch.y = Math.round(v.y0 + (pac.y - v.y0) * e); }
+    }
+    // they've arrived (at Pac-Man): any ghost that isn't blue catches him; the blue ones are eaten, one per pause
+    function vacuumEnd() {
+      const caught = g.vacuumGhosts || [], pac = g.chars.pac;
+      g.vacuumGhosts = [];
+      for (const v of caught) { v.ch.x = pac.x; v.ch.y = pac.y; }
+      for (const v of caught) if (!T(v.ch.frightened) && !T(v.ch.dead) && handleGhostCollision(v.ch, 0, 0, 0, 0)) { g.vacuumQueue = []; return; }
+      g.vacuumQueue = caught.filter((v) => T(v.ch.frightened)).map((v) => v.ch);
       vacuumNext();
     }
     // the next blue ghost the vacuum caught, if it's still blue (one per ateGhost pause)
@@ -1025,7 +1039,7 @@
               g.fruitTimer = false; g.fruitScoreTimer = false;
               g.state = { showPac: true, showGhosts: true, showReady: true };
               g.starvation = 0;
-              g.vacuumSpent = false; g.vacuumQueue = []; g.vacuumFx = 0; g.vacuumFly = []; // the Vacuum's charge, back at every READY
+              g.vacuumSpent = false; g.vacuumQueue = []; g.vacuumFx = 0; g.vacuumFly = []; g.vacuumGhosts = []; // the Vacuum's charge, back at every READY
               characters.reset();
               levels.resetLevel();
             }
@@ -1035,6 +1049,12 @@
         normal: {
           startFunc() { if (!g.attract) g.levelMusic.play(); },
           state: { running: true, showPac: true, showGhosts: true },
+        },
+        // web edition: the Vacuum dragging ghosts in (play stopped meanwhile); vacuumEnd settles it (the mode's already
+        // normal by then, so it can go straight to ateGhost or caught)
+        vacuum: {
+          state: { running: false, showPac: true, showGhosts: true }, frames: VACUUM_FX, nextMode: "normal",
+          endFunc() { vacuumEnd(); },
         },
         ateGhost: {
           state: { running: false, showPac: false, showGhosts: true }, frames: 60, nextMode: "normal",
@@ -1669,6 +1689,7 @@
         gameFc += 1;
         if (g.vacuumFx > 0) g.vacuumFx -= 1; // the Vacuum's swirl (render.js)
         mode.handle();
+        if (g.mode === "vacuum") vacuumStep(); // (after the mode has started: its timer is the vacuum's)
         if (T(g.fruitScoreTimer)) {
           g.fruitScoreTimer -= 1;
           if (g.fruitScoreTimer <= 0) g.fruitScoreTimer = false;
