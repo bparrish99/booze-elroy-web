@@ -1192,9 +1192,9 @@
               // a weak signal: faint snow always; once in a while a burst of it, or a bar of static across part of the
               // screen (occasional: the author)
               float sn = hash(floor(fuv * vec2(320.0, 400.0)) + fract(time * 61.0) * 97.0);
-              float burst = step(0.992, hash(vec2(floor(time * 6.0), 11.0)));       // about every 20 s
+              float burst = step(0.984, hash(vec2(floor(time * 6.0), 11.0)));       // about every 10 s
               float bslot = floor(time * 4.0), by = hash(vec2(bslot, 14.0)), bh = 0.03 + 0.08 * hash(vec2(bslot, 15.0));
-              float bar = step(0.98, hash(vec2(bslot, 16.0))) * (1.0 - smoothstep(bh * 0.6, bh, abs(fuv.y - by))); // about every 12 s
+              float bar = step(0.96, hash(vec2(bslot, 16.0))) * (1.0 - smoothstep(bh * 0.6, bh, abs(fuv.y - by))); // about every 6 s
               c = mix(c, vec3(sn) * 0.75, clamp(0.05 + burst * 0.65 + bar * 0.7, 0.0, 0.85));
               // and the colour drains out for a moment now and then
               float dslot = floor(time / 5.0), dk = (time - dslot * 5.0 - 4.0 * hash(vec2(dslot, 17.0))) / 0.6;
