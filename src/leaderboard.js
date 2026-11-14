@@ -132,7 +132,7 @@
         const d = vals.indexOf(g.defaultConfig[k]);
         if (i !== d) diffs.push(LABELS[k] + " " + optionText(k, vals, i));
       }
-      if (!diffs.length) return ["default settings"];
+      if (!diffs.length) return ["classic Pac-Man"]; // the untouched settings: the original arcade game (the author's name, 2026-11-14)
       const lines = [];
       for (const d of diffs) {
         const last = lines[lines.length - 1];

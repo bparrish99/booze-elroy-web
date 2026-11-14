@@ -1816,7 +1816,7 @@
       Object.assign(opt("mazeColor", MAZE_COLORS, ["Default"].concat(range(1, 26), ["Random"])), { y: 25 }),
       Object.assign(ON_OFF("crtEffect"), { y: 26 }),
       Object.assign(opt("volume", range(0, 10), null, () => applyVolume()), { y: 27, x: 18 }),
-      { text: "Restore Defaults", sound: "phase", x: 6, y: 29, action() {
+      { text: "Classic Pac-Man", sound: "phase", x: 6, y: 29, action() {
         // web edition (env.restoreKeepsAV): Audio/Video settings stay as they are; only Game/Player/Ghost options reset
         const keep = env.restoreKeepsAV ? AV_KEYS.map((k) => [k, g.config[k]]) : [];
         resetConfigs(); for (const [k, v] of keep) g.config[k] = v;
@@ -1834,10 +1834,10 @@
     // web edition: no volume setting (env.fixedVolume; the browser / system volume does the job), the game plays at that level
     if (env.fixedVolume != null) {
       optMenu.splice(optMenu.findIndex((it) => it.key === "volume"), 1);
-      optMenu.find((it) => it.text === "Restore Defaults").y = 28; // the freed row: a blank line after Restore Defaults
+      optMenu.find((it) => it.text === "Classic Pac-Man").y = 28; // the freed row: a blank line after Classic Pac-Man (once Restore Defaults)
     }
     // web edition: Pro Mode in the Style section (the freed row under Maze Style)
-    if (env.proMode) optMenu.splice(optMenu.findIndex((it) => it.text === "Restore Defaults"), 0, Object.assign(opt("proMode", [false, true], ["Off", "On"]), { y: 26 }));
+    if (env.proMode) optMenu.splice(optMenu.findIndex((it) => it.text === "Classic Pac-Man"), 0, Object.assign(opt("proMode", [false, true], ["Off", "On"]), { y: 26 }));
     // web edition: Create Arena (an arena with the current settings) under Share Config
     if (env.createArena) optMenu.splice(optMenu.length - 1, 0, { text: "Create Arena", x: 6, y: 31, action() { env.createArena(); } });
     if (env.creditsInOptions) {

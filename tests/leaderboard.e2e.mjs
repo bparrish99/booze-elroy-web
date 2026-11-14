@@ -112,7 +112,7 @@ try {
   await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
   await p.keyboard.type("xyzzy"); await p.waitForTimeout(400);
   check(await ev(() => !document.getElementById("fps").classList.contains("on") && localStorage.getItem("booze-elroy-fps") === "0"), "typing it again hides it");
-  check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Restore Defaults,Share Config,Create Arena,Credits,Back", "Options: Restore Defaults, Share Config, Create Arena, Credits, Back");
+  check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Classic Pac-Man,Share Config,Create Arena,Credits,Back", "Options: Classic Pac-Man, Share Config, Create Arena, Credits, Back");
   await ev(() => { const c = window.__core; c.setScene("options"); c.g.config.ghostCount = 2; c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Create Arena") + 1; });
   await p.keyboard.press("Enter"); await p.waitForTimeout(100);
   check(await g("g.scene.name === 'options' && g.toast && g.toast.text === 'log in to create an arena'"), "logged out: Options > Create Arena says to log in");
@@ -193,9 +193,9 @@ try {
   await ev(() => { window.__core.g.config.crtEffect = true; });
   await ev(() => { window.__core.g.config.startingLevel = 1; localStorage.removeItem("booze-elroy-name"); }); // name entry below starts blank
 
-  // Restore Defaults: gameplay options reset, Audio/Video ones stay
-  await ev(() => { const c = window.__core; c.setScene("options"); Object.assign(c.g.config, { ghostCount: 2, crtEffect: false, volume: 9, background: "stars", mazeColor: 5 }); c.optMenu.find((i) => i.text === "Restore Defaults").action(); });
-  check(await g("g.config.ghostCount === 4 && g.config.crtEffect === false && g.config.volume === 9 && g.config.background === 'stars' && g.config.mazeColor === 5"), "Restore Defaults keeps the Audio/Video settings");
+  // Classic Pac-Man (once Restore Defaults): gameplay options reset, Audio/Video ones stay
+  await ev(() => { const c = window.__core; c.setScene("options"); Object.assign(c.g.config, { ghostCount: 2, crtEffect: false, volume: 9, background: "stars", mazeColor: 5 }); c.optMenu.find((i) => i.text === "Classic Pac-Man").action(); });
+  check(await g("g.config.ghostCount === 4 && g.config.crtEffect === false && g.config.volume === 9 && g.config.background === 'stars' && g.config.mazeColor === 5"), "Classic Pac-Man (the old Restore Defaults) keeps the Audio/Video settings");
   await ev(() => { const c = window.__core; Object.assign(c.g.config, { crtEffect: true, volume: 4, background: "none", mazeColor: 99 }); c.setScene("attract"); });
 
   // a different gameplay setting is a different board; a cosmetic one isn't

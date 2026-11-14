@@ -63,7 +63,7 @@
     { id: "dinner", name: "chicken dinner", desc: "Win an arena." },
 
     { id: "trailblazer", name: "trailblazer", desc: "Be the first to put a score on the leaderboard for a combination of settings nobody has a score on yet." },
-    { id: "billy", name: "billy mitchell", desc: "Take the top spot on the default-settings leaderboard." },
+    { id: "billy", name: "billy mitchell", desc: "Take the top spot on the Classic Pac-Man leaderboard (the untouched settings)." },
     { id: "pug", name: "booze pug", desc: "Make the top 10 on 3 different leaderboards.", boards: 3 },
     { id: "beagle", name: "booze beagle", desc: "Make the top 10 on 5 different leaderboards.", boards: 5 },
     { id: "boxer", name: "booze boxer", desc: "Make the top 10 on 10 different leaderboards.", boards: 10 },
