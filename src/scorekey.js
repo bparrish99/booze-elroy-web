@@ -20,7 +20,7 @@
     ["radar", [false, 30, 60, 90, 120]],
     ["startingLives", [1, 3, 5]],
     ["freeGuy", [1, 2, 3, 4, 5]],
-    ["ability", [false, 1, 2, 3, 4]], // 4 = Rewind (web edition, appended later; see LEGACY_LENGTHS)
+    ["ability", [false, 1, 2, 3, 4, 5]], // 4 = Rewind, 5 = Pause (web edition, appended later; see LEGACY_LENGTHS)
     ["movement", [0, 1, 2, 3]],
     ["ghostCount", range(0, 7)],
     ["pinkyBug", [true, false]],
@@ -60,11 +60,14 @@
   // digit so typos and made-up codes are rejected.
   //  - 6 characters (5 + check): the original format, frozen. It packs only the values that existed when it shipped
   //    (LEGACY_LENGTHS), so every link shared since then keeps working.
-  //  - 7 characters (6 + check): settings the old format can't hold (values appended later, e.g. the Rewind ability).
+  //  - 7 characters (6 + check): the Rewind ability's format, frozen the same way (REWIND_LENGTHS).
+  //  - 8 characters (7 + check): settings neither can hold (values appended since, e.g. the Pause ability). Its lengths
+  //    follow FIELDS; appending another value later means freezing these too and adding a 9-character format.
   const LEGACY_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 4, 4, 8, 2, 4, 2]; // never change: the 6-character format depends on it
+  const REWIND_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 5, 4, 8, 2, 4, 2]; // never change: the 7-character format depends on it
   const LENGTHS = FIELDS.map(([, vals]) => vals.length);
-  const COMBOS = LEGACY_LENGTHS.reduce((n, l) => n * l, 1);
-  const COMBOS7 = LENGTHS.reduce((n, l) => n * l, 1);
+  const prod = (ls) => ls.reduce((n, l) => n * l, 1);
+  const COMBOS = prod(LEGACY_LENGTHS);
   const MUL = 27644437, ADD = 12345678, B36 = "0123456789abcdefghijklmnopqrstuvwxyz";
   const mulmod = (a, b, m) => Number((BigInt(a) * BigInt(b)) % BigInt(m));
   const inverse = (m) => { // modular inverse of MUL by extended Euclid
@@ -72,21 +75,26 @@
     while (r1) { const q = Math.floor(r0 / r1); [r0, r1] = [r1, r0 - q * r1]; [t0, t1] = [t1, t0 - q * t1]; }
     return ((t0 % m) + m) % m;
   };
-  const FORMATS = { 6: { lengths: LEGACY_LENGTHS, combos: COMBOS, inv: inverse(COMBOS) }, 7: { lengths: LENGTHS, combos: COMBOS7, inv: inverse(COMBOS7) } };
+  const FORMATS = {};
+  [[6, LEGACY_LENGTHS], [7, REWIND_LENGTHS], [8, LENGTHS]].forEach(([len, lengths]) => {
+    const combos = prod(lengths);
+    FORMATS[len] = { len, lengths, combos, inv: inverse(combos) };
+  });
+  const fits = (idx, len) => idx.every((i, k) => i < FORMATS[len].lengths[k]);
   const check = (s) => { let c = 7; for (let i = 0; i < s.length; i++) c = (c * 31 + B36.indexOf(s[i]) * (i + 3)) % 36; return B36[c]; };
   /** short share code for a config, e.g. "k4t9x2" (7 characters if it needs a later value); null for unknown values */
   function shareCode(config) {
     const idx = [];
     for (const [k, vals] of FIELDS) { const i = indexOf(vals, config[k]); if (i < 0) return null; idx.push(i); }
-    const f = FORMATS[idx.every((i, k) => i < LEGACY_LENGTHS[k]) ? 6 : 7];
+    const f = FORMATS[fits(idx, 6) ? 6 : fits(idx, 7) ? 7 : 8];
     let n = 0;
     idx.forEach((i, k) => { n = n * f.lengths[k] + i; });
-    const body = ((mulmod(n, MUL, f.combos) + ADD) % f.combos).toString(36).padStart(f === FORMATS[6] ? 5 : 6, "0");
+    const body = ((mulmod(n, MUL, f.combos) + ADD) % f.combos).toString(36).padStart(f.len - 1, "0");
     return body + check(body);
   }
   /** the gameplay settings a share code stands for, or null if it isn't a valid code */
   function configFromCode(s) {
-    if (typeof s !== "string" || !/^[0-9a-z]{6,7}$/i.test(s)) return null;
+    if (typeof s !== "string" || !/^[0-9a-z]{6,8}$/i.test(s)) return null;
     s = s.toLowerCase();
     const f = FORMATS[s.length], body = s.slice(0, -1);
     if (check(body) !== s[s.length - 1]) return null;
@@ -97,8 +105,8 @@
     for (let k = FIELDS.length - 1; k >= 0; k--) { const [key, vals] = FIELDS[k]; c[key] = vals[n % f.lengths[k]]; n = Math.floor(n / f.lengths[k]); }
     const out = {};
     for (const [key] of FIELDS) out[key] = c[key];
-    // a 7-character code always holds a later value; one that doesn't is a made-up code
-    if (s.length === 7 && FIELDS.every(([key, vals], k) => indexOf(vals, out[key]) < LEGACY_LENGTHS[k])) return null;
+    // a longer code always holds a value the shorter format can't; one that doesn't is a made-up code
+    if (s.length > 6 && fits(FIELDS.map(([key, vals]) => indexOf(vals, out[key])), s.length - 1)) return null;
     return out;
   }
   /** true if s is a well-formed board key */
@@ -129,5 +137,5 @@
     return i < BOARD_SIZE ? i : -1;
   }
 
-  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, COMBOS7, isKey, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
+  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
 });

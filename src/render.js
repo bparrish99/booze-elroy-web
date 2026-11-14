@@ -135,6 +135,8 @@
           if (phased >= 0) setColor(Math.random(), Math.random(), Math.random()); else setHollow();
         } else if (ab === 2) {
           if (phased < 0) setHollow(); // web edition: plain yellow while boosting (the Lua tinted him green)
+        } else if (ab === core.PAUSE) {
+          if (phased < 0) setHollow(); // web edition: the Pause ability reloading
         } else if (ab === 3) {
           if (phased > 40) {
             const pac = g.chars.pac;

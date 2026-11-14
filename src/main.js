@@ -177,7 +177,7 @@
 
     let rwd = null; // the Rewind ability (rewind.js), made once the core exists
     const core = BoozeCore.create(A.data, {
-      testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, proMode: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
+      testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, proMode: true, video, rng: Math.random, isDown: (k) => !!down[k], abilityHeld: () => !!(down.space || down.lalt || padAbility || touchHold), makeSound: audio.makeSound,
       scenes: { ...LB.scenes, ...ACC.scenes, mina },
       afterGameOver: (s) => {
         const c = core.g.config, d = core.g.defaultConfig, styled = c.background !== d.background || c.mazeColor !== d.mazeColor;
@@ -455,7 +455,12 @@
     }
     function hideTip() { tipEl.classList.remove("on"); }
     // touch gameplay: swipe = direction (stays latched, like holding a key), tap = ability, two-finger tap = pause
-    const touches = new Map(); let touchDir = null, twoFinger = false;
+    // With the Pause ability, a finger held still instead holds the ability button (after HOLD_MS, so a swipe that
+    // starts slowly isn't one) until it lifts or moves
+    const touches = new Map(); let touchDir = null, twoFinger = false, touchHold = false, holdTimer = 0;
+    const HOLD_MS = 120;
+    const pauseAbility = () => core.g.config.ability === core.PAUSE;
+    const endHold = () => { clearTimeout(holdTimer); touchHold = false; };
     const setTouchDir = (d) => {
       if (d === touchDir) return;
       if (touchDir) down[touchDir] = false;
@@ -467,7 +472,12 @@
       e.preventDefault();
       try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now() });
-      if (touches.size === 2 && !twoFinger) { twoFinger = true; core.keypressed("p"); }
+      if (touches.size === 2 && !twoFinger) { twoFinger = true; endHold(); core.keypressed("p"); }
+      else if (touches.size === 1 && pauseAbility()) {
+        const id = e.pointerId;
+        clearTimeout(holdTimer);
+        holdTimer = setTimeout(() => { const t = touches.get(id); if (t && !t.moved && !twoFinger) { touchHold = true; core.keypressed("space"); } }, HOLD_MS);
+      }
       return true;
     }
     function gestureMove(e) {
@@ -476,12 +486,14 @@
       if (Math.abs(dx) < TH && Math.abs(dy) < TH) return;
       setTouchDir(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
       t.x = e.clientX; t.y = e.clientY; t.moved = true;
+      endHold();
     }
     function gestureEnd(e) {
       const t = touches.get(e.pointerId); if (!t) return;
       touches.delete(e.pointerId);
       if (touches.size === 0) {
-        if (!twoFinger && !t.moved && Math.hypot(e.clientX - t.sx, e.clientY - t.sy) < 12 && performance.now() - t.t < 350) core.keypressed("space");
+        endHold();
+        if (!twoFinger && !pauseAbility() && !t.moved && Math.hypot(e.clientX - t.sx, e.clientY - t.sy) < 12 && performance.now() - t.t < 350) core.keypressed("space");
         twoFinger = false;
       }
     }
@@ -618,9 +630,11 @@
 
     // gamepad (standard mapping): d-pad -> arrows (held), A/start/B -> buttons
     const padPrev = {}, padDown = {};
+    let padAbility = false; // A held (the Pause ability lasts while the button is down)
     function pollPad() {
       const pads = navigator.getGamepads ? navigator.getGamepads() : [];
       const held = { left: false, right: false, up: false, down: false };
+      padAbility = false;
       for (const p of pads) {
         if (!p) continue;
         const b = p.buttons;
@@ -628,6 +642,7 @@
         if (b[12] && b[12].pressed) held.up = true; if (b[13] && b[13].pressed) held.down = true;
         const ax = p.axes[0] || 0, ay = p.axes[1] || 0;
         if (ax < -0.5) held.left = true; if (ax > 0.5) held.right = true; if (ay < -0.5) held.up = true; if (ay > 0.5) held.down = true;
+        if (b[0] && b[0].pressed) padAbility = true;
         const names = { 0: "a", 1: "b", 9: "start" };
         for (const i in names) { const pr = b[i] && b[i].pressed; if (pr && !padPrev[i]) core.gamepadpressed(names[i]); padPrev[i] = pr; }
       }

@@ -60,7 +60,8 @@ test("share codes: short, reversible for every option value, reject junk", () =>
   const seen = new Set();
   for (const [k, vals] of SK.FIELDS) for (const v of vals) {
     const cfg = { ...def, [k]: v }, code = SK.shareCode(cfg);
-    assert.match(code, k === "ability" && v === 4 ? /^[0-9a-z]{7}$/ : /^[0-9a-z]{6}$/); // Rewind needs the 7-character format
+    // Rewind needs the 7-character format, Pause the 8-character one
+    assert.match(code, k === "ability" && v === 4 ? /^[0-9a-z]{7}$/ : k === "ability" && v === 5 ? /^[0-9a-z]{8}$/ : /^[0-9a-z]{6}$/);
     assert.equal(SK.keyFor(SK.configFromCode(code)), SK.keyFor(cfg), k + "=" + v);
     seen.add(code);
   }
@@ -92,6 +93,16 @@ test("share codes: links shared before Rewind existed still mean the same settin
   assert.deepEqual(SK.configFromCode(code), rw);
   assert.equal(SK.keyFor(def), "pac.0.f.f.f.3.1.f.0.4.t.f.f");
   assert.equal(SK.keyFor(rw), "pac.0.f.f.f.3.1.4.0.4.t.f.f");
+  // 7-character codes shared before Pause existed still mean the same settings
+  assert.equal(code, "0p3iqry");
+  const rw2 = { ...def, ability: 4, mazepack: "random", ghostCount: 7, afterDark: 5 };
+  assert.equal(SK.shareCode(rw2), "0pkfir3");
+  assert.deepEqual(SK.configFromCode("0pkfir3"), rw2);
+  // Pause: 8 characters, round-trips; a made-up 8-character code for older values is rejected
+  const ps = { ...def, ability: 5 }, pcode = SK.shareCode(ps);
+  assert.match(pcode, /^[0-9a-z]{8}$/);
+  assert.deepEqual(SK.configFromCode(pcode), ps);
+  assert.equal(SK.keyFor(ps), "pac.0.f.f.f.3.1.5.0.4.t.f.f");
 });
 
 test("achievements: the list the server checks ids against", () => {

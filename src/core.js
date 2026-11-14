@@ -73,6 +73,8 @@
       return m + Math.floor(r * (n - m + 1));
     };
     const isDown = env.isDown || (() => false);
+    // web edition: the Pause ability needs to know whether the ability button is still held (keyboard, gamepad, touch)
+    const abilityHeld = env.abilityHeld || (() => isDown("space") || isDown("lalt"));
     const makeSound = env.makeSound || ((name, loop) => new StubSound(loop));
 
     const animations = DATA.animations;
@@ -117,7 +119,18 @@
     // web edition: the Rewind ability (env.rewind does the work, see rewind.js). Every gameplay check sees it as "Off":
     // only the ability button behaves differently
     const REWIND = 4;
-    function ability() { return g.config.ability === REWIND ? false : g.config.ability; }
+    // web edition: the Pause ability (author's design, 2026-11-13). Holding the ability button stops Pac-Man in his
+    // tracks, up to PAUSE_MAX frames; then it reloads for PAUSE_COOLDOWN frames, like Phase and Boost. Uses pac.phased
+    // the abilities' way: > 0 while held (frames left), counting down from 0 to -PAUSE_COOLDOWN while it reloads.
+    // Like Rewind, every gameplay check sees it as "Off"; only Pac-Man's own movement stops
+    const PAUSE = 5, PAUSE_MAX = 120, PAUSE_COOLDOWN = 120;
+    function ability() { return g.config.ability === REWIND || g.config.ability === PAUSE ? false : g.config.ability; }
+    const pausing = () => g.config.ability === PAUSE && T(g.chars.pac.phased) && g.chars.pac.phased > 0;
+    const pausePac = () => {
+      g.chars.pac.phased = PAUSE_MAX;
+      if (g.sounds.phase.isPlaying()) g.sounds.phase.stop();
+      g.sounds.phase.play();
+    };
     // web edition: Pro Mode (Options > Style, env.proMode; also always on in test mode, env.testMode): real games skip
     // the opening jingle, the death animation, the board-complete flashing and the intermissions, and READY is short.
     // Not the attract demo; no gameplay changes (none of it runs during play)
@@ -1616,7 +1629,11 @@
               g.radarTimer -= 1;
             }
           }
-          if (T(pac.phased)) {
+          if (g.config.ability === PAUSE && T(pac.phased)) {
+            if (pac.phased > 0 && !abilityHeld()) pac.phased = 1; // let go: the reload starts now
+            pac.phased -= 1;
+            if (pac.phased === -PAUSE_COOLDOWN) { pac.phased = false; g.sounds.reload.play(); }
+          } else if (T(pac.phased)) {
             pac.phased -= 1;
             if (pac.phased === -60) { pac.phased = false; g.sounds.reload.play(); }
             if (pac.phased === 0 && (g.config.movement === 0 || g.config.movement === 1) && ability() === 2) pac.speed = logic.getPacSpeed();
@@ -1640,9 +1657,11 @@
           handleModeSwitching();
           handlePlayerInput();
           g.ghostEatenThisFrame = false;
-          logic.turn(g.chars.pac);
+          const held = pausing(); // the Pause ability: Pac-Man stands still (turns too wait for him to move again)
+          if (!held) logic.turn(g.chars.pac);
           for (const name of charKeys()) {
             const char = g.chars[name];
+            if (held && char === g.chars.pac) { char.moved = false; continue; }
             if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
           }
           if (T(g.fruitTimer)) {
@@ -1655,7 +1674,7 @@
             graphics.emitBlinkyBubbles(b.x, b.y);
           }
           graphics.updateParticles();
-          if (g.chars.pac.moved || (g.config.movement === 3 && g.chars.pac.speed > 0.3)) graphics.updateAnimation(g.chars.pac, gameFc);
+          if (g.chars.pac.moved || (g.config.movement === 3 && g.chars.pac.speed > 0.3 && !held)) graphics.updateAnimation(g.chars.pac, gameFc);
         } else if (g.mode === "ateGhost") {
           for (const name of charKeys()) {
             const c = g.chars[name];
@@ -1726,11 +1745,13 @@
           return;
         }
         if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === REWIND && env.rewind) env.rewind();
+        if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
         if (g.state.running && (key === "space" || key === "lalt") && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (key === "tab" || key === "p") togglePause();
       },
       gamepadpressed(button) {
         if (g.state.running && button === "a" && g.config.ability === REWIND && env.rewind) env.rewind();
+        if (g.state.running && button === "a" && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
         if (g.state.running && button === "a" && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (button === "x") togglePause();
       },
@@ -1773,7 +1794,7 @@
       Object.assign(opt("radar", [false, 30, 60, 90, 120], ["Off", "Tame", "Tricky", "Tough", "Terror"]), { y: 9 }),
       Object.assign(opt("startingLives", [1, 3, 5]), { y: 12 }),
       Object.assign(opt("freeGuy", [1, 2, 3, 4, 5], ["10000", "20000", "every 10k", "every 5k", "none"]), { y: 13 }),
-      Object.assign(opt("ability", [false, 1, 2, 3, 4], ["Off", "Phase", "Boost", "Stun", "Rewind"]), { y: 14 }),
+      Object.assign(opt("ability", [false, 1, 2, 3, 4, 5], ["Off", "Phase", "Boost", "Stun", "Rewind", "Pause"]), { y: 14 }),
       Object.assign(opt("movement", [0, 1, 2, 3], ["Normal", "Faster", "Fastest", "Jetpack"]), { y: 15 }),
       Object.assign(opt("ghostCount", range(0, 7)), { y: 18 }),
       Object.assign(ON_OFF("pinkyBug"), { y: 19 }),
@@ -1817,7 +1838,7 @@
     const OPT_VALUES = {
       mazepack: PACKS, startingLevel: range(1, 21), difficulty: [0, 1, 2], plusMode: [false, true],
       afterDark: [false, 1, 2, 3, 4, 5], radar: [false, 30, 60, 90, 120], startingLives: [1, 3, 5], freeGuy: [1, 2, 3, 4, 5],
-      ability: [false, 1, 2, 3, 4], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
+      ability: [false, 1, 2, 3, 4, 5], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
       scatterOption: [false, 1, 2, 3], freeGhost: [true, false], background: bgNames, mazeColor: MAZE_COLORS,
       crtEffect: [true, false], volume: range(0, 10), proMode: [false, true],
     };
@@ -1910,7 +1931,7 @@
 
     return {
       g, init, setScene, keypressed, update: () => g.scene.update(FIXED_DT),
-      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND,
+      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND, PAUSE,
       // web edition (rewind.js): put the looping sounds back in line with the game state, the way the game itself picks
       // them: eyes heading home -> "dead", any ghost frightened -> "scared", otherwise the siren for the dots left
       resyncLoops() {

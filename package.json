@@ -7,7 +7,7 @@
     "build": "python3 tools/build.py",
     "serve": "python3 -m http.server 8080 --directory public",
     "lint": "eslint src tests netlify tools",
-    "test": "node --test tests/unit.test.mjs tests/golden.test.mjs tests/rewind.test.mjs tests/promode.test.mjs tests/maze-editor.test.mjs && node tests/smoke.js && node tests/leaderboard.e2e.mjs && node tests/arena.e2e.mjs && node tests/account.e2e.mjs && node tests/maze-editor.e2e.mjs",
+    "test": "node --test tests/unit.test.mjs tests/golden.test.mjs tests/rewind.test.mjs tests/promode.test.mjs tests/pause.test.mjs tests/maze-editor.test.mjs && node tests/smoke.js && node tests/leaderboard.e2e.mjs && node tests/arena.e2e.mjs && node tests/account.e2e.mjs && node tests/maze-editor.e2e.mjs",
     "dev": "node tools/dev-server.mjs"
   },
   "engines": {
