@@ -990,10 +990,14 @@
     // the glint's hidden clock: the hour hand's angle (radians clockwise from 12) in the player's local time
     const hourAngle = () => { const d = new Date(); return ((d.getHours() % 12) + d.getMinutes() / 60) / 12 * 2 * Math.PI; };
     const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
+    // the vector look's glass: nearly flat (barrel bend, also in main.js toGame via presenter.vecBend) and angular
+    const VEC_BEND_XY = [0.012, 0.016], VEC_BEND = VEC_BEND_XY.join(", "), VEC_CHAMFER = "0.09";
     const pU = mk(HDR + `
       uniform sampler2D bezTex; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv, vec; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV; vec: 1 = vector
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
+      // the vector look's angular screen: straight edges, the corners cut off at 45 degrees (a vector cabinet's bezel)
+      float sdChamfer(vec2 p){ vec2 a = abs(p); return max(max(a.x, a.y) - 1.0, (a.x + a.y - (2.0 - ${VEC_CHAMFER})) * 0.7071); }
       // web edition: the C key's third look, a ratty old living-room TV on an RF cable. Brightness stays fairly sharp,
       // colour smears sideways and drifts (composite video), a ghost trails to the right, faint diagonal interference, wonky geometry now and then,
       // a torn tracking band drifting down (no vertical-hold jumps or rolls: tried, too cheesy)
@@ -1061,8 +1065,8 @@
         vec2 fuv = (vuv - frame.xy) / frame.zw;          // screen-relative uv (the bezel may fill the whole window)
         vec2 q = fuv * 2.0 - 1.0;
         q *= ${CRT_ZOOM.toFixed(3)}; // > 1: the glass is smaller than the canvas, leaving a bezel round it
-        q += (q.yx * q.yx) * q * vec2(0.04, 0.055);
-        float d = sdBox(q, vec2(1.0), 0.06);
+        q += (q.yx * q.yx) * q * (vec > 0.5 ? vec2(${VEC_BEND}) : vec2(0.04, 0.055)); // vector: nearly flat glass
+        float d = vec > 0.5 ? sdChamfer(q) : sdBox(q, vec2(1.0), 0.06);
         float inside = 1.0 - smoothstep(-0.004, 0.012, d);
         vec2 uv = (q + 1.0) * 0.5;
         vec3 c = vec3(0.0);
@@ -1144,12 +1148,14 @@
       uniform vec4 frame; uniform float dpr, tv, vec;
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
+      // the vector look's angular screen: straight edges, the corners cut off at 45 degrees (a vector cabinet's bezel)
+      float sdChamfer(vec2 p){ vec2 a = abs(p); return max(max(a.x, a.y) - 1.0, (a.x + a.y - (2.0 - ${VEC_CHAMFER})) * 0.7071); }
       void main(){
         vec2 fuv = (vuv - frame.xy) / frame.zw;
         vec2 q = fuv * 2.0 - 1.0;
         q *= ${CRT_ZOOM.toFixed(3)};
-        q += (q.yx * q.yx) * q * vec2(0.04, 0.055);
-        float d = sdBox(q, vec2(1.0), 0.06);
+        q += (q.yx * q.yx) * q * (vec > 0.5 ? vec2(${VEC_BEND}) : vec2(0.04, 0.055)); // vector: nearly flat glass
+        float d = vec > 0.5 ? sdChamfer(q) : sdBox(q, vec2(1.0), 0.06);
         // the CRT's dark plastic; the ratty TV's (C key) is the same, just dark brown
         vec3 col = tv > 0.5 ? vec3(0.2, 0.12, 0.065) : vec > 0.5 ? vec3(0.045, 0.045, 0.05) : vec3(0.11, 0.1, 0.086); // TV: 1982 wood-panelling brown; vector: a black cabinet
         vec3 bez = col * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
@@ -1181,7 +1187,7 @@
     };
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     const api = {
-      webgl: true, ultra: true, zoom: CRT_ZOOM,
+      webgl: true, ultra: true, zoom: CRT_ZOOM, vecBend: VEC_BEND_XY,
       // frame: where the game screen sits in the canvas, as uv fractions {x, y (from the bottom), w, h}; default the whole canvas.
       // win (CRT on): the window in device px {w, h} and this canvas's top-left in it {x, y}. The bezel is baked once over the
       // whole window, and the part outside this canvas comes back as ImageData for a static background (never redrawn per frame)
