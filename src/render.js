@@ -999,7 +999,7 @@
     const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
     // the vector look's glass: nearly flat (barrel bend, also in main.js toGame via presenter.vecBend) and angular
     const VEC_BEND_XY = [0.012, 0.016], VEC_BEND = VEC_BEND_XY.join(", "), VEC_CHAMFER = "0.09";
-    const VEC_BACKDROP = "0.3"; // the backdrop's brightness (the pictures are already at 25%)
+    const VEC_BACKDROP = "0.7"; // the backdrop's brightness (the pictures are already at 25%)
     const pU = mk(HDR + `
       uniform sampler2D bezTex, back; uniform float backOn; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv, vec; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV; vec: 1 = vector
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
@@ -1119,10 +1119,12 @@
           // mains flicker, rolling hum bar
           c *= 1.0 - (vec > 0.5 ? 0.07 : 0.05) * hash(vec2(floor(time * 60.0), 1.0)); // a vector's refresh flickers a bit more
           if (vec < 0.5) c *= 1.0 + 0.1 * pow(0.5 + 0.5 * sin(6.2832 * (ty * 1.0 - time * 0.09)), 10.0);
-          c += backdrop; // the vector backdrop: lit by a steady lamp, it doesn't flicker with the beam
           // static grain + sparse bright speckles
           float n = hash(gl_FragCoord.xy + fract(time) * 91.7);
           c += (n - 0.5) * (vec > 0.5 ? 0.02 : 0.075);
+          // the vector backdrop: after the grain (no shimmer: the author didn't like it), flickering with the beam at
+          // half its strength (full strength was jarring on a bright backdrop; none at all, the author missed it)
+          c += backdrop * (1.0 - 0.035 * hash(vec2(floor(time * 60.0), 1.0)));
           // glass: glare at the top-right (web edition: moved off the 1UP score), faint dust streak, darkening near the rim
           float gl1 = exp(-pow(length((fuv - vec2(0.8, 0.84)) * vec2(1.0, 1.25)) / 0.30, 2.0));
           float gl2 = exp(-pow(((1.0 - fuv.x) * 0.9 + fuv.y * 0.55 - 0.78) / 0.05, 2.0)) * 0.5;

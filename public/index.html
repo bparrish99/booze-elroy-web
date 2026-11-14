@@ -234,7 +234,7 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
               vec3 bd = texture2D(back, uv).rgb * 0.4 + (texture2D(back, uv + vec2(bp.x, 0.0)).rgb + texture2D(back, uv - vec2(bp.x, 0.0)).rgb
                 + texture2D(back, uv + vec2(0.0, bp.y)).rgb + texture2D(back, uv - vec2(0.0, bp.y)).rgb) * 0.15;
               bd = mix(vec3(dot(bd, vec3(0.299, 0.587, 0.114))), bd, 0.7) * vec3(0.85, 0.92, 1.1);
-              backdrop = bd * 0.3 * (1.0 - clamp(max(c.r, max(c.g, c.b)) * 1.5, 0.0, 1.0)); // added after the flicker
+              backdrop = bd * 0.7 * (1.0 - clamp(max(c.r, max(c.g, c.b)) * 1.5, 0.0, 1.0)); // added after the flicker
             }
           }
           else { c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b; }
@@ -258,10 +258,12 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
           // mains flicker, rolling hum bar
           c *= 1.0 - (vec > 0.5 ? 0.07 : 0.05) * hash(vec2(floor(time * 60.0), 1.0)); // a vector's refresh flickers a bit more
           if (vec < 0.5) c *= 1.0 + 0.1 * pow(0.5 + 0.5 * sin(6.2832 * (ty * 1.0 - time * 0.09)), 10.0);
-          c += backdrop; // the vector backdrop: lit by a steady lamp, it doesn't flicker with the beam
           // static grain + sparse bright speckles
           float n = hash(gl_FragCoord.xy + fract(time) * 91.7);
           c += (n - 0.5) * (vec > 0.5 ? 0.02 : 0.075);
+          // the vector backdrop: after the grain (no shimmer: the author didn't like it), flickering with the beam at
+          // half its strength (full strength was jarring on a bright backdrop; none at all, the author missed it)
+          c += backdrop * (1.0 - 0.035 * hash(vec2(floor(time * 60.0), 1.0)));
           // glass: glare at the top-right (web edition: moved off the 1UP score), faint dust streak, darkening near the rim
           float gl1 = exp(-pow(length((fuv - vec2(0.8, 0.84)) * vec2(1.0, 1.25)) / 0.30, 2.0));
           float gl2 = exp(-pow(((1.0 - fuv.x) * 0.9 + fuv.y * 0.55 - 0.78) / 0.05, 2.0)) * 0.5;
