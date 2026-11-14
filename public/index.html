@@ -394,7 +394,7 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
             c += ruinLight;
           }
           // glass: glare at the top-right (web edition: moved off the 1UP score), faint dust streak, darkening near the rim
-          float gl1 = exp(-pow(length((fuv - vec2(0.8, 0.84)) * vec2(1.0, 1.25)) / 0.30, 2.0));
+          float gl1 = exp(-pow(length((fuv - (ruin > 0.5 ? vec2(0.2, 0.16) : vec2(0.8, 0.84))) * vec2(1.0, 1.25)) / 0.30, 2.0)); // (discarded: lower left)
           float gl2 = exp(-pow(((1.0 - fuv.x) * 0.9 + fuv.y * 0.55 - 0.78) / 0.05, 2.0)) * 0.5;
           c += vec3(0.85, 0.9, 1.0) * (0.06 * gl1 + 0.018 * gl2);
           c *= 0.62 + 0.38 * smoothstep(-0.16, 0.0, -d);
@@ -403,7 +403,7 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
           float sheen = smoothstep(-0.1, 1.0, q.y * 0.85 + q.x * 0.35 + 0.15 * (1.0 - dot(q, q)));
           c += vec3(0.78, 0.84, 1.0) * 0.045 * sheen * sheen;
           //   a soft window-shaped reflection with a crisp lower edge, upper right
-          const vec2 WIN = vec2(0.73, 0.8);
+          vec2 WIN = ruin > 0.5 ? vec2(0.27, 0.2) : vec2(0.73, 0.8); // (the discarded look: lower left, lying on the ground)
           vec2 wq = (fuv - WIN) * vec2(1.0, 1.6);
           float win = (1.0 - smoothstep(0.17, 0.2, length(wq))) * smoothstep(-0.12, 0.1, wq.y);
           c += vec3(0.8, 0.86, 1.0) * 0.035 * win;
