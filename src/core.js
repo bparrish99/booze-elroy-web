@@ -1798,7 +1798,7 @@
       Object.assign(opt("movement", [0, 1, 2, 3], ["Normal", "Faster", "Fastest", "Jetpack"]), { y: 15 }),
       Object.assign(opt("ghostCount", range(0, 7)), { y: 18 }),
       Object.assign(ON_OFF("pinkyBug"), { y: 19 }),
-      Object.assign(opt("scatterOption", [false, 1, 2, 3], ["Normal", "Random", "mspac", "None"]), { y: 20 }),
+      Object.assign(opt("scatterOption", [false, 1, 2, 3], ["Normal", "Random", "mspac", "Chase-only"]), { y: 20 }),
       Object.assign(ON_OFF("freeGhost"), { y: 21 }),
       Object.assign(opt("background", bgNames, bgNames.map(cap), (v) => { g.currentBackground = v === "random" ? BACKGROUND_OPTIONS[rand(2, BACKGROUND_OPTIONS.length) - 1] : v; }), { y: 24 }),
       Object.assign(opt("mazeColor", MAZE_COLORS, ["Default"].concat(range(1, 26), ["Random"])), { y: 25 }),

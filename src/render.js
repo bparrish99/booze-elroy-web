@@ -924,7 +924,7 @@
     // web edition: the C key's fourth look, "vector" (2026-11-13): as if the game were a 1980s vector (X-Y) monitor
     // game. Only the edges of what's drawn are traced, by a beam: outlines of every shape (where a lit pixel meets dark or
     // a different colour), so Pac-Man, the ghosts and the energizers become line drawings, as smooth glowing strokes on
-    // pure black, every line at full beam brightness with a white-hot core where they're bright, and a long phosphor
+    // pure black, every line at full beam brightness with a white-hot core where they're bright, and a faint phosphor
     // afterglow (new = max(beam, previous * decay)). The dim backgrounds don't make it (below the beam's threshold).
     // Drawn at 3x the game's size into VH; pU then puts it behind the same glass, without scanlines or a grille.
     // film = 1: Mina's film, shown as it is (no outlines, no trails)
@@ -1193,7 +1193,7 @@
           let pic;
           if (vec) { // the beam's afterglow fades by time, not by frame (same trails at 60 or 144 Hz)
             const nxt = 1 - vh, film = smoothNow();
-            pass(pV, VH[nxt], (p) => { gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.8, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t);
+            pass(pV, VH[nxt], (p) => { gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.3, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t);
             vh = nxt; pic = VH[vh].t;
           } else {
             const nxt = 1 - ph;
