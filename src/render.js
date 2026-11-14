@@ -1175,6 +1175,12 @@
               ruinDim = 1.0 - ev * 0.3;
               ruinLight += vec3(0.35, 0.36, 0.4) * ev * (1.0 - smoothstep(0.0, 0.002, abs(uv.y - tearY)));
               ca *= 3.5;                                                   // convergence long gone
+              //   every so often the picture collapses to a bright line across the middle and springs back
+              float cslot = floor(time / 9.0), ck = (time - cslot * 9.0 - 8.0 * hash(vec2(cslot, 12.0))) / 0.4;
+              float squash = step(0.45, hash(vec2(cslot, 13.0))) * step(0.0, ck) * step(ck, 1.0) * sin(clamp(ck, 0.0, 1.0) * 3.14159);
+              float fv = 1.0 - 0.985 * squash;
+              uv.y = 0.5 + (uv.y - 0.5) / fv;
+              ruinDim *= 1.0 + squash * 1.5;
               // schmutz on the glass: greasy smudges hazing the picture, a dried drip from the top, a water-stain ring,
               // dust specks (applied after the scanlines too)
               float smudge = smoothstep(0.5, 0.75, fbm(fuv * vec2(2.6, 3.4) + 11.0)) * 0.75;
@@ -1188,6 +1194,17 @@
             c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b;
             if (ruin > 0.5) {
               c += samp(uv - vec2(0.012, 0.0), vec2(0.0)) * 0.18;           // a ghost image to the right
+              c *= step(0.0, uv.y) * step(uv.y, 1.0);                     // (black outside a collapsed picture)
+              // a weak signal: faint snow always; now and then a burst of it, or a bar of static across part of the screen
+              float sn = hash(floor(fuv * vec2(320.0, 400.0)) + fract(time * 61.0) * 97.0);
+              float burst = step(0.955, hash(vec2(floor(time * 6.0), 11.0)));
+              float bslot = floor(time * 4.0), by = hash(vec2(bslot, 14.0)), bh = 0.03 + 0.08 * hash(vec2(bslot, 15.0));
+              float bar = step(0.82, hash(vec2(bslot, 16.0))) * (1.0 - smoothstep(bh * 0.6, bh, abs(fuv.y - by)));
+              c = mix(c, vec3(sn) * 0.75, clamp(0.05 + burst * 0.65 + bar * 0.7, 0.0, 0.85));
+              // and the colour drains out for a moment now and then
+              float dslot = floor(time / 5.0), dk = (time - dslot * 5.0 - 4.0 * hash(vec2(dslot, 17.0))) / 0.6;
+              float drain = step(0.6, hash(vec2(dslot, 18.0))) * step(0.0, dk) * step(dk, 1.0);
+              c = mix(c, vec3(dot(c, vec3(0.299, 0.587, 0.114))), drain * 0.9);
               float rr = length((fuv - vec2(0.18, 0.78)) * vec2(0.7778, 1.0));
               // a magnetised corner (purity gone): a purple stain with a green fringe
               float blot = 1.0 - smoothstep(0.08, 0.42, rr);
