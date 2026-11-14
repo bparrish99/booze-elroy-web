@@ -1,5 +1,5 @@
 // Plus Mode: the fruit frightens the ghosts like an energizer, so it wins a tie with a ghost the same way (web
-// edition, the author's call, 2026-11-13): Pac-Man reaching the fruit and a ghost on the same step eats both. Without
+// edition bug fix, 2026-11-13; the Lua had the bug too): Pac-Man reaching the fruit and a ghost on the same step eats both. Without
 // Plus Mode the fruit frightens nothing, so that ghost still catches him.
 import { test } from "node:test";
 import assert from "node:assert/strict";

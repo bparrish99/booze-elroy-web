@@ -819,7 +819,7 @@
             const [pX, , pY] = cm.getLoc(g.chars.pac);
             checkCollisions(g.powers, pX, pY);
             checkCollisions(g.dots, pX, pY);
-            // web edition (author's call, 2026-11-13): in Plus Mode the fruit frightens the ghosts like an energizer, so
+            // web edition bug fix (2026-11-13; the Lua had it too): in Plus Mode the fruit frightens the ghosts like an energizer, so
             // it wins a tie with a ghost the same way: eaten before the ghosts are checked (it used to come after, and a
             // ghost reached on the same step caught him). Elsewhere the fruit is still eaten after them, as before
             if (g.config.plusMode) eatFruit();
