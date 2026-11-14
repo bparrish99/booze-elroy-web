@@ -54,6 +54,20 @@
       og.gain.setValueAtTime(0, t); og.gain.setValueAtTime(0.05, on); og.gain.setValueAtTime(0, off);
       osc.connect(of); of.connect(og); og.connect(R.input); osc.start(t); osc.stop(off + 0.05);
     }
+    // an electrical buzz (a bad ground, an arcing transformer): rough mains hum with harsh overtones, steady or sputtering
+    function buzz() {
+      const t = ctx.currentTime, dur = 0.3 + Math.random() * 0.9, end = t + dur;
+      const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      o1.type = "sawtooth"; o1.frequency.value = 60; o2.type = "square"; o2.frequency.value = 120 + (Math.random() - 0.5) * 2;
+      f.type = "bandpass"; f.frequency.value = 350 + Math.random() * 500; f.Q.value = 0.8;
+      const peak = 0.08 + Math.random() * 0.1;
+      g.gain.setValueAtTime(0, t);
+      if (Math.random() < 0.5) { g.gain.linearRampToValueAtTime(peak, t + 0.01); g.gain.setValueAtTime(peak, end - 0.01); } // steady
+      else for (let u = t; u < end; u += 0.03 + Math.random() * 0.06) g.gain.setValueAtTime(Math.random() < 0.6 ? peak : 0, u); // sputtering
+      g.gain.linearRampToValueAtTime(0, end);
+      o1.connect(f); o2.connect(f); f.connect(g); g.connect(master);
+      o1.start(t); o2.start(t); o1.stop(end + 0.05); o2.stop(end + 0.05);
+    }
     function blip(kind) {
       const t = ctx.currentTime, src = ctx.createBufferSource(); src.buffer = ruin.noise;
       const f = ctx.createBiquadFilter(), g = ctx.createGain();
@@ -76,6 +90,7 @@
       const r = Math.random();
       if (r < 0.17) blip("crack"); else if (r < 0.21) blip("hiss");           // a crack every ~1.5 s, a hiss every ~6 s
       else if (r < 0.222 && ctx.currentTime > stuckUntil) stick();            // stuck every ~20 s
+      else if (r < 0.253) buzz();                                             // a buzz every ~8 s
       if (Math.random() < 0.05) {
         const t = ctx.currentTime, g = ruin.wire.gain;
         // dead silence, cut and back at once (a dip and a fade back was too gentle)
