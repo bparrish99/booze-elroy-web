@@ -975,8 +975,8 @@
         }
         float k = max(acc.r, max(acc.g, acc.b));
         // saturating stroke, keeps its hue; dimmed and a small white core, for a crisp line (brighter looked washed out)
-        vec3 beam = acc / max(k, 1e-4) * (1.0 - exp(-k * 1.8)) * 0.85;
-        beam += vec3(0.3) * smoothstep(0.9, 1.3, k) * (1.0 - exp(-k));
+        vec3 beam = acc / max(k, 1e-4) * (1.0 - exp(-k * 1.8)) * 0.92;
+        beam += vec3(0.34) * smoothstep(0.9, 1.3, k) * (1.0 - exp(-k));
         // text: the CRT's way, each pixel a soft dot of light that runs into its neighbours sideways and leaves a dark
         // scanline between rows (flat blocks looked too clean)
         vec3 txt = vec3(0.0);
@@ -1254,7 +1254,7 @@
           if (vec) { // the beam's afterglow fades by time, not by frame (same trails at 60 or 144 Hz)
             const nxt = 1 - vh, film = smoothNow();
             if (textMask) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, maskTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textMask); }
-            pass(pV, VH[nxt], (p) => { gl.uniform1i(p.u("mask"), 2); gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.55, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t, maskTex);
+            pass(pV, VH[nxt], (p) => { gl.uniform1i(p.u("mask"), 2); gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.65, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t, maskTex);
             vh = nxt; pic = VH[vh].t;
           } else {
             const nxt = 1 - ph;
@@ -1265,7 +1265,7 @@
           pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), vec ? 0.3 : 0.72), A.t);
           pass(pB, B2, (p) => { gl.uniform2f(p.u("dir"), 1 / BW, 0); gl.uniform1f(p.u("sigma"), 3.5); }, B1.t);
           pass(pB, B1, (p) => { gl.uniform2f(p.u("dir"), 0, 1 / BH); gl.uniform1f(p.u("sigma"), 3.5); }, B2.t);
-          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS); gl.uniform1f(p.u("glowK"), vec ? 0.4 : 0.55); }, A.t, B1.t);
+          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS); gl.uniform1f(p.u("glowK"), vec ? 0.48 : 0.55); }, A.t, B1.t);
         } else {
           pass(pA, A, (p) => { gl.uniform2f(p.u("distortion"), 1.03, 1.04); gl.uniform1f(p.u("feather"), 0.02);
             gl.uniform1f(p.u("widthPx"), 2); gl.uniform1f(p.u("thickness"), 0.5); gl.uniform1f(p.u("opacity"), 0.4); gl.uniform1f(p.u("screenH"), cssH); }, srcTex);
