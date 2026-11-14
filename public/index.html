@@ -314,9 +314,6 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
           // a soft gloss band across the top, an overhead light reflected
           float band = exp(-pow((q.y - 1.13) / 0.045, 2.0)) * exp(-pow(q.x / 0.85, 4.0));
           bez += vec3(0.075, 0.075, 0.085) * band * outside;
-          // and a faint long sheen down each side
-          float sheen = exp(-pow((abs(q.x) - 1.1 + 0.04 * q.y) / 0.03, 2.0)) * smoothstep(-1.2, 0.8, q.y);
-          bez += vec3(0.035, 0.035, 0.04) * sheen * outside;
           // a broad soft streak of light across the side panels, glancing down from the upper left, fading away from the screen
           float panel = smoothstep(1.02, 1.12, abs(q.x)) * exp(-pow((abs(q.x) - 1.0) / 1.8, 2.0));
           float streak = exp(-pow((q.x * 0.45 + q.y * 0.9 - 0.95) / 0.16, 2.0)) + 0.6 * exp(-pow((q.x * 0.45 + q.y * 0.9 + 0.55) / 0.1, 2.0));
