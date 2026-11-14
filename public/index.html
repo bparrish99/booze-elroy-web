@@ -312,8 +312,8 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
               ruinLight += vec3(0.35, 0.36, 0.4) * ev * (1.0 - smoothstep(0.0, 0.002, abs(uv.y - tearY)));
               ca *= 3.5;                                                   // convergence long gone
               //   (the picture collapsing to a line and springing back was tried: the author didn't want it)
-              // schmutz on the glass: greasy smudges hazing the picture, a dried drip from the top, a water-stain ring,
-              // dust specks (applied after the scanlines too)
+              // schmutz on the glass: greasy smudges hazing the picture and dried drips from the top (applied after the
+              // scanlines too)
               float smudge = smoothstep(0.5, 0.75, fbm(fuv * vec2(2.6, 3.4) + 11.0)) * 0.75;
               // dried drips running down from the top (the author liked the first one: more of them), each wobbling its
               // own way and ending in a bead; some older and fainter
@@ -329,8 +329,8 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
                 float bead = 1.0 - smoothstep(wd + 0.004, wd + 0.011, length((fuv - vec2(x0 + wobEnd, yEnd + 0.004)) * vec2(1.0, 1.4)));
                 drip = max(drip, max(run, bead * 0.9) * age);
               }
-              float stain = (1.0 - smoothstep(0.0, 0.006, abs(length((fuv - vec2(0.27, 0.2)) * vec2(0.7778, 1.0)) - 0.07))) * (0.5 + 0.5 * vnoise(fuv * 60.0));
-              ruinHaze = clamp(smudge + drip * 0.8 + stain * 0.7, 0.0, 0.9);
+              // (a water-stain ring was tried: an almost perfect circle, out of place)
+              ruinHaze = clamp(smudge + drip * 0.8, 0.0, 0.9);
               ruinLight += vec3(0.075, 0.06, 0.04) * drip;                   // dried residue catching the light
               // (fingerprints and swipe smears were tried: "fake crabmeat". Single bright dust specks before them looked
               // like dead pixels)
