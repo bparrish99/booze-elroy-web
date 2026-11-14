@@ -379,9 +379,13 @@
     // mouse / touch for the menus (pointer position is mapped back through the CRT barrel distortion)
     function toGame(e) {
       const rc = canvas.getBoundingClientRect();
-      const ux = (e.clientX - rc.left - scr.x) / scr.w, uy = 1 - (e.clientY - rc.top - scr.y) / scr.h;
+      let ux = (e.clientX - rc.left - scr.x) / scr.w, uy = 1 - (e.clientY - rc.top - scr.y) / scr.h;
       let sx = ux, sy = uy;
       if (core.g.config.crtEffect) {
+        if (core.g.config.crtEffect === "discarded" && P.ruinAngle) { // the tilted monitor (the same turn as render.js tilt)
+          const A = 224 / 288, px = (ux - 0.5) * A, py = uy - 0.5, cs = Math.cos(P.ruinAngle), sn = Math.sin(P.ruinAngle);
+          ux = (cs * px - sn * py) / A + 0.5; uy = sn * px + cs * py + 0.5;
+        }
         let qx = ux * 2 - 1, qy = uy * 2 - 1;
         if (P.ultra) { const z = P.zoom || 1.035; qx *= z; qy *= z; }
         const vb = core.g.config.crtEffect === "vector" && P.vecBend; // the vector look's glass is nearly flat
@@ -597,11 +601,11 @@
     // (between mute and fullscreen; phones have no C). Not an option on the Options page (env.crtKey); saved at once, into the player's
     // own settings even while an arena's / leaderboard's are borrowed
     const lookBtn = document.getElementById("look");
-    const LOOK_NAMES = { true: "CRT", false: "clean", tv: "retro TV", vector: "vector" };
+    const LOOK_NAMES = { true: "CRT", false: "clean", tv: "retro TV", vector: "vector", discarded: "discarded" };
     const syncLook = () => { lookBtn.title = "Visuals: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title); };
     function cycleLook() {
       const crt = core.g.config.crtEffect;
-      core.g.config.crtEffect = crt === "tv" ? "vector" : crt === "vector" ? true : crt ? false : "tv";
+      core.g.config.crtEffect = crt === "tv" ? "vector" : crt === "vector" ? "discarded" : crt === "discarded" ? true : crt ? false : "tv";
       try { localStorage.setItem("booze-elroy-options", JSON.stringify({ ...LB.ownSettings(), crtEffect: core.g.config.crtEffect })); } catch { /* ignore */ }
       syncLook();
     }

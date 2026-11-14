@@ -1008,13 +1008,22 @@
     const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
     // the vector look's glass: nearly flat (barrel bend, also in main.js toGame via presenter.vecBend) and angular
     const VEC_BEND_XY = [0.012, 0.016], VEC_BEND = VEC_BEND_XY.join(", "), VEC_CHAMFER = "0.09";
-    const VEC_BACKDROP = "1.0"; // the backdrop's brightness (the pictures are already at 25%)
+    const VEC_BACKDROP = "1.0";
+    // the "discarded" look (an experiment): the monitor tilted by RUIN_ANGLE radians (also in main.js toGame, via
+    // presenter.ruinAngle), its glass cracked, lying in a ruin
+    const RUIN_ANGLE = 0.09; // the backdrop's brightness (the pictures are already at 25%)
     const pU = mk(HDR + `
-      uniform sampler2D bezTex, back; uniform float backOn; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv, vec; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV; vec: 1 = vector
+      uniform sampler2D bezTex, back; uniform float backOn; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv, vec, ruin; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV; vec: 1 = vector
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
       // the vector look's angular screen: straight edges, the corners cut off at 45 degrees (a vector cabinet's bezel)
       float sdChamfer(vec2 p){ vec2 a = abs(p); return max(max(a.x, a.y) - 1.0, (a.x + a.y - (2.0 - ${VEC_CHAMFER})) * 0.7071); }
+      // the discarded look: the whole monitor tilted (screen-relative uv, rotated round the screen's middle; 224:288)
+      vec2 tilt(vec2 f){ vec2 p = (f - 0.5) * vec2(0.7778, 1.0); float cs = cos(${RUIN_ANGLE}), sn = sin(${RUIN_ANGLE});
+        p = vec2(cs * p.x - sn * p.y, sn * p.x + cs * p.y); return p / vec2(0.7778, 1.0) + 0.5; }
+      float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
+      float fbm(vec2 p){ return 0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03 + 7.1) + 0.125 * vnoise(p * 4.1 + 3.3) + 0.0625 * vnoise(p * 8.3 + 1.7); }
       // web edition: the C key's third look, a ratty old living-room TV on an RF cable. Brightness stays fairly sharp,
       // colour smears sideways and drifts (composite video), a ghost trails to the right, faint diagonal interference, wonky geometry now and then,
       // a torn tracking band drifting down (no vertical-hold jumps or rolls: tried, too cheesy)
@@ -1080,6 +1089,7 @@
       }
       void main(){
         vec2 fuv = (vuv - frame.xy) / frame.zw;          // screen-relative uv (the bezel may fill the whole window)
+        if (ruin > 0.5) fuv = tilt(fuv);
         vec2 q = fuv * 2.0 - 1.0;
         q *= ${CRT_ZOOM.toFixed(3)}; // > 1: the glass is smaller than the canvas, leaving a bezel round it
         q += (q.yx * q.yx) * q * (vec > 0.5 ? vec2(${VEC_BEND}) : vec2(0.04, 0.055)); // vector: nearly flat glass
@@ -1107,7 +1117,45 @@
               backdrop = bd * ${VEC_BACKDROP} * (1.0 - clamp(max(c.r, max(c.g, c.b)) * 1.5, 0.0, 1.0)); // added after the flicker
             }
           }
-          else { c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b; }
+          else {
+            float crack = 0.0, halo = 0.0, crackAng = 0.0;
+            if (ruin > 0.5) {
+              // broken glass: an impact low on the right, radial cracks out from it (wiggling, some to the edge), broken
+              // rings round it, a crushed spot in the middle. Each shard bends the picture a little its own way
+              vec2 cp = (fuv - vec2(0.7, 0.32)) * vec2(0.7778, 1.0);
+              float r = length(cp), a = atan(cp.y, cp.x); crackAng = a;
+              for (int k = 0; k < 11; k++) {
+                float fk = float(k);
+                float ak = 6.2832 * (fk + 0.6 * hash(vec2(fk, 1.3))) / 11.0 + 0.05 * sin(r * 31.0 + fk) + 0.025 * sin(r * 77.0 + fk * 3.0);
+                float len = 0.18 + 0.75 * hash(vec2(fk, 2.9));
+                float da = a - ak; da = mod(da + 3.14159, 6.28318) - 3.14159;
+                float dk = abs(r * sin(da)) / 0.7778;
+                float on = step(abs(da), 1.4) * (1.0 - smoothstep(len * 0.85, len, r));
+                crack = max(crack, on * (1.0 - smoothstep(0.0009, 0.0022, dk)));
+                halo = max(halo, on * (1.0 - smoothstep(0.002, 0.006, dk)));
+              }
+              float sector = floor((a + 3.14159) / 6.28318 * 11.0);
+              for (int i = 0; i < 4; i++) {
+                float fi = float(i), ri = (0.035 + 0.055 * fi * (1.0 + 0.3 * fi)) * (1.0 + 0.07 * sin(a * 5.0 + fi * 2.0));
+                float seg = step(0.4, hash(vec2(sector + fi * 13.0, 4.4)));
+                float dr = abs(r - ri);
+                crack = max(crack, seg * (1.0 - smoothstep(0.0009, 0.0022, dr)));
+                halo = max(halo, seg * (1.0 - smoothstep(0.002, 0.006, dr)));
+              }
+              float ring = r < 0.035 ? 0.0 : r < 0.09 ? 1.0 : r < 0.19 ? 2.0 : r < 0.34 ? 3.0 : 4.0;
+              uv += (vec2(hash(vec2(sector, ring)), hash(vec2(ring, sector + 0.5))) - 0.5) * 0.007 * (1.0 - smoothstep(0.08, 0.7, r));
+              if (r < 0.03) crack = max(crack, step(0.55, hash(floor(fuv * 260.0))) * (1.0 - r / 0.03)); // crushed
+            }
+            c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b;
+            if (ruin > 0.5) {
+              // neglect: dimmer, dusty (brownish film, thicker in blotches), the cracks dark at their sides and catching
+              // the light along their edge
+              float dust = fbm(fuv * vec2(6.0, 7.7) + 3.0);
+              c *= 0.8 * (1.0 - 0.45 * halo);
+              c = mix(c, c * vec3(1.0, 0.93, 0.8), 0.6) + vec3(0.05, 0.045, 0.035) * smoothstep(0.35, 0.8, dust);
+              c += vec3(0.42, 0.44, 0.46) * crack * (0.45 + 0.55 * hash(vec2(floor(crackAng * 40.0), 2.0)));
+            }
+          }
           if (vec < 0.5) { // a vector monitor has no scanlines and no grille: the beam draws the lines themselves
           // scanlines: bright beams widen and fill the gap, dim ones leave dark lines
           float lum = dot(c, vec3(0.299, 0.587, 0.114));
@@ -1170,20 +1218,27 @@
                  + texture2D(tex, ruv - nb).rgb * 0.12;
           // a dark gap at the rim, then a fade; top/bottom much fainter (text rows sit right against the glass there)
           float fall = exp(-d / 0.035) * smoothstep(0.008, 0.02, d);
-          bez += r * vec3(0.95, 0.92, 0.88) * (vec > 0.5 ? 0.62 : 0.42) * fall * (0.3 + 0.7 * side); // vector: shinier plastic
+          bez += r * vec3(0.95, 0.92, 0.88) * (vec > 0.5 ? 0.62 : ruin > 0.5 ? 0.12 : 0.42) * fall * (0.3 + 0.7 * side); // vector: shinier plastic; discarded: grimy
         }
         gl_FragColor = vec4(mix(bez, c, inside), 1.0);
       }`);
 
     // the bezel's static look (base colour, grain, rim highlight), drawn once per resize into Z; pU reads it back
     const pZ = mk(HDR + `
-      uniform vec4 frame; uniform float dpr, tv, vec;
+      uniform vec4 frame; uniform float dpr, tv, vec, ruin;
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
       // the vector look's angular screen: straight edges, the corners cut off at 45 degrees (a vector cabinet's bezel)
       float sdChamfer(vec2 p){ vec2 a = abs(p); return max(max(a.x, a.y) - 1.0, (a.x + a.y - (2.0 - ${VEC_CHAMFER})) * 0.7071); }
+      // the discarded look: the whole monitor tilted (screen-relative uv, rotated round the screen's middle; 224:288)
+      vec2 tilt(vec2 f){ vec2 p = (f - 0.5) * vec2(0.7778, 1.0); float cs = cos(${RUIN_ANGLE}), sn = sin(${RUIN_ANGLE});
+        p = vec2(cs * p.x - sn * p.y, sn * p.x + cs * p.y); return p / vec2(0.7778, 1.0) + 0.5; }
+      float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
+      float fbm(vec2 p){ return 0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03 + 7.1) + 0.125 * vnoise(p * 4.1 + 3.3) + 0.0625 * vnoise(p * 8.3 + 1.7); }
       void main(){
         vec2 fuv = (vuv - frame.xy) / frame.zw;
+        if (ruin > 0.5) fuv = tilt(fuv);
         vec2 q = fuv * 2.0 - 1.0;
         q *= ${CRT_ZOOM.toFixed(3)};
         q += (q.yx * q.yx) * q * (vec > 0.5 ? vec2(${VEC_BEND}) : vec2(0.04, 0.055)); // vector: nearly flat glass
@@ -1213,6 +1268,65 @@
           bez += NEON * (0.4 * (1.0 - smoothstep(0.0015, 0.0045, nd)) + 0.14 * exp(-nd / 0.012) + 0.05 * exp(-nd / 0.05));
           bez += NEON2 * (0.42 * (1.0 - smoothstep(0.0015, 0.0045, nd2)) + 0.12 * exp(-nd2 / 0.012) + 0.04 * exp(-nd2 / 0.05));
         }
+        if (ruin > 0.5) {
+          // discarded: the monitor's own grimy, scuffed plastic only so far (bd < 0); round it, the floor of a ruin:
+          // dusty concrete and dirt, rocks, a few shards of glass, the monitor's shadow
+          vec2 pp = gl_FragCoord.xy / max(dpr, 1.0);                       // css px, the window's own (untilted)
+          float bd = sdBox(q, vec2(1.17, 1.12), 0.1);
+          float scuff = fbm(q * 9.0) * 0.5 + 0.5 * step(0.985, vnoise(vec2(q.x * 3.0 + q.y * 9.0, q.y * 140.0)));
+          vec3 plastic = vec3(0.12, 0.11, 0.095) * (0.6 + 0.5 * clamp(fuv.y, -0.15, 1.15)) * (0.75 + 0.35 * scuff);
+          plastic += vec3(0.07) * smoothstep(-0.02, 0.0, bd) * (1.0 - smoothstep(0.0, 0.01, bd)) * clamp(q.y * 0.4 + 0.6, 0.0, 1.0); // its edge
+          bez = mix(bez, plastic, 0.55) * vec3(1.0, 0.97, 0.9);
+          vec3 ground = vec3(0.15, 0.135, 0.11) * (0.55 + 0.6 * fbm(pp / 140.0)) * (0.85 + 0.25 * vnoise(pp / 9.0)) * (0.9 + 0.2 * hash(floor(pp / 1.5)));
+          ground = mix(ground, vec3(0.1, 0.085, 0.07), smoothstep(0.55, 0.8, fbm(pp / 60.0 + 9.0)) * 0.6); // patches of dirt
+          // rocks: one maybe per cell, a lumpy disc shaded by a light from the upper left, with a shadow to the lower right
+          float rockA = 0.0, shadow = 0.0; vec3 rock = vec3(0.0);
+          for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+            vec2 cell = floor(pp / 64.0) + vec2(float(i), float(j));
+            float h = hash(cell * 1.7 + 0.3);
+            float clump = fbm(cell * 0.23 + 4.0);                          // rubble gathers in some places, not others
+            if (h < 1.15 - clump * 1.1) continue;
+            vec2 pt = (cell + 0.15 + 0.7 * vec2(hash(cell + 5.1), hash(cell + 9.7))) * 64.0;
+            float sz = hash(cell + 2.2);
+            float rad = 3.0 + 9.0 * sz + 26.0 * pow(hash(cell + 3.3), 4.0); // mostly pebbles and stones, a few big chunks
+            // a broken chunk: a jagged polygon (the furthest of 7 planes round it), with a flat top and flat side faces
+            vec2 rel = (pp - pt) / rad, srel = rel - vec2(0.35, -0.35);
+            float dd = -1.0, sd = -1.0; vec2 face = vec2(0.0);
+            for (int k = 0; k < 7; k++) {
+              float fk = float(k), ak = 6.2832 * fk / 7.0 + h * 9.0 + 0.5 * hash(cell + fk);
+              vec2 dk = vec2(cos(ak), sin(ak)); float reach = 0.7 + 0.45 * hash(cell * 3.1 + fk);
+              float pk = dot(rel, dk) / reach;
+              if (pk > dd) { dd = pk; face = dk; }
+              sd = max(sd, dot(srel, dk) / reach);
+            }
+            shadow = max(shadow, 1.0 - smoothstep(0.9, 1.2, sd));
+            if (dd < 1.0) {
+              vec3 L = normalize(vec3(-0.55, 0.6, 0.6));
+              vec3 n = dd < 0.5 + 0.2 * hash(cell + 1.1) ? vec3(0.0, 0.0, 1.0) : normalize(vec3(face * 0.9, 0.45)); // top, or a side
+              float lit = clamp(dot(n, L), 0.0, 1.0);
+              vec3 tone = mix(vec3(0.25, 0.235, 0.215), vec3(0.3, 0.27, 0.22), hash(cell + 7.7));
+              rock = tone * (0.2 + 0.9 * lit) * (0.82 + 0.3 * vnoise(pp / 2.5 + h * 50.0));
+              rock *= 1.0 - 0.45 * (1.0 - smoothstep(0.0, 0.06, 1.0 - dd));        // a dark rim
+              rockA = 1.0;
+            }
+          }
+          ground *= 1.0 - 0.55 * shadow * (1.0 - rockA);
+          ground = mix(ground, rock, rockA);
+          // shards of glass on the ground: small, rare, catching the light
+          vec2 sc = floor(pp / 23.0);
+          if (hash(sc + 0.7) > 0.985) {
+            vec2 sp = pp - (sc + 0.5) * 19.0; float sa = hash(sc + 1.9) * 6.28;
+            sp = vec2(cos(sa) * sp.x - sin(sa) * sp.y, sin(sa) * sp.x + cos(sa) * sp.y);
+            float tri = max(abs(sp.x) * 0.87 + sp.y * 0.5, -sp.y) - 1.5 - 1.5 * hash(sc + 4.4);
+            float glint = step(0.8, hash(sc + 6.6));                        // most are dull; now and then one catches the light
+            ground = mix(ground, vec3(0.3, 0.31, 0.32) * (0.6 + 0.3 * hash(sc + 8.8)) + vec3(0.35) * glint, (1.0 - smoothstep(-0.5, 0.5, tri)) * (1.0 - rockA) * 0.8);
+          }
+          // the monitor's shadow on the ground, to the lower right
+          float sh = sdBox(q - vec2(0.07, -0.09), vec2(1.17, 1.12), 0.1);
+          ground *= 0.45 + 0.55 * smoothstep(-0.02, 0.22, sh);
+          ground *= 0.75;                                                   // dim, so the game stays the thing to look at
+          bez = mix(bez, ground, smoothstep(-0.004, 0.004, bd));
+        }
         gl_FragColor = vec4(bez, 1.0);
       }`);
 
@@ -1241,7 +1355,7 @@
     };
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     const api = {
-      webgl: true, ultra: true, zoom: CRT_ZOOM, vecBend: VEC_BEND_XY,
+      webgl: true, ultra: true, zoom: CRT_ZOOM, vecBend: VEC_BEND_XY, ruinAngle: RUIN_ANGLE,
       // frame: where the game screen sits in the canvas, as uv fractions {x, y (from the bottom), w, h}; default the whole canvas.
       // win (CRT on): the window in device px {w, h} and this canvas's top-left in it {x, y}. The bezel is baked once over the
       // whole window, and the part outside this canvas comes back as ImageData for a static background (never redrawn per frame)
@@ -1257,7 +1371,7 @@
         VH = [mkTarget(GW * 3, GH * 3), mkTarget(GW * 3, GH * 3)];
         zmap = [w / W, h / H, ox / W, oy / H];
         pass(pZ, Z, (p) => { gl.uniform4f(p.u("frame"), (fr[0] * w + ox) / W, (fr[1] * h + oy) / H, fr[2] * w / W, fr[3] * h / H); gl.uniform1f(p.u("dpr"), dpr);
-          gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), getConfig().crtEffect === "vector" ? 1 : 0); });
+          gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), getConfig().crtEffect === "vector" ? 1 : 0); gl.uniform1f(p.u("ruin"), getConfig().crtEffect === "discarded" ? 1 : 0); });
         let bg = null;
         if (win) {
           const G = mkTarget(W, H);
@@ -1293,7 +1407,7 @@
             pass(pH, PH[nxt], (p) => gl.uniform1f(p.u("decay"), 0.58), srcTex, PH[ph].t);
             ph = nxt; pic = PH[ph].t;
           }
-          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), vec ? 1 : 0); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); gl.uniform1i(p.u("back"), 2); gl.uniform1f(p.u("backOn"), bdImg ? 1 : 0); }, pic, Z.t, backTex);
+          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), vec ? 1 : 0); gl.uniform1f(p.u("ruin"), getConfig().crtEffect === "discarded" ? 1 : 0); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); gl.uniform1i(p.u("back"), 2); gl.uniform1f(p.u("backOn"), bdImg ? 1 : 0); }, pic, Z.t, backTex);
           pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), vec && !vfilm ? 0.3 : 0.72), A.t);
           pass(pB, B2, (p) => { gl.uniform2f(p.u("dir"), 1 / BW, 0); gl.uniform1f(p.u("sigma"), 3.5); }, B1.t);
           pass(pB, B1, (p) => { gl.uniform2f(p.u("dir"), 0, 1 / BH); gl.uniform1f(p.u("sigma"), 3.5); }, B2.t);
