@@ -113,8 +113,8 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
         float e = 0.0;
         vec3 n0 = px(t + vec2(1.0, 0.0)), n1 = px(t - vec2(1.0, 0.0)), n2 = px(t + vec2(0.0, 1.0)), n3 = px(t - vec2(0.0, 1.0));
         e = max(e, step(mx(n0), 0.08)); e = max(e, step(mx(n1), 0.08)); e = max(e, step(mx(n2), 0.08)); e = max(e, step(mx(n3), 0.08));
-        e = max(e, step(0.35, distance(c, n0))); e = max(e, step(0.35, distance(c, n1)));
-        e = max(e, step(0.35, distance(c, n2))); e = max(e, step(0.35, distance(c, n3)));
+        e = max(e, step(0.15, distance(c, n0))); e = max(e, step(0.15, distance(c, n1)));
+        e = max(e, step(0.15, distance(c, n2))); e = max(e, step(0.15, distance(c, n3)));
         return c / max(m, 0.7) * lit * e;
       }
       void main(){
