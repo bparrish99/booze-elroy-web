@@ -592,15 +592,15 @@
       popBtn.addEventListener("click", (e) => { e.preventDefault(); popOut(); popBtn.blur(); });
     }
     document.getElementById("popBack").addEventListener("click", () => { try { if (popWin) popWin.close(); } catch { /* ignore */ } setPoppedOut(null); });
-    // the look: CRT (true, the default) -> plain (false) -> 1982 living-room TV ("tv") -> CRT. The C key or the TV button
+    // the look: CRT (true, the default) -> plain (false) -> 1982 living-room TV ("tv") -> vector monitor ("vector") -> CRT. The C key or the TV button
     // (between mute and fullscreen; phones have no C). Not an option on the Options page (env.crtKey); saved at once, into the player's
     // own settings even while an arena's / leaderboard's are borrowed
     const lookBtn = document.getElementById("look");
-    const LOOK_NAMES = { true: "CRT", false: "clean", tv: "retro TV" };
+    const LOOK_NAMES = { true: "CRT", false: "clean", tv: "retro TV", vector: "vector" };
     const syncLook = () => { lookBtn.title = "Visuals: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title); };
     function cycleLook() {
       const crt = core.g.config.crtEffect;
-      core.g.config.crtEffect = crt === "tv" ? true : crt ? false : "tv";
+      core.g.config.crtEffect = crt === "tv" ? "vector" : crt === "vector" ? true : crt ? false : "tv";
       try { localStorage.setItem("booze-elroy-options", JSON.stringify({ ...LB.ownSettings(), crtEffect: core.g.config.crtEffect })); } catch { /* ignore */ }
       syncLook();
     }

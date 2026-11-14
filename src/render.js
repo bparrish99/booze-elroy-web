@@ -921,13 +921,47 @@
     // phosphor persistence: new = max(source, previous * decay)
     const pH = mk(HDR + `uniform sampler2D prev; uniform float decay;
       void main(){ vec3 s = texture2D(tex, vuv).rgb; vec3 p = texture2D(prev, vuv).rgb * decay; gl_FragColor = vec4(max(s, p), 1.0); }`);
+    // web edition: the C key's fourth look, "vector" (2026-11-13): as if the game were a 1980s vector (X-Y) monitor
+    // game. Only the edges of what's drawn are traced, by a beam: outlines of every shape (where a lit pixel meets dark or
+    // a different colour), so Pac-Man, the ghosts and the energizers become line drawings, as smooth glowing strokes on
+    // pure black, every line at full beam brightness with a white-hot core where they're bright, and a long phosphor
+    // afterglow (new = max(beam, previous * decay)). The dim backgrounds don't make it (below the beam's threshold).
+    // Drawn at 3x the game's size into VH; pU then puts it behind the same glass, without scanlines or a grille.
+    // film = 1: Mina's film, shown as it is (no outlines, no trails)
+    const pV = mk(HDR + `uniform sampler2D prev; uniform vec2 srcSize; uniform float decay, film;
+      vec3 px(vec2 t){ return texture2D(tex, (t + 0.5) / srcSize).rgb; }
+      float mx(vec3 c){ return max(c.r, max(c.g, c.b)); }
+      vec3 edge(vec2 t){
+        vec3 c = px(t); float m = mx(c);
+        float lit = smoothstep(0.3, 0.45, m);
+        if (lit <= 0.0) return vec3(0.0);
+        float e = 0.0;
+        vec3 n0 = px(t + vec2(1.0, 0.0)), n1 = px(t - vec2(1.0, 0.0)), n2 = px(t + vec2(0.0, 1.0)), n3 = px(t - vec2(0.0, 1.0));
+        e = max(e, step(mx(n0), 0.3)); e = max(e, step(mx(n1), 0.3)); e = max(e, step(mx(n2), 0.3)); e = max(e, step(mx(n3), 0.3));
+        e = max(e, step(0.35, distance(c, n0))); e = max(e, step(0.35, distance(c, n1)));
+        e = max(e, step(0.35, distance(c, n2))); e = max(e, step(0.35, distance(c, n3)));
+        return c / max(m, 0.7) * lit * e;
+      }
+      void main(){
+        if (film > 0.5) { gl_FragColor = vec4(texture2D(tex, vuv).rgb, 1.0); return; }
+        vec2 p = vuv * srcSize - 0.5, b = floor(p + 0.5);
+        vec3 acc = vec3(0.0);
+        for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+          vec2 t = b + vec2(float(dx), float(dy)), d = p - t;
+          acc += edge(t) * exp(-dot(d, d) / 0.3);
+        }
+        float k = max(acc.r, max(acc.g, acc.b));
+        vec3 beam = acc / max(k, 1e-4) * (1.0 - exp(-k * 2.2));          // saturating stroke, keeps its hue
+        beam += vec3(0.55) * smoothstep(0.85, 1.25, k) * (1.0 - exp(-k)); // white-hot core
+        gl_FragColor = vec4(max(beam, texture2D(prev, vuv).rgb * decay), 1.0);
+      }`);
     // the MAX CRT: heavy barrel, rounded glass, RGB convergence error, horizontal bleed, beam-width scanlines,
     // aperture-grille triads, vignette, mains flicker, rolling hum bar, tracking glitches, static grain, glass glare, plastic bezel
     // the glint's hidden clock: the hour hand's angle (radians clockwise from 12) in the player's local time
     const hourAngle = () => { const d = new Date(); return ((d.getHours() % 12) + d.getMinutes() / 60) / 12 * 2 * Math.PI; };
     const CRT_ZOOM = 1.075; // glass size vs canvas (main.js toGame uses the same, via presenter.zoom)
     const pU = mk(HDR + `
-      uniform sampler2D bezTex; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV
+      uniform sampler2D bezTex; uniform vec4 zmap; uniform vec2 res; uniform vec4 frame; uniform float time, dpr, hourAngle, tv, vec; // frame: the screen's rect in the canvas (uv); tv: 1 = living-room TV; vec: 1 = vector
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
       // web edition: the C key's third look, a ratty old living-room TV on an RF cable. Brightness stays fairly sharp,
@@ -1009,7 +1043,9 @@
           float rim = smoothstep(-0.25, 0.0, d);          // 0 in the middle, 1 at the glass edge
           vec2 ca = q * (0.003 + 0.002 * rim);
           if (tv > 0.5) c = rfTV(uv);
+          else if (vec > 0.5) { c.r = texture2D(tex, uv + ca * 0.6).r; c.g = texture2D(tex, uv).g; c.b = texture2D(tex, uv - ca * 0.6).b; }
           else { c.r = samp(uv, ca).r; c.g = samp(uv, vec2(0.0)).g; c.b = samp(uv, -ca).b; }
+          if (vec < 0.5) { // a vector monitor has no scanlines and no grille: the beam draws the lines themselves
           // scanlines: bright beams widen and fill the gap, dim ones leave dark lines
           float lum = dot(c, vec3(0.299, 0.587, 0.114));
           float v = fract(uv.y * 288.0);
@@ -1021,16 +1057,17 @@
           float t3 = mod(px, 3.0);
           vec3 m = vec3(step(abs(t3 - 0.0), 0.5), step(abs(t3 - 1.0), 0.5), step(abs(t3 - 2.0), 0.5));
           c *= tv > 0.5 ? 0.86 + 0.2 * m : 0.62 + 0.62 * m;
+          }
           // vignette + brightness
           float vg = 1.0 - 0.55 * pow(length(q * vec2(0.82, 0.74)), 2.6);
-          c *= clamp(vg, 0.0, 1.0) * 1.4;
+          c *= clamp(vg, 0.0, 1.0) * (vec > 0.5 ? 1.15 : 1.4);
           c = pow(max(c, 0.0), vec3(0.88, 0.88, 0.8));   // lift shadows, blues most
           // mains flicker, rolling hum bar
-          c *= 1.0 - 0.05 * hash(vec2(floor(time * 60.0), 1.0));
-          c *= 1.0 + 0.1 * pow(0.5 + 0.5 * sin(6.2832 * (ty * 1.0 - time * 0.09)), 10.0);
+          c *= 1.0 - (vec > 0.5 ? 0.07 : 0.05) * hash(vec2(floor(time * 60.0), 1.0)); // a vector's refresh flickers a bit more
+          if (vec < 0.5) c *= 1.0 + 0.1 * pow(0.5 + 0.5 * sin(6.2832 * (ty * 1.0 - time * 0.09)), 10.0);
           // static grain + sparse bright speckles
           float n = hash(gl_FragCoord.xy + fract(time) * 91.7);
-          c += (n - 0.5) * 0.075;
+          c += (n - 0.5) * (vec > 0.5 ? 0.02 : 0.075);
           // glass: glare at the top-right (web edition: moved off the 1UP score), faint dust streak, darkening near the rim
           float gl1 = exp(-pow(length((fuv - vec2(0.8, 0.84)) * vec2(1.0, 1.25)) / 0.30, 2.0));
           float gl2 = exp(-pow(((1.0 - fuv.x) * 0.9 + fuv.y * 0.55 - 0.78) / 0.05, 2.0)) * 0.5;
@@ -1074,7 +1111,7 @@
 
     // the bezel's static look (base colour, grain, rim highlight), drawn once per resize into Z; pU reads it back
     const pZ = mk(HDR + `
-      uniform vec4 frame; uniform float dpr, tv;
+      uniform vec4 frame; uniform float dpr, tv, vec;
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float sdBox(vec2 p, vec2 b, float r){ vec2 d = abs(p) - b + r; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r; }
       void main(){
@@ -1084,7 +1121,7 @@
         q += (q.yx * q.yx) * q * vec2(0.04, 0.055);
         float d = sdBox(q, vec2(1.0), 0.06);
         // the CRT's dark plastic; the ratty TV's (C key) is the same, just dark brown
-        vec3 col = tv > 0.5 ? vec3(0.2, 0.12, 0.065) : vec3(0.11, 0.1, 0.086); // TV: 1982 wood-panelling brown
+        vec3 col = tv > 0.5 ? vec3(0.2, 0.12, 0.065) : vec > 0.5 ? vec3(0.045, 0.045, 0.05) : vec3(0.11, 0.1, 0.086); // TV: 1982 wood-panelling brown; vector: a black cabinet
         vec3 bez = col * (0.55 + 0.6 * clamp(fuv.y, -0.15, 1.15)) * (0.8 + 0.2 * hash(floor(gl_FragCoord.xy / 2.0)));
         bez += vec3(0.05) * smoothstep(0.0, 0.05, d) * (1.0 - smoothstep(0.05, 0.1, d));
         gl_FragColor = vec4(bez, 1.0);
@@ -1100,8 +1137,8 @@
     const mkTarget = (w, h) => { const t = newTex(gl.LINEAR); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
       gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); return { t, f, w, h }; };
-    let zmap = [1, 1, 0, 0], A = null, Z = null, B1 = null, B2 = null, PH = null, ph = 0, cw = 0, ch = 0, cssH = 864, dpr = 1, fr = [0, 0, 1, 1];
-    let BW = 448, BH = 576; // bloom buffers: 448x576 over the screen, more when the canvas is wider than it
+    let zmap = [1, 1, 0, 0], A = null, Z = null, B1 = null, B2 = null, PH = null, ph = 0, VH = null, cw = 0, ch = 0, cssH = 864, dpr = 1, fr = [0, 0, 1, 1];
+    let BW = 448, BH = 576, vh = 0, lastPresent = 0; // bloom buffers: 448x576 over the screen, more when the canvas is wider than it
     const pass = (prog, target, setup, ...texs) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.f : null);
       gl.viewport(0, 0, target ? target.w : cw, target ? target.h : ch);
@@ -1125,11 +1162,12 @@
         const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
         if (win && (win.w > max || win.h > max)) win = null;
         const W = win ? win.w : w, H = win ? win.h : h, ox = win ? win.x : 0, oy = win ? win.h - win.y - h : 0; // oy: from the bottom
-        [A, Z, B1, B2, ...(PH || [])].forEach((T) => { if (T) { gl.deleteTexture(T.t); gl.deleteFramebuffer(T.f); } });
+        [A, Z, B1, B2, ...(PH || []), ...(VH || [])].forEach((T) => { if (T) { gl.deleteTexture(T.t); gl.deleteFramebuffer(T.f); } });
         A = mkTarget(w, h); Z = mkTarget(W, H); B1 = mkTarget(BW, BH); B2 = mkTarget(BW, BH); PH = [mkTarget(448, 576), mkTarget(448, 576)];
+        VH = [mkTarget(GW * 3, GH * 3), mkTarget(GW * 3, GH * 3)];
         zmap = [w / W, h / H, ox / W, oy / H];
         pass(pZ, Z, (p) => { gl.uniform4f(p.u("frame"), (fr[0] * w + ox) / W, (fr[1] * h + oy) / H, fr[2] * w / W, fr[3] * h / H); gl.uniform1f(p.u("dpr"), dpr);
-          gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); });
+          gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), getConfig().crtEffect === "vector" ? 1 : 0); });
         let bg = null;
         if (win) {
           const G = mkTarget(W, H);
@@ -1143,22 +1181,30 @@
       },
       present() {
         if (!A) return;
-        const crtOn = !!getConfig().crtEffect;
+        const crtOn = !!getConfig().crtEffect, vec = getConfig().crtEffect === "vector";
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex);
-        const f = (!crtOn || !api.ultra) ? gl.LINEAR : gl.NEAREST; // plain: LINEAR for pP's sharp bilinear
+        const f = (!crtOn || !api.ultra || vec) ? gl.LINEAR : gl.NEAREST; // plain: LINEAR for pP's sharp bilinear; vector: for the film
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
         if (!crtOn) { pass(pP, null, (p) => { gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform2f(p.u("outSize"), cw, ch); gl.uniform1f(p.u("soft"), smoothNow() ? 1 : 0); }, srcTex); return; }
         const time = performance.now() / 1000;
+        const dt = Math.min(0.1, Math.max(0, time - (lastPresent || time))); lastPresent = time;
         if (api.ultra) {
-          const nxt = 1 - ph;
-          pass(pH, PH[nxt], (p) => gl.uniform1f(p.u("decay"), 0.58), srcTex, PH[ph].t);
-          ph = nxt;
-          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); }, PH[ph].t, Z.t);
-          pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), 0.72), A.t);
+          let pic;
+          if (vec) { // the beam's afterglow fades by time, not by frame (same trails at 60 or 144 Hz)
+            const nxt = 1 - vh, film = smoothNow();
+            pass(pV, VH[nxt], (p) => { gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.8, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t);
+            vh = nxt; pic = VH[vh].t;
+          } else {
+            const nxt = 1 - ph;
+            pass(pH, PH[nxt], (p) => gl.uniform1f(p.u("decay"), 0.58), srcTex, PH[ph].t);
+            ph = nxt; pic = PH[ph].t;
+          }
+          pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), vec ? 1 : 0); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); }, pic, Z.t);
+          pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), vec ? 0.12 : 0.72), A.t);
           pass(pB, B2, (p) => { gl.uniform2f(p.u("dir"), 1 / BW, 0); gl.uniform1f(p.u("sigma"), 3.5); }, B1.t);
           pass(pB, B1, (p) => { gl.uniform2f(p.u("dir"), 0, 1 / BH); gl.uniform1f(p.u("sigma"), 3.5); }, B2.t);
-          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS); gl.uniform1f(p.u("glowK"), 0.55); }, A.t, B1.t);
+          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS); gl.uniform1f(p.u("glowK"), vec ? 0.9 : 0.55); }, A.t, B1.t);
         } else {
           pass(pA, A, (p) => { gl.uniform2f(p.u("distortion"), 1.03, 1.04); gl.uniform1f(p.u("feather"), 0.02);
             gl.uniform1f(p.u("widthPx"), 2); gl.uniform1f(p.u("thickness"), 0.5); gl.uniform1f(p.u("opacity"), 0.4); gl.uniform1f(p.u("screenH"), cssH); }, srcTex);
