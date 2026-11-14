@@ -130,7 +130,7 @@
     // (not eyes, not ones in the house): a blue one is eaten, one at a time with the usual pause and score chain (the rest
     // wait in g.vacuumQueue, eaten as each ateGhost pause ends); a ghost that isn't blue catches him. Each thing eaten
     // goes through the normal eating code, as if he were standing on it. Like Rewind and Pause, gameplay checks see it as Off
-    const VACUUM = 6, VACUUM_RADIUS = 6;
+    const VACUUM = 6, VACUUM_RADIUS = 6, VACUUM_FX = 48; // VACUUM_FX: frames of the picture of it sucking (render only)
     function ability() { return g.config.ability === REWIND || g.config.ability === PAUSE || g.config.ability === VACUUM ? false : g.config.ability; }
     const pausing = () => g.config.ability === PAUSE && T(g.chars.pac.phased) && g.chars.pac.phased > 0;
     const pausePac = () => {
@@ -690,16 +690,23 @@
     };
     function vacuum() {
       if (g.vacuumSpent || g.mode !== "normal" || !g.state.running) return;
-      g.vacuumSpent = true; g.vacuumFx = 24;
+      g.vacuumSpent = true; g.vacuumFx = VACUUM_FX;
       if (g.sounds.phase.isPlaying()) g.sounds.phase.stop();
       g.sounds.phase.play();
       const cm = getCurrentMaze();
       const [pX, , pY] = cm.getLoc(g.chars.pac);
       const near = (x, y) => (x - pX) * (x - pX) + (y - pY) * (y - pY) <= VACUUM_RADIUS * VACUUM_RADIUS;
+      // what it takes, for the picture of it all flying in (render.js drawVacuum; it's all eaten right now regardless)
+      const fly = g.powers.concat(g.dots).filter((it) => near(it.x, it.y))
+        .map((it) => ({ item: it, x: it.x * 8 + 4, y: it.y * 8 + 4, d: Math.hypot(it.x - pX, it.y - pY) }));
       for (const p of g.powers.filter((it) => near(it.x, it.y))) checkCollisions(g.powers, p.x, p.y);
       for (const d of g.dots.filter((it) => near(it.x, it.y))) checkCollisions(g.dots, d.x, d.y);
       const fl = cm.fruitLoc;
-      if (T(g.fruitTimer) && near(fl.x / 8, fl.y / 8)) eatFruit(true);
+      if (T(g.fruitTimer) && near(fl.x / 8, fl.y / 8)) {
+        fly.push({ fruit: g.config.plusMode ? levels.plusModeFruitMap(g.level.fruit) : g.level.fruit, x: fl.x, y: fl.y, d: Math.hypot(fl.x / 8 - pX, fl.y / 8 - pY) });
+        eatFruit(true);
+      }
+      g.vacuumFly = fly;
       const blue = [];
       for (const name of charKeys()) {
         const ch = g.chars[name];
@@ -1018,7 +1025,7 @@
               g.fruitTimer = false; g.fruitScoreTimer = false;
               g.state = { showPac: true, showGhosts: true, showReady: true };
               g.starvation = 0;
-              g.vacuumSpent = false; g.vacuumQueue = []; g.vacuumFx = 0; // the Vacuum's charge, back at every READY
+              g.vacuumSpent = false; g.vacuumQueue = []; g.vacuumFx = 0; g.vacuumFly = []; // the Vacuum's charge, back at every READY
               characters.reset();
               levels.resetLevel();
             }
@@ -1987,7 +1994,7 @@
 
     return {
       g, init, setScene, keypressed, update: () => g.scene.update(FIXED_DT),
-      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND, PAUSE, VACUUM,
+      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND, PAUSE, VACUUM, VACUUM_FX,
       // web edition (rewind.js): put the looping sounds back in line with the game state, the way the game itself picks
       // them: eyes heading home -> "dead", any ghost frightened -> "scared", otherwise the siren for the dots left
       resyncLoops() {

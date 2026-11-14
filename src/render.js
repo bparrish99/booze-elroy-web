@@ -526,17 +526,33 @@
       if (g.rewinding) drawRewindTape();
     }
 
-    // web edition: the Vacuum's swirl: a ring closing in on Pac-Man from the vacuum's reach (6 tiles), with streaks
-    // spiralling in behind it, fading as it closes (24 frames)
+    // web edition: the Vacuum, sucking: everything it took (g.vacuumFly: dots, energizers, the fruit, eaten already)
+    // flies in from where it was, spiralling toward Pac-Man and shrinking, the nearest first; and a ring closing in from
+    // the vacuum's reach (6 tiles) with streaks spiralling in behind it, fading as it closes (core.VACUUM_FX frames)
     function drawVacuum() {
-      const pac = g.chars.pac, k = 1 - g.vacuumFx / 24;                 // 0 -> 1 as it closes
-      const cx = camX() + pac.x, cy = camY() + pac.y + 24, R = 6 * TILE * (1 - k * k);
+      const pac = g.chars.pac, total = core.VACUUM_FX, k = 1 - g.vacuumFx / total; // 0 -> 1
+      const tx = pac.x, ty = pac.y + 24;                                    // where he is now (he keeps moving)
+      for (const f of g.vacuumFly || []) {
+        const t0 = Math.min(0.45, f.d / 6 * 0.45), t = Math.max(0, Math.min(1, (k - t0) / 0.5)); // the nearest go first
+        if (t >= 1) continue;
+        const e = t * t * (3 - 2 * t), sx = f.x, sy = f.y + 24;
+        const dx = tx - sx, dy = ty - sy, len = Math.hypot(dx, dy) || 1;
+        const swirl = Math.sin(e * Math.PI) * Math.min(14, len * 0.35);   // bows out sideways: a spiral in
+        const cx = sx + dx * e - dy / len * swirl, cy = sy + dy * e + dx / len * swirl, sc = 1 - 0.75 * e;
+        ctx.save();
+        ctx.translate(camX() + cx, camY() + cy); ctx.scale(sc, sc); ctx.translate(-camX() - cx, -camY() - cy);
+        if (f.fruit) drawSprite(f.fruit.sheet, f.fruit.quad, cx - 8, cy - 8, true);
+        else { const a = f.item.animator(); drawSprite(a.spr, a.frames[(f.item.frame || 1) - 1], cx - 4, cy - 4, true); }
+        ctx.restore();
+      }
+      const R = 6 * TILE * (1 - k * k);
       ctx.save();
-      ctx.globalAlpha = 0.85 * (1 - k * 0.6);
+      ctx.globalAlpha = 0.8 * (1 - k * 0.7);
       ctx.strokeStyle = "rgb(222,222,255)"; ctx.lineWidth = 1;
+      const cx = camX() + tx, cy = camY() + ty;
       ctx.beginPath(); ctx.arc(cx, cy, Math.max(0.5, R), 0, Math.PI * 2); ctx.stroke();
       for (let i = 0; i < 10; i++) {
-        const a0 = i * Math.PI / 5 + k * 3, r0 = R + 10 * (1 - k), r1 = Math.max(0, R - 6);
+        const a0 = i * Math.PI / 5 + k * 5, r0 = R + 10 * (1 - k), r1 = Math.max(0, R - 6);
         ctx.beginPath();
         ctx.moveTo(cx + Math.cos(a0) * r0, cy + Math.sin(a0) * r0);
         ctx.lineTo(cx + Math.cos(a0 + 0.5) * r1, cy + Math.sin(a0 + 0.5) * r1);
