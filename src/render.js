@@ -1175,6 +1175,10 @@
           float panel = smoothstep(1.02, 1.12, abs(q.x)) * exp(-pow((abs(q.x) - 1.0) / 1.8, 2.0));
           float streak = exp(-pow((q.x * 0.45 + q.y * 0.9 - 0.95) / 0.16, 2.0)) + 0.6 * exp(-pow((q.x * 0.45 + q.y * 0.9 + 0.55) / 0.1, 2.0));
           bez += vec3(0.055, 0.055, 0.062) * streak * panel;
+          // 80s flair: a thin neon tube in dark fuchsia just outside the bevel, following the screen's shape, with a soft glow
+          float nd = abs(d - 0.045);
+          vec3 NEON = vec3(0.62, 0.1, 0.55);
+          bez += NEON * (0.4 * (1.0 - smoothstep(0.0015, 0.0045, nd)) + 0.14 * exp(-nd / 0.012) + 0.05 * exp(-nd / 0.05));
         }
         gl_FragColor = vec4(bez, 1.0);
       }`);
