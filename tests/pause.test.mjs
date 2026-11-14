@@ -1,5 +1,5 @@
 // The Pause ability (ability 5; web edition, 2026-11-13): holding the ability button stops Pac-Man in his tracks, up
-// to 2 seconds; letting go (or the 2 seconds running out) starts a 1-second reload, during which it can't be used.
+// to 1.5 seconds; letting go (or the 1.5 seconds running out) starts a 1-second reload, during which it can't be used.
 // Everything else keeps moving.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -23,16 +23,16 @@ function start() {
 const pos = (g) => g.chars.pac.x + "," + g.chars.pac.y;
 const press = (core, input) => { input.held = true; core.keypressed("space"); };
 
-test("Pause: held, Pac-Man stands still for at most 2 seconds, then reloads for 1", () => {
+test("Pause: held, Pac-Man stands still for at most 1.5 seconds, then reloads for 1", () => {
   const { core, g, input } = start();
   const p0 = pos(g);
   core.update();
   assert.notEqual(pos(g), p0, "moving before the press");
   press(core, input);
   const here = pos(g);
-  for (let f = 0; f < 119; f++) { core.update(); assert.equal(pos(g), here, "still at frame " + f); }
+  for (let f = 0; f < 89; f++) { core.update(); assert.equal(pos(g), here, "still at frame " + f); }
   core.update(); core.update();
-  assert.notEqual(pos(g), here, "moves again after 2 seconds, though still held");
+  assert.notEqual(pos(g), here, "moves again after 1.5 seconds, though still held");
   assert.ok(g.chars.pac.phased < 0, "reloading");
   input.held = false;
   // during the reload a press does nothing
