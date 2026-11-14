@@ -44,7 +44,7 @@
     // (each pixel's shade from its distance to the nearest empty pixel), instead of the original flat dark tint. Baked once per sprite frame.
     let hollow = false;
     // (the vector look only draws outlines, so there he has no inside to hollow out: a dimmer yellow instead)
-    const setHollow = () => { if (g.config.crtEffect === "vector") { col = [0.42, 0.42, 0.42, 1]; hollow = false; } else { col = [1, 1, 1, 1]; hollow = true; } };
+    const setHollow = () => { if (g.config.crtEffect === "vector") { col = [0.6, 0.6, 0.6, 1]; hollow = false; } else { col = [1, 1, 1, 1]; hollow = true; } };
     const HOLLOW_EDGE = [150, 146, 0], HOLLOW_MID = [62, 58, 0], HOLLOW_FADE = 3; // pixels from the edge to the darkest shade
     const hollowCache = new WeakMap(); // sheet -> Map(frame -> canvas)
     function hollowFrame(s, sx, sy) {
@@ -230,7 +230,7 @@
     }
 
     function clearScreen() {
-      const v = g.config.crtEffect ? 13 : 0;
+      const v = g.config.crtEffect && g.config.crtEffect !== "vector" ? 13 : 0; // (vector: true black, so faint fades still count)
       ctx.fillStyle = `rgb(${v},${v},${v})`; ctx.fillRect(0, 0, GW, GH);
     }
     function drawBackground() {
@@ -958,38 +958,45 @@
       vec3 px(vec2 t){ return texture2D(tex, (t + 0.5) / srcSize).rgb; }
       float isText(vec2 t){ return texture2D(mask, (t + 0.5) / srcSize).a; }
       float mx(vec3 c){ return max(c.r, max(c.g, c.b)); }
-      vec3 edge(vec2 t){
+      // an outline pixel: rgb = its hue at full strength, a = its brightness (0 where it isn't on an outline). Brightness
+      // is kept apart so the beam can be strictly in proportion to it (below): fades (Sonar ghosts, Blindfold mazes, the
+      // dots fading in, "FOR MINA") fade exactly as in the other looks (2026-11-14; brightness used to be flattened above
+      // 70% and cut off below 8-18%, so things popped instead of fading). The screen is cleared to true black here, so
+      // "dark" can mean almost nothing; "another colour" is judged relative to brightness, so a fading ghost keeps its eyes
+      vec4 edge(vec2 t){
         vec3 c = px(t); float m = mx(c);
-        float lit = smoothstep(0.08, 0.18, m); // low: dim lines count (no background pictures here to drop)
-        if (lit <= 0.0 || isText(t) > 0.5) return vec3(0.0);
+        if (m < 0.012 || isText(t) > 0.5) return vec4(0.0);
         float e = 0.0;
         vec3 n0 = px(t + vec2(1.0, 0.0)), n1 = px(t - vec2(1.0, 0.0)), n2 = px(t + vec2(0.0, 1.0)), n3 = px(t - vec2(0.0, 1.0));
-        e = max(e, step(mx(n0), 0.08)); e = max(e, step(mx(n1), 0.08)); e = max(e, step(mx(n2), 0.08)); e = max(e, step(mx(n3), 0.08));
-        e = max(e, step(0.15, distance(c, n0))); e = max(e, step(0.15, distance(c, n1)));
-        e = max(e, step(0.15, distance(c, n2))); e = max(e, step(0.15, distance(c, n3)));
-        return c / max(m, 0.7) * lit * e;
+        e = max(e, step(mx(n0), 0.012)); e = max(e, step(mx(n1), 0.012)); e = max(e, step(mx(n2), 0.012)); e = max(e, step(mx(n3), 0.012));
+        e = max(e, step(0.15, distance(c, n0) / max(m, mx(n0)))); e = max(e, step(0.15, distance(c, n1) / max(m, mx(n1))));
+        e = max(e, step(0.15, distance(c, n2) / max(m, mx(n2)))); e = max(e, step(0.15, distance(c, n3) / max(m, mx(n3))));
+        return vec4(c / m, m) * e;
       }
       void main(){
         // (the film at the CRT's brightness, and no glow in the vector look while it's on (present): with no scanlines or
         // grille to darken it, it came out washed out, and the glow blew its whites out)
         if (film > 0.5) { gl_FragColor = vec4(texture2D(tex, vuv).rgb * 0.72, 1.0); return; }
         vec2 p = vuv * srcSize - 0.5, b = floor(p + 0.5);
-        vec3 acc = vec3(0.0);
+        vec3 acc = vec3(0.0); float bright = 0.0, wsum = 0.0;
         for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
           vec2 t = b + vec2(float(dx), float(dy)), d = p - t;
-          acc += edge(t) * exp(-dot(d, d) / 0.2); // a thin beam (wider looked soft)
+          vec4 e = edge(t);
+          float w = exp(-dot(d, d) / 0.2) * step(0.001, e.a); // a thin beam (wider looked soft)
+          acc += e.rgb * w; bright += e.a * w; wsum += w;
         }
         float k = max(acc.r, max(acc.g, acc.b));
-        // saturating stroke, keeps its hue; dimmed and a small white core, for a crisp line (brighter looked washed out)
+        // the stroke's shape at full strength (saturating, keeps its hue; dimmed, with a small white core, for a crisp
+        // line: brighter looked washed out), then scaled by the brightness of the pixels it traces
         vec3 beam = acc / max(k, 1e-4) * (1.0 - exp(-k * 1.8)) * 0.92;
         beam += vec3(0.34) * smoothstep(0.9, 1.3, k) * (1.0 - exp(-k));
+        beam *= bright / max(wsum, 1e-4);
         // text: the CRT's way, each pixel a soft dot of light that runs into its neighbours sideways and leaves a dark
-        // scanline between rows (flat blocks looked too clean)
+        // scanline between rows (flat blocks looked too clean); at the pixel's own brightness, so it fades like the rest
         vec3 txt = vec3(0.0);
         for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
           vec2 t = b + vec2(float(dx), float(dy)), d = p - t;
-          float m = isText(t);
-          if (m > 0.0) { vec3 c = px(t); txt += c / max(max(c.r, max(c.g, c.b)), 0.7) * m * exp(-d.x * d.x / 0.45 - d.y * d.y / 0.11); }
+          if (isText(t) > 0.004) txt += px(t) * exp(-d.x * d.x / 0.45 - d.y * d.y / 0.11);
         }
         beam = max(beam, min(txt, vec3(1.0)) * 0.9);
         gl_FragColor = vec4(max(beam, texture2D(prev, vuv).rgb * decay), 1.0);
