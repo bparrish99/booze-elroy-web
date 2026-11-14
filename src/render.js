@@ -970,7 +970,9 @@
         return c / max(m, 0.7) * lit * e;
       }
       void main(){
-        if (film > 0.5) { gl_FragColor = vec4(texture2D(tex, vuv).rgb, 1.0); return; }
+        // (the film at the CRT's brightness, and no glow in the vector look while it's on (present): with no scanlines or
+        // grille to darken it, it came out washed out, and the glow blew its whites out)
+        if (film > 0.5) { gl_FragColor = vec4(texture2D(tex, vuv).rgb * 0.72, 1.0); return; }
         vec2 p = vuv * srcSize - 0.5, b = floor(p + 0.5);
         vec3 acc = vec3(0.0);
         for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
@@ -1271,9 +1273,9 @@
         const time = performance.now() / 1000;
         const dt = Math.min(0.1, Math.max(0, time - (lastPresent || time))); lastPresent = time;
         if (api.ultra) {
-          let pic, bdImg = null;
+          let pic, bdImg = null, vfilm = false;
           if (vec) { // the beam's afterglow fades by time, not by frame (same trails at 60 or 144 Hz)
-            const nxt = 1 - vh, film = smoothNow();
+            const nxt = 1 - vh, film = smoothNow(); vfilm = film;
             if (textMask) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, maskTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textMask); }
             bdImg = film ? null : getBackdrop();
             if (bdImg && bdImg !== backImg) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, backTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bdImg); backImg = bdImg; }
@@ -1285,10 +1287,10 @@
             ph = nxt; pic = PH[ph].t;
           }
           pass(pU, A, (p) => { gl.uniform2f(p.u("res"), cw, ch); gl.uniform4f(p.u("frame"), fr[0], fr[1], fr[2], fr[3]); gl.uniform4f(p.u("zmap"), ...zmap); gl.uniform1f(p.u("tv"), getConfig().crtEffect === "tv" ? 1 : 0); gl.uniform1f(p.u("vec"), vec ? 1 : 0); gl.uniform1f(p.u("time"), time); gl.uniform1f(p.u("dpr"), dpr); gl.uniform1f(p.u("hourAngle"), hourAngle()); gl.uniform1i(p.u("back"), 2); gl.uniform1f(p.u("backOn"), bdImg ? 1 : 0); }, pic, Z.t, backTex);
-          pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), vec ? 0.3 : 0.72), A.t);
+          pass(pT, B1, (p) => gl.uniform1f(p.u("minLuma"), vec && !vfilm ? 0.3 : 0.72), A.t);
           pass(pB, B2, (p) => { gl.uniform2f(p.u("dir"), 1 / BW, 0); gl.uniform1f(p.u("sigma"), 3.5); }, B1.t);
           pass(pB, B1, (p) => { gl.uniform2f(p.u("dir"), 0, 1 / BH); gl.uniform1f(p.u("sigma"), 3.5); }, B2.t);
-          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS); gl.uniform1f(p.u("glowK"), vec ? 0.48 : 0.55); }, A.t, B1.t);
+          pass(pF, null, (p) => { gl.uniform3f(p.u("factors"), ...ULTRA_FACTORS); gl.uniform1f(p.u("glowK"), vfilm ? 0 : vec ? 0.48 : 0.55); }, A.t, B1.t);
         } else {
           pass(pA, A, (p) => { gl.uniform2f(p.u("distortion"), 1.03, 1.04); gl.uniform1f(p.u("feather"), 0.02);
             gl.uniform1f(p.u("widthPx"), 2); gl.uniform1f(p.u("thickness"), 0.5); gl.uniform1f(p.u("opacity"), 0.4); gl.uniform1f(p.u("screenH"), cssH); }, srcTex);
