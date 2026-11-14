@@ -24,7 +24,7 @@ table{width:100%;border-collapse:collapse}
 td{padding:4px 8px 4px 0;vertical-align:top;border-top:1px solid #1a1a3a}
 td.t{color:var(--dim);white-space:nowrap;width:1%}
 td.w{white-space:nowrap;width:1%}
-.k-signup{color:var(--cyan)}.k-score,.k-arenascore{color:var(--pink)}.k-score b,.k-arenascore b{color:var(--white);font-weight:normal}.k-achievement{color:var(--fg)}.k-login,.k-played{color:var(--white)}.k-game{color:var(--dim)}.k-game b{color:var(--white);font-weight:normal}
+.k-signup{color:var(--cyan)}.k-score,.k-arenascore,.k-anonscore,.k-anonarenascore{color:var(--pink)}.k-score b,.k-arenascore b,.k-anonscore b,.k-anonarenascore b{color:var(--white);font-weight:normal}.k-anonscore i,.k-anonarenascore i{color:var(--dim);font-style:normal}.k-achievement{color:var(--fg)}.k-login,.k-played{color:var(--white)}.k-game{color:var(--dim)}.k-game b{color:var(--white);font-weight:normal}
 .day td{border-top:0;padding-top:14px;color:var(--dim);font-size:13px;letter-spacing:.1em}
 form{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 input{padding:6px 8px;background:#111;color:#fff;border:1px solid #555;border-radius:3px;font:inherit}
@@ -67,12 +67,13 @@ tr.new td{animation:glow 6s ease-out}
     : e.type === "achievement" ? "earned <b>" + esc((ACH[e.detail] || e.detail).toUpperCase()) + "</b>"
     : e.type === "game" ? gameText(e)
     : e.type === "played" ? "played today" + (Number(e.detail) > 1 ? " (" + Number(e.detail) + " days in a row)" : "")
-    : e.type === "score" || e.type === "arenascore" ? scoreText(e) : esc(e.type);
+    : e.type === "score" || e.type === "arenascore" ? scoreText(e)
+    : e.type === "anonscore" || e.type === "anonarenascore" ? scoreText(e) + " <i>(not logged in)</i>" : esc(e.type);
   // [rank, score, settings | arena name]
   function scoreText(e) {
     let d; try { d = JSON.parse(e.detail); } catch { return esc(e.detail); }
     const [rank, score, where] = Array.isArray(d) ? d : [];
-    return "placed <b>#" + esc(rank) + "</b> with <b>" + esc(Number(score).toLocaleString()) + "</b> " + (e.type === "arenascore" ? "in the arena <b>" + esc(String(where).toUpperCase()) + "</b>" : "on " + esc(where));
+    return "placed <b>#" + esc(rank) + "</b> with <b>" + esc(Number(score).toLocaleString()) + "</b> " + (e.type === "arenascore" || e.type === "anonarenascore" ? "in the arena <b>" + esc(String(where).toUpperCase()) + "</b>" : "on " + esc(where));
   }
   // [settings, streak (first game of the day) or 0, arena name or ""]
   function gameText(e) {
@@ -87,7 +88,7 @@ tr.new td{animation:glow 6s ease-out}
     const since = (ms, t) => data.events.filter((e) => (!t || e.type === t) && now - Date.parse(e.at) < ms).length;
     const active = new Set(data.events.filter((e) => now - Date.parse(e.at) < day).map((e) => e.name)).size;
     $("stats").innerHTML = [[data.accounts.length, "accounts"], [active, "active today"], [since(day, "signup"), "signups today"],
-      [since(day, "login"), "logins today"], [since(day, "game"), "games today"], [since(day, "achievement"), "achievements today"], [since(7 * day, "signup"), "signups this week"]]
+      [since(day, "login"), "logins today"], [since(day, "game"), "games today"], [since(day, "achievement"), "achievements today"], [since(day, "anonscore") + since(day, "anonarenascore"), "logged-out scores today"], [since(7 * day, "signup"), "signups this week"]]
       .map(([n, l]) => "<div><b>" + n + "</b><span>" + l + "</span></div>").join("");
     $("accts").innerHTML = data.accounts.length ? data.accounts.map((n) => '<button class="name' + (n === who ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + "</button>").join("") : '<span class="sub">none yet</span>';
     $("filterNote").textContent = who ? "showing " + who : "click a name to see just theirs";

@@ -87,6 +87,20 @@ export function nameChecker(store) {
   };
 }
 
+/** logs a score that landed on a board or an arena when the request isn't logged in (logged-in players' scores are
+ *  logged by /api/account/placed already), so the activity page shows who the strangers on the boards are (the author,
+ *  2026-11-14). type "anonscore" (detail: JSON [rank, score, settings]) or "anonarenascore" ([rank, score, arena name]).
+ *  Never fails the score it belongs to. Used by the leaderboard and arena score endpoints (opts.logAnon) */
+export function anonLogger(store) {
+  return async (req, type, name, detail) => {
+    try {
+      const token = tokenOf(req);
+      if (token && (await store.get(sessionKey(token), { type: "json" }))) return;
+      await logEvent(store, type, name, detail);
+    } catch { /* ignore */ }
+  };
+}
+
 export async function handleAccounts(req, store, opts = {}) {
   const failDelay = opts.failDelay === undefined ? 1000 : opts.failDelay;
   const path = new URL(req.url).pathname.replace(/\/+$/, "");

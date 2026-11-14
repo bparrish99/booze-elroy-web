@@ -12,7 +12,7 @@ import { BlobsServer } from "@netlify/blobs/server";
 import { getStore } from "@netlify/blobs";
 import { handle } from "../netlify/lib/scores.mjs";
 import { handleArenas } from "../netlify/lib/arenas.mjs";
-import { handleAccounts, nameChecker } from "../netlify/lib/accounts.mjs";
+import { handleAccounts, nameChecker, anonLogger } from "../netlify/lib/accounts.mjs";
 import { handleEditor } from "./maze-editor/server.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -28,7 +28,7 @@ export async function startDev(opts = {}) {
   const mkStore = (name) => getStore({ name, siteID: "dev-site", token, edgeURL: url, uncachedEdgeURL: url, consistency: "strong" });
   const store = mkStore("leaderboard"), arenaStore = mkStore("arenas"), accountStore = mkStore("accounts");
   const env = { LEADERBOARD_ADMIN_PASSWORD: password };
-  const nameCheck = nameChecker(accountStore);
+  const nameCheck = nameChecker(accountStore), logAnon = anonLogger(accountStore);
 
   const server = createServer(async (req, res) => {
     try {
@@ -37,9 +37,9 @@ export async function startDev(opts = {}) {
         const chunks = []; for await (const c of req) chunks.push(c);
         const body = chunks.length ? Buffer.concat(chunks) : undefined;
         const request = new Request(u, { method: req.method, headers: req.headers, body: req.method === "GET" ? undefined : body });
-        const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now, nameCheck })
+        const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now, nameCheck, logAnon })
           : u.pathname.startsWith("/api/account/") ? await handleAccounts(request, accountStore, { env, failDelay: opts.failDelay, now: opts.now })
-          : await handle(request, store, { env, nameCheck });
+          : await handle(request, store, { env, nameCheck, logAnon });
         res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer()));
         if (!quiet) console.log(req.method, u.pathname + u.search, r.status);
         return;

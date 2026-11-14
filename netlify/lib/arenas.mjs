@@ -83,6 +83,7 @@ export async function handleArenas(req, store, opts = {}) {
     if (opts.nameCheck && !(await opts.nameCheck(req, name))) return json(403, { error: "name taken" });
     const r = await addScore(store, entriesKey(id), name, score, true); // one entry per name
     if (!r) return json(409, { error: "busy, try again" });
+    if (r.rank && opts.logAnon) await opts.logAnon(req, "anonarenascore", name, JSON.stringify([r.rank, score, a.name])); // logged out: on the activity page
     let arena = a;
     if (r.rank === 1) { // new leader: note it in the index for the list page
       const top = r.entries[0];

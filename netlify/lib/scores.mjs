@@ -114,6 +114,10 @@ export async function handle(req, store, opts = {}) {
     if (!Number.isInteger(score) || score < 1 || score > MAX_SCORE) return json(400, { error: "bad score" });
     if (opts.nameCheck && !(await opts.nameCheck(req, name))) return json(403, { error: "name taken" });
     const r = await addScore(store, board, name, score);
+    if (r && r.rank && opts.logAnon) { // a logged-out score that placed: on the activity page (settings: the client's summary)
+      const settings = typeof body.settings === "string" ? body.settings.replace(/[^\x20-\x7e]/g, "").slice(0, 160) : "";
+      await opts.logAnon(req, "anonscore", name, JSON.stringify([r.rank, score, settings || board]));
+    }
     return r ? json(200, { board, ...r }) : json(409, { error: "busy, try again" });
   }
 

@@ -527,7 +527,7 @@
         if (!(opts.playerName && opts.playerName())) store.set(NAME, name); // the remembered name is for logged-out entry
         if (this.arenaId) return this.submitArena(name);
         let res = null;
-        try { res = await post("", { board: this.key, name, score: this.score }); } catch { res = null; }
+        try { res = await post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  ") }); } catch { res = null; }
         if (taken(res)) return this.taken(name);
         if (res && res.ok && res.data) {
           boards.set(this.key, { status: "ok", entries: res.data.entries || [], at: performance.now() });
@@ -560,7 +560,7 @@
       async submitArena(name) {
         const [ar, gr] = await Promise.all([
           post2(arenaApi + "/score", { id: this.arenaId, name, score: this.score }).catch(() => null),
-          post("", { board: this.key, name, score: this.score }).catch(() => null),
+          post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  ") }).catch(() => null),
         ]);
         if (taken(ar) || taken(gr)) return this.taken(name);
         if (gr && gr.ok && gr.data) { boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() }); placed(this.key, gr.data.rank, gr.data.entries || [], this.score); }

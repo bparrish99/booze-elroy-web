@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { handle } from "../netlify/lib/scores.mjs";
 import { handleArenas, HOUR, GRACE } from "../netlify/lib/arenas.mjs";
-import { handleAccounts, nameChecker } from "../netlify/lib/accounts.mjs";
+import { handleAccounts, nameChecker, anonLogger } from "../netlify/lib/accounts.mjs";
 import { startBlobs } from "./blobs.mjs";
 
 const require = createRequire(import.meta.url);
@@ -429,4 +429,23 @@ test("accounts: the activity log (signups, logins, achievements, every game with
   const scores = r2.data.events.filter((e) => e.name === "LOGGED ONE" && /score/.test(e.type)).map((e) => [e.type, JSON.parse(e.detail)]);
   assert.deepEqual(scores.sort(), [["arenascore", [1, 8200, "FRIDAY FIGHT"]], ["score", [3, 12340, "default settings"]]]);
   for (let i = 1; i < r.data.events.length; i++) assert.ok(r.data.events[i - 1].at >= r.data.events[i].at, "newest first");
+});
+
+test("accounts: logged-out scores that place are logged (with the client's summary); logged-in and unplaced ones aren't", async () => {
+  const logAnon = anonLogger(blobs.accountStore), nameCheck = nameChecker(blobs.accountStore);
+  const { token } = (await acct("POST", "signup", { name: "logged two", password: "pw12" })).data;
+  const B = "pac.0.f.f.f.3.3.f.0.4.t.f.f";
+  const post = (name, score, tok, settings) => handle(new Request("http://x/api/scores", { method: "POST", headers: tok ? { authorization: "Bearer " + tok } : {},
+    body: JSON.stringify({ board: B, name, score, ...(settings ? { settings } : {}) }) }), blobs.store, { env, nameCheck, logAnon }).then((r) => r.json());
+  await post("josh", 9000, null, "default settings  lives 1");
+  await post("logged two", 8000, token); // logged in: /api/account/placed logs these
+  for (let i = 0; i < 9; i++) await post("filler", 20000 + i); // fill the board
+  await post("too low", 10); // didn't place: not logged
+  const a = (await handleArenas(new Request("http://x/api/arenas", { method: "POST", body: JSON.stringify({ name: "anon cup", board: B }) }), blobs.arenaStore, { env, now: () => clock }).then((r) => r.json())).arena;
+  await handleArenas(new Request("http://x/api/arenas/score", { method: "POST", body: JSON.stringify({ id: a.id, name: "josh", score: 700 }) }), blobs.arenaStore, { env, now: () => clock, nameCheck, logAnon });
+  const r = await acct("GET", "activity", undefined, null, { "x-admin-key": "correct horse" });
+  const anon = r.data.events.filter((e) => e.type.startsWith("anon")).map((e) => [e.type, e.name, JSON.parse(e.detail)]);
+  assert.deepEqual(anon.filter((x) => x[1] === "JOSH").sort(), [["anonarenascore", "JOSH", [1, 700, "ANON CUP"]], ["anonscore", "JOSH", [1, 9000, "default settings  lives 1"]]]);
+  assert.ok(!anon.some((x) => x[1] === "LOGGED TWO" || x[1] === "TOO LOW"));
+  assert.ok(anon.some((x) => x[1] === "FILLER" && x[2][2] === B), "no summary sent: the board key");
 });
