@@ -602,7 +602,10 @@
     // own settings even while an arena's / leaderboard's are borrowed
     const lookBtn = document.getElementById("look");
     const LOOK_NAMES = { true: "CRT", false: "clean", tv: "retro TV", vector: "vector", discarded: "discarded" };
-    const syncLook = () => { lookBtn.title = "Visuals: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title); };
+    const syncLook = () => {
+      lookBtn.title = "Visuals: " + LOOK_NAMES[core.g.config.crtEffect] + " (C to change)"; lookBtn.setAttribute("aria-label", lookBtn.title);
+      audio.setRuin(core.g.config.crtEffect === "discarded"); // the discarded look's sound comes out of a dying speaker
+    };
     function cycleLook() {
       const crt = core.g.config.crtEffect;
       core.g.config.crtEffect = crt === "tv" ? "vector" : crt === "vector" ? "discarded" : crt === "discarded" ? true : crt ? false : "tv";
