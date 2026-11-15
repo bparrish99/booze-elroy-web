@@ -1324,12 +1324,22 @@
     // web edition: no Autoplay item (env.noAutoplay; the autoplay code itself stays), Share Config in its row
     if (env.noAutoplay) menus.main.splice(menus.main.findIndex((it) => it.text === "Autoplay"), 1);
     // (Share Config is on the Options and Leaderboard pages, not the main menu)
-    // web edition: Credits lives on the Options page (env.creditsInOptions); its row stays blank
-    if (env.creditsInOptions) menus.main.splice(menus.main.findIndex((it) => it.text === "Credits"), 1);
+    // web edition: Credits is a link on the title (env.creditsOnTitle; render.js) or on the Options page
+    // (env.creditsInOptions), not a main-menu item; its row stays blank
+    if (env.creditsInOptions || env.creditsOnTitle) menus.main.splice(menus.main.findIndex((it) => it.text === "Credits"), 1);
     // web edition: Arenas (24-hour leaderboards) right under Play
     if (env.scenes && env.scenes.arenas) {
       menus.main.splice(1, 0, { text: "Arena", x: 10, y: 27, action() { setScene("arenas"); } });
       for (const it of menus.main) if (it.text === "Options") it.y = 29; else if (it.text === "Leaderboards") it.y = 31; // a blank row between items
+    }
+    // web edition: Favorites (the author, 2026-11-15: saved gameplay settings, logged in) under Arena; logged out it says
+    // so, like Create Arena
+    if (env.scenes && env.scenes.favorites) {
+      menus.main.splice(menus.main.findIndex((it) => it.text === "Options"), 0, { text: "Favorites", x: 10, y: 29, action() {
+        if (env.loggedIn && !env.loggedIn()) { g.toast = { text: "log in to save favorites", until: (typeof performance !== "undefined" ? performance.now() : 0) + 2500 }; return; }
+        setScene("favorites");
+      } });
+      for (const it of menus.main) if (it.text === "Options") it.y = 31; else if (it.text === "Leaderboards") it.y = 33;
     }
     const menuConfirm = (menu) => {
       const item = menu[menu.selectedItem - 1];
@@ -2022,7 +2032,7 @@
       Object.assign(opt("mazeColor", MAZE_COLORS, ["Default"].concat(range(1, 26), ["Random"])), { y: 25 }),
       Object.assign(ON_OFF("crtEffect"), { y: 26 }),
       Object.assign(opt("volume", range(0, 10), null, () => applyVolume()), { y: 27, x: 18 }),
-      { text: "Classic Pac-Man", sound: "phase", x: 6, y: 29, action() {
+      { text: "Reset Classic Pac-Man", sound: "phase", x: 6, y: 29, action() {
         // web edition (env.restoreKeepsAV): Audio/Video settings stay as they are; only Game/Player/Ghost options reset
         const keep = env.restoreKeepsAV ? AV_KEYS.map((k) => [k, g.config[k]]) : [];
         resetConfigs(); for (const [k, v] of keep) g.config[k] = v;
@@ -2034,22 +2044,24 @@
     // web edition: the online boards are reset from a hidden page link instead (see main.js), so the item goes;
     // Share Config takes its row
     if (env.scenes) optMenu.splice(optMenu.findIndex((it) => it.text === "Reset High Score"), 1);
-    if (env.shareConfig) optMenu.splice(optMenu.length - 1, 0, shareItem(6, 30));
+    // (Add Favorite took Share Config's row, 2026-11-15: the author, sharing is a favorite's job now)
+    if (env.addFavorite) optMenu.splice(optMenu.length - 1, 0, { text: "Add Favorite", x: 6, y: 30, action() { env.addFavorite(); } });
+    else if (env.shareConfig) optMenu.splice(optMenu.length - 1, 0, shareItem(6, 30));
     // web edition: the CRT effect is the C key (env.crtKey), not an option; sfx volume moves up into its row
     if (env.crtKey) { optMenu.splice(optMenu.findIndex((it) => it.key === "crtEffect"), 1); optMenu.find((it) => it.key === "volume").y = 26; }
     // web edition: no volume setting (env.fixedVolume; the browser / system volume does the job), the game plays at that level
     if (env.fixedVolume != null) {
       optMenu.splice(optMenu.findIndex((it) => it.key === "volume"), 1);
-      optMenu.find((it) => it.text === "Classic Pac-Man").y = 28; // the freed row: a blank line after Classic Pac-Man (once Restore Defaults)
+      optMenu.find((it) => it.text === "Reset Classic Pac-Man").y = 28; // the freed row: a blank line after Classic Pac-Man (once Restore Defaults)
     }
     // web edition: Pro Mode in the Style section (the freed row under Maze Style)
-    if (env.proMode) optMenu.splice(optMenu.findIndex((it) => it.text === "Classic Pac-Man"), 0, Object.assign(opt("proMode", [false, true], ["Off", "On"]), { y: 26 }));
+    if (env.proMode) optMenu.splice(optMenu.findIndex((it) => it.text === "Reset Classic Pac-Man"), 0, Object.assign(opt("proMode", [false, true], ["Off", "On"]), { y: 26 }));
     // web edition: Create Arena (an arena with the current settings) under Share Config
     if (env.createArena) optMenu.splice(optMenu.length - 1, 0, { text: "Create Arena", x: 6, y: 31, action() { env.createArena(); } });
     if (env.creditsInOptions) {
       optMenu.splice(optMenu.length - 1, 0, { text: "Credits", x: 6, y: env.createArena ? 32 : 31, action() { setScene("credits", "options"); } });
       optMenu[optMenu.length - 1].y = env.createArena ? 34 : 33; // Back
-    }
+    } else if (env.createArena) optMenu[optMenu.length - 1].y = 33; // Back, a blank row under Create Arena
     // web edition: plain menu items (not option values) centred on the 28-column screen
     if (env.centerMenus) for (const m of [menus.main, optMenu]) for (const it of m) if (it.text && !it.options) it.x = 14 - it.text.length / 2;
     // value lists kept alongside for selection lookup

@@ -39,7 +39,7 @@ try {
   await ev(() => { const real = performance.now.bind(performance); performance.now = () => real() + 122000; });
   check(await until("g.highScore === 5000 && g.highScoreName === 'PINBACK'"), "(board restored)");
   await ev(() => { performance.now = window.__realNow; });
-  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Options,Leaderboards", "main menu: Play 1P, Arena, Options, Leaderboards");
+  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Favorites,Options,Leaderboards", "main menu: Play 1P, Arena, Favorites, Options, Leaderboards");
   // C cycles CRT (default) -> plain -> ratty old TV (not on the Options page), saved at once
   check(await g("g.config.crtEffect === true"), "CRT is on by default");
   await p.keyboard.press("c");
@@ -114,7 +114,7 @@ try {
   await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
   await p.keyboard.type("xyzzy"); await p.waitForTimeout(400);
   check(await ev(() => !document.getElementById("fps").classList.contains("on") && localStorage.getItem("booze-elroy-fps") === "0"), "typing it again hides it");
-  check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Classic Pac-Man,Share Config,Create Arena,Credits,Back", "Options: Classic Pac-Man, Share Config, Create Arena, Credits, Back");
+  check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Reset Classic Pac-Man,Add Favorite,Create Arena,Back", "Options: Reset Classic Pac-Man, Add Favorite (where Share Config was), Create Arena, Back (Credits moved to the title)");
   await ev(() => { const c = window.__core; c.setScene("options"); c.g.config.ghostCount = 2; c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Create Arena") + 1; });
   await p.keyboard.press("Enter"); await p.waitForTimeout(100);
   check(await g("g.scene.name === 'options' && g.toast && g.toast.text === 'log in to create an arena'"), "logged out: Options > Create Arena says to log in");
@@ -126,24 +126,19 @@ try {
   check(await g("g.scene.name === 'options'"), "Esc there goes back to Options");
   await ev(() => window.__acc.logout());
   await ev(() => { window.__core.g.config.ghostCount = 4; });
-  await ev(() => { const c = window.__core; c.setScene("options"); c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Credits") + 1; });
-  await p.keyboard.press("Enter");
-  check(await g("g.scene.name === 'credits'"), "Options > Credits opens the credits");
-  await p.keyboard.press("Escape");
-  check(await g("g.scene.name === 'options' && window.__core.optMenu[window.__core.optMenu.selectedItem - 1].text === 'Credits'"), "Esc from those credits goes back to Options");
   await ev(() => window.__core.setScene("attract"));
   await p.waitForTimeout(300);
-  await p.mouse.click(336, 822); // "web edition", bottom row (3x scale, inside the bezel)
-  check(await g("g.scene.name === 'credits'"), "clicking WEB EDITION on the title opens the credits");
+  await p.mouse.click(336, 822); // "credits", bottom row (3x scale, inside the bezel)
+  check(await g("g.scene.name === 'credits'"), "clicking CREDITS on the title opens the credits");
   await p.keyboard.press("Escape");
   check(await g("g.scene.name === 'attract'"), "and Esc goes back to the title");
 
-  for (let i = 0; i < 3; i++) await p.keyboard.press("ArrowDown");
+  for (let i = 0; i < 4; i++) await p.keyboard.press("ArrowDown"); // (Play 1P, Arena, Favorites, Options, Leaderboards)
   await p.keyboard.press("Enter");
   check(await until("g.scene.name === 'leaderboard' && g.scene.board().entries.length === 1"), "leaderboard page lists the board");
-  check(await ev(() => window.__core.g.scene.menu.map((i) => i.text).join(",")) === "Play 1P,Share Config,Back", "leaderboard page has Play 1P, Share Config and Back");
+  check(await ev(() => window.__core.g.scene.menu.map((i) => i.text).join(",")) === "Play 1P,Add Favorite,Back", "leaderboard page has Play 1P, Add Favorite and Back (sharing is on a favorite's page)");
   await p.keyboard.press("ArrowDown"); await p.keyboard.press("Enter"); await p.waitForTimeout(200);
-  check(await g("g.scene.name === 'leaderboard' && !!g.toast"), "Share Config on the leaderboard copies (or tries to)");
+  check(await g("g.scene.name === 'leaderboard' && g.toast && g.toast.text === 'log in to save favorites'"), "Add Favorite, logged out, says to log in");
   await p.keyboard.press("ArrowDown");
   check(await ev(() => { const m = window.__core.g.scene.menu; return m[m.selectedItem - 1].text; }) === "Back", "down moves to Back");
   await ev(() => { window.__w = []; for (const n of ["wakka1", "wakka2"]) { const snd = window.__core.g.sounds[n], play = snd.play.bind(snd); snd.play = () => { window.__w.push(n); play(); }; } });
@@ -196,7 +191,7 @@ try {
   await ev(() => { window.__core.g.config.startingLevel = 1; localStorage.removeItem("booze-elroy-name"); }); // name entry below starts blank
 
   // Classic Pac-Man (once Restore Defaults): gameplay options reset, Audio/Video ones stay
-  await ev(() => { const c = window.__core; c.setScene("options"); Object.assign(c.g.config, { ghostCount: 2, crtEffect: false, volume: 9, background: "stars", mazeColor: 5 }); c.optMenu.find((i) => i.text === "Classic Pac-Man").action(); });
+  await ev(() => { const c = window.__core; c.setScene("options"); Object.assign(c.g.config, { ghostCount: 2, crtEffect: false, volume: 9, background: "stars", mazeColor: 5 }); c.optMenu.find((i) => i.text === "Reset Classic Pac-Man").action(); });
   check(await g("g.config.ghostCount === 4 && g.config.crtEffect === false && g.config.volume === 9 && g.config.background === 'stars' && g.config.mazeColor === 5"), "Classic Pac-Man (the old Restore Defaults) keeps the Audio/Video settings");
   await ev(() => { const c = window.__core; Object.assign(c.g.config, { crtEffect: true, volume: 4, background: "none", mazeColor: 99 }); c.setScene("attract"); });
 
@@ -239,7 +234,7 @@ try {
   check(await until("g.scene.name === 'attract' && g.highScore === 7000 && g.highScoreName === 'TESTER-1'"), "title header shows the new leader");
 
   // Reset High Scores: cheat "reset" on a menu screen -> password dialog
-  check(await ev(() => !window.__core.optMenu.some((i) => /reset/i.test(i.text || ""))), "Options has no reset item");
+  check(await ev(() => !window.__core.optMenu.some((i) => /reset high score/i.test(i.text || ""))), "Options has no Reset High Score item (Reset Classic Pac-Man is the settings)");
   await ev(() => window.__core.setScene("options"));
   await p.keyboard.type("reset");
   check(await p.isVisible("#reset") && await ev(() => document.querySelector("#reset h2").textContent === "RESET HIGH SCORES"), "typing reset asks for the password");
@@ -261,16 +256,17 @@ try {
     const q = await ctx.newPage(); q.on("pageerror", (e) => errs.push(e.message));
     await q.goto(dev.url + "/"); await q.waitForTimeout(1000);
     await q.evaluate(() => { const c = window.__core.g.config; c.mazepack = "mspac"; c.ghostCount = 2; c.radar = 60; c.startingLevel = 7; c.volume = 3; });
-    await q.evaluate(() => { const c = window.__core; c.setScene("options"); c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Share Config") + 1; });
+    // (Share on a favorite's page: the only place settings are shared now; a favorite of the current settings)
+    await q.evaluate(() => { const c = window.__core; c.setScene("favorite", { fav: { name: "TEST", board: window.BoozeScoreKey.keyFor(c.g.config) } }); const m = c.g.scene.menu; m.selectedItem = m.findIndex((i) => i.text === "Share") + 1; });
     await q.keyboard.press("Enter");
     await q.waitForTimeout(200);
-    check(await q.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "link copied to clipboard", "Share Config (Options) shows the popup");
+    check(await q.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "link copied to clipboard", "Share Config shows the popup");
     if (process.env.SHOTS) await q.screenshot({ path: join(process.env.SHOTS, "6-share.png") });
     const link = await q.evaluate(() => navigator.clipboard.readText());
     const code = new URL(link).searchParams.get("cfg");
     check(link.startsWith(new URL(dev.url).origin + "/?cfg=") && /^[0-9a-z]{6}$/.test(code), "link carries a short share code: " + link);
     check(await q.evaluate((c) => window.BoozeScoreKey.keyFor(window.BoozeScoreKey.configFromCode(c)), code) === "mspac.0.f.f.60.3.1.f.0.2.t.f.f", "the code holds only the gameplay settings");
-    await q.evaluate(() => { const c = window.__core; c.setScene("options"); c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Share Config") + 1; window.__core.g.toast = null; });
+    await q.evaluate(() => { const c = window.__core; c.setScene("favorite", { fav: { name: "TEST", board: window.BoozeScoreKey.keyFor(c.g.config) } }); const m = c.g.scene.menu; m.selectedItem = m.findIndex((i) => i.text === "Share") + 1; window.__core.g.toast = null; });
     await q.keyboard.press("Enter"); await q.waitForTimeout(200);
     check(await q.evaluate(() => !!window.__core.g.toast), "and again");
     await ctx.close();

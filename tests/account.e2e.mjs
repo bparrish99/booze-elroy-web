@@ -242,8 +242,8 @@ try {
       for (let i = 0; i < n; i++) { sc.page = i; out.push(sc.pageItems()); }
       sc.page = 0; return out.map((pg) => pg.map((a) => ({ name: a.name, y: a.y, earned: !!a.earned })));
     });
-    const all = pages.flat();
-    check(all.length === 55 && all.every((a) => a.y >= 8 && a.y + (a.earned ? 1 : 0) <= 29), "every achievement fits on a page (" + pages.length + " page(s))");
+    const all = pages.flat(), count = await p.evaluate(() => window.BoozeAchievements.LIST.length);
+    check(all.length === count && all.every((a) => a.y >= 8 && a.y + (a.earned ? 1 : 0) <= 29), "every achievement fits on a page (" + pages.length + " page(s))");
     if (pages.length > 1) {
       await p.keyboard.press("ArrowRight");
       check(await p.evaluate(() => window.__core.g.scene.page) === 1, "right: the next page");
@@ -300,6 +300,33 @@ try {
     check(await p.evaluate((s0) => document.getElementById("popped").classList.contains("on") && window.__core.attractMenu.selectedItem === s0, sel), "this tab: covered, keys ignored");
     await q.close(); await p.waitForTimeout(900);
     check(await p.evaluate(() => !document.getElementById("popped").classList.contains("on")), "closing the pop-out: this tab plays again");
+  }
+  // favorites (the author, 2026-11-15): Add Favorite asks for a name; the list shows it; Play makes its settings the
+  // player's own; Remove takes it off
+  {
+    await p.evaluate(() => { const c = window.__core; c.g.toast = null; Object.assign(c.g.config, { ghostCount: 6, mazepack: "mspac" }); c.setScene("options"); const m = c.optMenu; m.selectedItem = m.findIndex((i) => i.text === "Add Favorite") + 1; });
+    await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+    check(await p.evaluate(() => document.getElementById("fav").open), "Add Favorite asks for a name");
+    await p.fill("#fav input[name=name]", "six of them"); await p.click("#fav button[value=ok]");
+    await p.waitForFunction(() => !document.getElementById("fav").open, null, { timeout: 5000 });
+    check(await p.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "saved to favorites", "saved");
+    await p.evaluate(() => { const c = window.__core; Object.assign(c.g.config, { ghostCount: 4, mazepack: "pac" }); c.setScene("attract"); const m = c.attractMenu; m.selectedItem = m.findIndex((i) => i.text === "Favorites") + 1; });
+    await p.keyboard.press("Enter");
+    await p.waitForFunction(() => window.__core.g.scene.name === "favorites" && window.__core.g.scene.menu.some((i) => i.text === "SIX OF THEM"), null, { timeout: 5000 });
+    check(true, "Favorites lists it");
+    check(await p.evaluate(() => window.__core.g.scene.decor.some((d) => d.text === "ghosts" && d.o === 6) && window.__core.g.scene.decor.some((d) => d.text === "6" && d.o === 0)), "with its settings under the list (the option's name yellow, its value white)");
+    await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+    check(await p.evaluate(() => window.__core.g.scene.name === "favorite" && window.__core.g.scene.menu.map((i) => i.text).join() === "Play 1P,Share,Remove,Back"), "its page: Play 1P, Share, Remove, Back");
+    await p.keyboard.press("Enter");
+    await p.waitForFunction(() => window.__core.g.scene.name === "game", null, { timeout: 5000 });
+    check(await p.evaluate(() => { const c = window.__core.g.config, saved = JSON.parse(localStorage.getItem("booze-elroy-options")); return c.ghostCount === 6 && c.mazepack === "mspac" && saved.ghostCount === 6; }), "Play: its settings become the player's own (saved)");
+    await p.keyboard.press("Escape"); await p.waitForTimeout(400);
+    await p.evaluate(() => { const c = window.__core; c.setScene("favorites"); });
+    await p.waitForFunction(() => window.__core.g.scene.menu.some((i) => i.text === "SIX OF THEM"), null, { timeout: 5000 });
+    await p.evaluate(() => { const c = window.__core; c.setScene("favorite", { fav: c.g.scene.menu.find((i) => i.fav).fav }); const m = c.g.scene.menu; m.selectedItem = m.findIndex((i) => i.text === "Remove") + 1; });
+    await p.keyboard.press("Enter"); await p.waitForTimeout(500);
+    check(await p.evaluate(() => window.__core.g.scene.name === "favorites" && !window.__core.g.scene.menu.some((i) => i.text === "SIX OF THEM")), "Remove takes it off the list");
+    await p.evaluate(() => { const c = window.__core.g.config; c.ghostCount = 4; c.mazepack = "pac"; localStorage.setItem("booze-elroy-options", JSON.stringify(c)); window.__core.setScene("attract"); });
   }
   // a token the server doesn't know logs out at start-up
   await p.evaluate(() => localStorage.setItem("booze-elroy-account", JSON.stringify({ name: "GHOST", token: "x".repeat(32) })));

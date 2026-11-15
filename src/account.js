@@ -142,9 +142,39 @@
       const r = await (saving = saving.then(() => call("played", { day, settings, arena: arena || "" })));
       return r.ok && r.data ? r.data.streak : null;
     }
+    // favorites (the author, 2026-11-15): named gameplay settings, kept on the server per account; favs.list is the
+    // last known list (status: "none" | "loading" | "ok" | "error")
+    let favs = { status: "none", list: [], of: null };
+    async function loadFavorites() {
+      if (!api || !me) { favs = { status: "none", list: [], of: null }; return favs; }
+      const was = me;
+      favs = { status: favs.of === me.name ? favs.status : "loading", list: favs.of === me.name ? favs.list : [], of: me.name };
+      try {
+        const res = await fetchFn(api + "/favorites", { headers: auth(), cache: "no-store" });
+        if (me !== was) return favs;
+        const d = res.ok ? await res.json() : null;
+        favs = d && Array.isArray(d.favorites) ? { status: "ok", list: d.favorites, of: me.name } : { ...favs, status: favs.list.length ? "ok" : "error" };
+      } catch { if (me === was) favs = { ...favs, status: favs.list.length ? "ok" : "error" }; }
+      return favs;
+    }
+    /** add (or, the same name, replace) a favorite -> { ok, full?, status } */
+    async function addFavorite(name, board) {
+      if (!me) return { ok: false, status: 401 };
+      const r = await call("favorites", { name, board });
+      if (r.data && Array.isArray(r.data.favorites)) favs = { status: "ok", list: r.data.favorites, of: me.name };
+      return { ok: r.ok, full: r.status === 409 && r.data && r.data.error === "full", status: r.status };
+    }
+    async function removeFavorite(name) {
+      if (!me) return { ok: false };
+      const r = await call("unfavorite", { name });
+      if (r.ok && r.data && Array.isArray(r.data.favorites)) favs = { status: "ok", list: r.data.favorites, of: me.name };
+      return { ok: r.ok };
+    }
     const api_ = {
       online: !!api,
       placedOn, playedOn, arenaPlaced,
+      favorites: () => (me && favs.of === me.name ? favs : { status: me ? "loading" : "none", list: [] }),
+      loadFavorites, addFavorite, removeFavorite,
       name: () => (me ? me.name : null),
       auth, // { authorization: "Bearer ..." } logged in, else {}
       signup: (name, password) => enter("signup", name, password),

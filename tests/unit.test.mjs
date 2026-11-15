@@ -445,6 +445,25 @@ test("accounts: the activity log (signups, logins, achievements, every game with
   for (let i = 1; i < r.data.events.length; i++) assert.ok(r.data.events[i - 1].at >= r.data.events[i].at, "newest first");
 });
 
+test("accounts: favorites: named settings, replaced by name, at most 15, removable, own login only", async () => {
+  const { token } = (await acct("POST", "signup", { name: "fav fan", password: "pw12" })).data;
+  const B1 = "pac.0.f.f.f.3.1.f.0.4.t.f.f", B2 = "booze.0.f.f.f.3.1.6.0.4.t.f.f";
+  assert.equal((await acct("GET", "favorites")).status, 401);
+  assert.deepEqual((await acct("GET", "favorites", undefined, token)).data.favorites, []);
+  assert.deepEqual((await acct("POST", "favorites", { name: "my suck", board: B2 }, token)).data.favorites, [{ name: "MY SUCK", board: B2 }]);
+  assert.equal((await acct("POST", "favorites", { name: "x", board: "nope" }, token)).status, 400);
+  assert.equal((await acct("POST", "favorites", { name: "bad?name", board: B1 }, token)).status, 400);
+  // the same name replaces it, in place
+  assert.deepEqual((await acct("POST", "favorites", { name: "MY SUCK", board: B1 }, token)).data.favorites, [{ name: "MY SUCK", board: B1 }]);
+  for (let i = 1; i < 15; i++) await acct("POST", "favorites", { name: "fav " + i, board: B1 }, token);
+  const full = await acct("POST", "favorites", { name: "one too many", board: B1 }, token);
+  assert.equal(full.status, 409); assert.equal(full.data.error, "full"); assert.equal(full.data.favorites.length, 15);
+  assert.equal((await acct("POST", "favorites", { name: "fav 3", board: B2 }, token)).status, 200, "replacing works when full");
+  const r = await acct("POST", "unfavorite", { name: "fav 3" }, token);
+  assert.equal(r.data.favorites.length, 14);
+  assert.ok(!r.data.favorites.some((f) => f.name === "FAV 3"));
+});
+
 test("accounts: logged-out scores that place are logged (with the client's summary); logged-in and unplaced ones aren't", async () => {
   const logAnon = anonLogger(blobs.accountStore), nameCheck = nameChecker(blobs.accountStore);
   const { token } = (await acct("POST", "signup", { name: "logged two", password: "pw12" })).data;

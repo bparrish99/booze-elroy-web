@@ -418,7 +418,7 @@
         print(msg1, 14 - msg1.length / 2, 5);
         print(msg2, 14 - msg2.length / 2, 7);
         drawMenu(core.attractMenu, 6, 23, 1);
-        print("web edition", 14 - "web edition".length / 2, 35, 2);
+        print("credits", 14 - "credits".length / 2, 35, 2); // (it said "web edition"; the author, 2026-11-15: the credits link, same pink)
       }
       if (g.mode === "restart" && core.mode.isStarted("restart") && g.ghosts) {
         clip(0, 0, 224, 190);
@@ -741,8 +741,8 @@
       { x0: 80, y0: 84, x1: 144, y1: 100, url: "mailto:bparrish99@gmail.com" },
       { x0: 0, y0: 264, x1: 224, y1: 284, url: "https://pinback.substack.com", secret: "wake" }, // a secret achievement (main.js)
     ];
-    // web edition: "web edition" on the title opens the credits
-    const TITLE_LINKS = [{ x0: 64, y0: 276, x1: 160, y1: 288, scene: "credits" }];
+    // web edition: "credits" on the title opens the credits
+    const TITLE_LINKS = [{ x0: 76, y0: 276, x1: 148, y1: 288, scene: "credits" }];
     const creditsLinks = () => (g.scene.name === "credits" ? LINKS : g.scene.name === "attract" && g.state && g.state.showHelperText ? TITLE_LINKS : g.scene.links || []);
 
     function drawCredits() {
@@ -767,13 +767,25 @@
     // ---- web edition: online leaderboard and arcade name entry (scenes live in leaderboard.js)
     const center = (m, y, o) => print(m, 14 - m.length / 2, y, o);
     // the leaderboard page; an arena page is the same with its own title / time left (sc.title, sc.subtitle)
+    // a scene's settings summary, centred lines: each option's name in Pac-Man yellow, its value white (the author)
+    function drawSummary(sc, top, maxLines) {
+      if (!sc.summaryParts) { sc.summary(26).slice(0, maxLines).forEach((l, i) => center(l, top + i, 0)); return; }
+      sc.summaryParts(26).slice(0, maxLines).forEach((line, i) => {
+        const text = line.map(([l, v]) => (l ? l + " " : "") + v).join("  ");
+        let x = 14 - text.length / 2;
+        for (const [l, v] of line) {
+          if (l) { print(l, x, top + i, 6); x += l.length + 1; }
+          print(v, x, top + i, 0); x += v.length + 2;
+        }
+      });
+    }
     function drawLeaderboard() {
       const sc = g.scene;
       begin(true); drawHeader();
       if (sc.title) { center(sc.title(), 3, 3); center(sc.subtitle(), 4, 2); }
       else center("leaderboard", 4, 3);
       const lay = sc.layout || { summaryTop: 6, summaryLines: 5, listTop: 12, messageRow: 31 }; // the arena page packs tighter
-      sc.summary(26).slice(0, lay.summaryLines).forEach((l, i) => center(l, lay.summaryTop + i, 0));
+      drawSummary(sc, lay.summaryTop, lay.summaryLines);
       const b = sc.board();
       if (!b.entries.length) center(sc.emptyText ? sc.emptyText(b) : b.status === "loading" ? "loading" : b.status === "error" ? "leaderboard offline" : "no scores yet", 20, 0);
       b.entries.slice(0, 10).forEach((e, i) => {
@@ -791,9 +803,9 @@
     function drawArenas() {
       const sc = g.scene;
       begin(true); drawHeader();
-      center("arenas", 3, 3);
+      center(sc.title ? sc.title() : "arenas", 3, 3); // (the favorites list is drawn this way too; its own notes are decor)
       const st = sc.status();
-      if (!sc.menu.some((it) => it.id)) {
+      if (sc.name === "arenas" && !sc.menu.some((it) => it.id)) {
         if (st === "loading") center("loading", 15, 0);
         else if (st === "error") center("no running arenas", 15, 0);
       }
@@ -828,7 +840,7 @@
       begin(true); drawHeader();
       if (sc.mode === "createArena") {
         center("create arena", 3, 3);
-        sc.summary(26).slice(0, 4).forEach((l, i) => center(l, 5 + i, 0));
+        drawSummary(sc, 5, 4);
         center("arena name", 10, 2);
       } else {
         center("new high score!", 4, sc.fc % 40 < 20 ? 3 : 1);
@@ -857,7 +869,7 @@
       if (scene === "attract") { if (g.state && g.state.showHelperText) spec = [core.attractMenu, 6, 23, 1]; }
       else if (scene === "options") spec = [core.optMenu, 18, 5, 1];
       else if (scene === "credits") spec = [core.creditsMenu, 12, 27, 2];
-      else if ((scene === "leaderboard" || scene === "nameEntry" || scene === "arenas" || scene === "arena" || scene === "profile") && !g.scene.sending) spec = [g.scene.menu, 0, 0, 1];
+      else if ((scene === "leaderboard" || scene === "nameEntry" || scene === "arenas" || scene === "arena" || scene === "profile" || scene === "favorites" || scene === "favorite") && !g.scene.sending) spec = [g.scene.menu, 0, 0, 1];
       if (!spec) return [];
       const [menu, mx, my, sp] = spec, rows = [];
       menu.forEach((item, i0) => {
@@ -941,8 +953,8 @@
       else if (scene === "attract") drawAttract();
       else if (scene === "options") drawOptions();
       else if (scene === "credits") drawCredits();
-      else if (scene === "leaderboard" || scene === "arena") drawLeaderboard();
-      else if (scene === "arenas") drawArenas();
+      else if (scene === "leaderboard" || scene === "arena" || scene === "favorite") drawLeaderboard();
+      else if (scene === "arenas" || scene === "favorites") drawArenas();
       else if (scene === "mina") { begin(false); drawIntermission3(g.scene.t, true); } // the "mina" cheat
       else if (scene === "nameEntry") drawNameEntry();
       else if (scene === "profile") drawProfile();

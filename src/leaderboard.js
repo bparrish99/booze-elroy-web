@@ -124,23 +124,27 @@
       const item = core.optMenu.find((it) => it.key === field);
       return item && item.options[i] ? item.options[i].text : String(vals[i]);
     }
-    function summary(width, cfg) {
+    // the settings that differ from the arcade's, as lines of [label, value] pairs fitting `width` columns (drawn with
+    // the option's name in Pac-Man yellow and its value white: the author, 2026-11-15); summary() is the same as text
+    function summaryParts(width, cfg) {
       cfg = cfg || g.config;
       const diffs = [];
       for (const [k, vals] of SK.FIELDS) {
         const i = vals.indexOf(cfg[k]) >= 0 ? vals.indexOf(cfg[k]) : vals.indexOf(!!cfg[k]);
         const d = vals.indexOf(g.defaultConfig[k]);
-        if (i !== d) diffs.push(LABELS[k] + " " + optionText(k, vals, i));
+        if (i !== d) diffs.push([LABELS[k], optionText(k, vals, i)]);
       }
-      if (!diffs.length) return ["classic Pac-Man"]; // the untouched settings: the original arcade game (the author's name, 2026-11-14)
-      const lines = [];
+      if (!diffs.length) return [[["", "classic Pac-Man"]]]; // the untouched settings: the original arcade game (the author's name, 2026-11-14)
+      const lines = [], len = (line) => line.reduce((n, [l, v]) => n + (n ? 2 : 0) + (l ? l.length + 1 : 0) + v.length, 0);
       for (const d of diffs) {
-        const last = lines[lines.length - 1];
-        if (last !== undefined && last.length + 2 + d.length <= width) lines[lines.length - 1] = last + "  " + d;
-        else lines.push(d);
+        const last = lines[lines.length - 1], dl = len([d]);
+        if (last !== undefined && len(last) + 2 + dl <= width) last.push(d);
+        else lines.push([d]);
       }
       return lines;
     }
+    const partsText = (line) => line.map(([l, v]) => (l ? l + " " : "") + v).join("  ");
+    function summary(width, cfg) { return summaryParts(width, cfg).map(partsText); }
 
     // ---------------------------------------------------------------- arenas (list, boards, the one being played)
     let clockOffset = 0; // server clock - this browser's clock
@@ -232,10 +236,11 @@
 
     // PLAY 1P plays the board on show (its settings borrowed for the game); Share Config only when the page can copy
     // links (opts.share; it shares the board on show)
+    // (Add Favorite: the author, 2026-11-15; sharing settings is a favorite's job now, so no Share Config here)
     const lbMenu = Object.assign([
       { text: "Play 1P", x: 10.5, y: 31, action() { applyBoard(leaderboard.key); startGame(); } },
-      ...(opts.share ? [{ text: "Share Config", share: true, x: 8, y: 33, action() { opts.share(SK.configFor(leaderboard.key)); } }] : []),
-      { text: "Back", x: 12, y: opts.share ? 35 : 33, action() { core.setScene("attract", true); } },
+      ...(opts.addFavorite ? [{ text: "Add Favorite", x: 8, y: 33, action() { opts.addFavorite(leaderboard.key); } }] : []),
+      { text: "Back", x: 12, y: 35, action() { core.setScene("attract", true); } },
     ], { selectedItem: 1 });
     const lbMove = (d) => { wakka(); lbMenu.selectedItem = ((lbMenu.selectedItem - 1 + d + lbMenu.length) % lbMenu.length) + 1; };
     const lbBack = () => lbMenu[lbMenu.length - 1].action();
@@ -282,6 +287,7 @@
       },
       board() { return boardFor(this.key); },
       summary(width) { return summary(width, SK.configFor(this.key)); },
+      summaryParts(width) { return summaryParts(width, SK.configFor(this.key)); },
       keypressed(key) {
         if (key === "return" || key === "space") { const it = lbMenu[lbMenu.selectedItem - 1]; if (it.text !== "Play 1P") wakka(); it.action(); }
         else if (key === "left") this.flip(-1);
@@ -412,9 +418,10 @@
       },
       build() {
         const items = [];
-        if (arenaOpen(arena) && api) items.push({ text: "Play 1P", x: 10.5, y: 31, action: () => this.play() });
+        if (arenaOpen(arena) && api) items.push({ text: "Play 1P", x: 10.5, y: 30, action: () => this.play() });
+        if (opts.addFavorite) items.push({ text: "Add Favorite", x: 8, y: 31.5, action: () => opts.addFavorite(arena.board) });
         if (opts.shareArena) items.push({ text: "Share Arena", share: true, x: 8.5, y: 33, action: () => opts.shareArena(arena.id) });
-        items.push({ text: "Back", x: 12, y: 35, action: () => this.back() });
+        items.push({ text: "Back", x: 12, y: 34.5, action: () => this.back() });
         rebuildMenu(this, items);
       },
       play() { applyArena(arena); startGame(); },
@@ -422,6 +429,7 @@
       title() { return arena.name; },
       subtitle() { return arenaOpen(arena) ? "ends in " + timeLeft(arena.endsAt - serverNow()) : "finished"; },
       summary(width) { return summary(width, SK.configFor(arena.board)); },
+      summaryParts(width) { return summaryParts(width, SK.configFor(arena.board)); },
       board() { return arenaBoards.get(arena.id) || { status: "loading", entries: [] }; },
       emptyText(b) { return b.status === "loading" ? "loading" : b.status === "gone" ? "arena not found" : b.status === "error" ? "try again soon" : "no scores yet"; },
       keypressed(key) {
@@ -433,6 +441,95 @@
         else if (button === "start") core.setScene("attract");
         else menuPad(this, button);
       },
+    };
+
+    // ---------------------------------------------------------------- favorites (the author, 2026-11-15)
+    // the list: a name a row (picking one opens its page), the highlighted one's settings underneath. opts.favorites:
+    // { get() -> { status, list: [{ name, board }] }, load(), remove(name) -> Promise }
+    const FAV_TOP = 6;
+    const favGet = () => (opts.favorites ? opts.favorites.get() : { status: "error", list: [] });
+    const favoritesScene = {
+      name: "favorites",
+      menu: Object.assign([], { selectedItem: 1 }),
+      decor: [], links: [],
+      start() {
+        leaveArena();
+        this.menu = Object.assign([], { selectedItem: 1 });
+        if (opts.favorites) opts.favorites.load();
+        this.build(); this.menu.selectedItem = 1;
+      },
+      update() { this.build(); },
+      status() { return favGet().status; },
+      title() { return "favorites"; },
+      build() {
+        const f = favGet(), decor = [];
+        const items = f.list.map((fav, i) => ({ id: "f:" + fav.name, text: fav.name, x: 2, y: FAV_TOP + i, fav, action: () => core.setScene("favorite", { fav }) }));
+        items.push({ text: "Back", x: 12, y: 31, action() { core.setScene("attract", true); } });
+        rebuildMenu(this, items);
+        const mid = (t, y, o) => decor.push({ text: t, x: 14 - t.length / 2, y, o });
+        if (!f.list.length) {
+          if (f.status === "loading" || f.status === "none") mid("loading", 12, 0);
+          else if (f.status === "error") mid("try again soon", 12, 0);
+          else { mid("no favorites yet", 11, 2); mid("add one from options,", 14, 0); mid("a leaderboard or an arena", 16, 0); }
+        }
+        const sel = this.menu[this.menu.selectedItem - 1];
+        if (sel && sel.fav) summaryParts(26, SK.configFor(sel.fav.board)).slice(0, 4).forEach((line, i) => { // name yellow, value white
+          let x = 14 - partsText(line).length / 2;
+          for (const [l, v] of line) {
+            if (l) { decor.push({ text: l, x, y: 23 + i, o: 6 }); x += l.length + 1; }
+            decor.push({ text: v, x, y: 23 + i, o: 0 }); x += v.length + 2;
+          }
+        });
+        this.decor = decor;
+      },
+      keypressed(key) {
+        if (key === "escape" || key === "backspace") { wakka(); core.setScene("attract", true); return; }
+        menuKeys(this, key);
+      },
+      gamepadpressed(button) { if (button === "b") core.setScene("attract", true); else menuPad(this, button); },
+    };
+    // one favorite: its settings and that board's top 10 (drawn like the leaderboard page); Play 1P makes them the
+    // player's settings and starts a game; Share Config copies its link; Remove
+    const favoriteScene = {
+      name: "favorite",
+      captureInput: true,
+      layout: { summaryTop: 5, summaryLines: 4, listTop: 10, messageRow: 29 },
+      menu: Object.assign([], { selectedItem: 1 }),
+      fav: null, highlight: null, message: null, fc: 0,
+      start(o) {
+        o = o || {};
+        if (o.fav) this.fav = o.fav;
+        this.fc = 0; this.highlight = null; this.message = null;
+        load(this.fav.board, true);
+        const items = [{ text: "Play 1P", x: 10.5, y: 30, action: () => this.play() }];
+        if (opts.share) items.push({ text: "Share", share: true, x: 11.5, y: 31.5, action: () => opts.share(SK.configFor(this.fav.board)) }); // (the only place settings are shared: the author)
+        items.push({ text: "Remove", x: 11, y: 33, action: () => this.remove() });
+        items.push({ text: "Back", x: 12, y: 34.5, action: () => core.setScene("favorites") });
+        this.menu = Object.assign(items, { selectedItem: 1 });
+      },
+      update() { this.fc += 1; },
+      play() {
+        leaveArena();
+        Object.assign(g.config, SK.configFor(this.fav.board)); // they become the player's own settings (the author)
+        if (opts.saveSettings) opts.saveSettings();
+        startGame();
+      },
+      remove() {
+        const name = this.fav.name;
+        if (opts.favorites) opts.favorites.remove(name);
+        g.toast = { text: "removed " + name.toLowerCase(), until: performance.now() + 2000 };
+        core.setScene("favorites");
+      },
+      title() { return this.fav.name; },
+      subtitle() { return "favorite"; },
+      summary(width) { return summary(width, SK.configFor(this.fav.board)); },
+      summaryParts(width) { return summaryParts(width, SK.configFor(this.fav.board)); },
+      board() { return boardFor(this.fav.board); },
+      keypressed(key) {
+        if (key === "escape" || key === "backspace") { wakka(); core.setScene("favorites"); return; }
+        menuKeys(this, key);
+      },
+      gamepadpressed(button) { if (button === "b") core.setScene("favorites"); else menuPad(this, button); },
     };
 
     // grid cells double as a "menu" so the mouse / touch code can hover and click them
@@ -475,6 +572,7 @@
       },
       leave() { core.setScene(this.mode === "createArena" ? this.from || "arenas" : quitGameTo() || "attract"); },
       summary(width) { return summary(width); },
+      summaryParts(width) { return summaryParts(width); },
       add(ch) {
         if (this.entry.length >= NAME_MAX) { neMenu.selectedItem = END + 1; return; }
         if (ch === " " && (!this.entry.length || this.entry.endsWith(" "))) return;
@@ -657,7 +755,7 @@
       if (opts.playerName && !opts.playerName()) { g.toast = { text: "log in to create an arena", until: performance.now() + 2500 }; return; }
       core.setScene("nameEntry", { mode: "createArena", from });
     };
-    return { attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
+    return { summaryParts, attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene, favorites: favoritesScene, favorite: favoriteScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
   }
 
   root.BoozeLeaderboard = { create };

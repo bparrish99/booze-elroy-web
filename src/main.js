@@ -49,6 +49,11 @@
       },
       auth: () => ACC.auth(), // logged in: score posts carry the login (an account's name is only its owner's)
       playerName: () => ACC.name(), // logged in: a top-10 score goes on the board under the account's name, no name entry
+      // favorites (the author, 2026-11-15): the list (account.js), "Add Favorite" (asks for a name), and playing one
+      // makes its settings the player's own (saved)
+      favorites: { get: () => ACC.favorites(), load: () => ACC.loadFavorites(), remove: (n) => ACC.removeFavorite(n) },
+      addFavorite: (key) => openFavorite(key),
+      saveSettings: () => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(core.g.config)); } catch { /* ignore */ } },
     });
     // player accounts (src/account.js): username + password; the corner where 2UP would be logs in / shows the name
     const ACC = BoozeAccount.create({
@@ -177,8 +182,9 @@
 
     let rwd = null; // the Rewind ability (rewind.js), made once the core exists
     const core = BoozeCore.create(A.data, {
-      testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsInOptions: true, restoreKeepsAV: true, proMode: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
+      testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsOnTitle: true, restoreKeepsAV: true, proMode: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
       scenes: { ...LB.scenes, ...ACC.scenes, mina },
+      loggedIn: () => !!ACC.name(), addFavorite: () => openFavorite(SK.keyFor(LB.ownSettings())), // (Favorites, Options' Add Favorite)
       afterGameOver: (s) => {
         const c = core.g.config, d = core.g.defaultConfig, styled = c.background !== d.background || c.mazeColor !== d.mazeColor;
         const ach = BoozeAchievements.LIST;
@@ -190,7 +196,9 @@
         if (!rwd) return;
         const was = rwd.active(); rwd.trigger();
         if (!was && rwd.active() && !core.g.attract && !core.g.autoplay) earned(["kind"]); // be kind (rewind)
-      }, feat: (id) => { if (!core.g.attract && !core.g.autoplay) earned([id]); }, // a single use of an ability (hoover deluxe, personal space) testMode: () => fpsOn /* test mode (xyzzy): Pro Mode always */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      },
+      feat: (id) => { if (!core.g.attract && !core.g.autoplay) earned([id]); }, // a single use of an ability (hoover deluxe, personal space, the power of now)
+      testMode: () => fpsOn /* test mode (xyzzy): Pro Mode always */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
@@ -359,6 +367,29 @@
       acMsg.textContent = res.status === 409 ? "That name is taken." : res.status === 403 ? "Wrong username or password." : res.status === 0 ? "Can't reach the server." : "That didn't work (" + res.status + ").";
     });
     ac.addEventListener("close", () => canvas.focus && canvas.focus());
+    // "Add Favorite" (Options, a leaderboard, an arena): a name for these settings (logged in only), saved on the server
+    const fv = document.getElementById("fav"), fvForm = fv.querySelector("form"), fvMsg = fv.querySelector(".msg");
+    let fvKey = null, fvBusy = false;
+    function openFavorite(key) {
+      if (!ACC.name()) { toast("log in to save favorites"); return; }
+      if (!key || typeof fv.showModal !== "function" || fv.open) return;
+      for (const k in down) down[k] = false;
+      fvKey = key; fvForm.reset(); fvMsg.textContent = "";
+      LB.wakka(); fv.showModal(); fvForm.elements.name.focus();
+    }
+    fvForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (fvBusy) return;
+      if (e.submitter && e.submitter.value === "cancel") { fv.close(); return; }
+      const raw = fvForm.elements.name.value, name = SK.cleanName(raw);
+      if (!name) { fvMsg.textContent = raw.trim() ? "Names use letters, digits, spaces and ! - / (up to 16)." : "Give it a name."; return; }
+      fvBusy = true; fvMsg.textContent = "Saving…";
+      const r = await ACC.addFavorite(name, fvKey);
+      fvBusy = false;
+      if (r.ok) { fv.close(); toast("saved to favorites"); return; }
+      fvMsg.textContent = r.full ? "Your favorites are full (15). Remove one first." : r.status === 0 ? "Can't reach the server." : "That didn't work (" + r.status + ").";
+    });
+    fv.addEventListener("close", () => canvas.focus && canvas.focus());
     const accountAt = (e) => { const B = R.accountBox(); if (!B) return null; const p = toGame(e); return p.x >= B.x0 && p.x < B.x1 && p.y >= B.y0 && p.y < B.y1 ? B : null; };
 
     window.addEventListener("keydown", (e) => {

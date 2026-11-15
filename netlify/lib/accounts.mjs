@@ -13,6 +13,9 @@
 //   POST /api/account/played { day: "YYYY-MM-DD", settings?, arena? } (Bearer) -> { streak }   a real game started on
 //        that day (the player's own calendar day, within a day of the server's); streak = days in a row ending on that
 //        day. Every one is logged (settings: the client's one-line summary; arena: its name when it's an arena game)
+//   GET  /api/account/favorites           (Bearer) -> { favorites: [{ name, board }] }   saved gameplay settings
+//   POST /api/account/favorites { name, board } (Bearer) -> { favorites }   adds one (the same name: replaced), at most
+//        FAV_MAX (409 "full"); POST /api/account/unfavorite { name } (Bearer) -> { favorites }
 //   GET  /api/account/activity  (x-admin-key: LEADERBOARD_ADMIN_PASSWORD) -> { accounts: [names], events: [{ at, type,
 //        name, detail }] newest first, the last 1000 }   the author's secret page (public/activity.html)
 //
@@ -39,6 +42,8 @@ const scryptP = promisify(scrypt);
 export const PW_MIN = 4, PW_MAX = 128;
 const hex = (name) => Buffer.from(name).toString("hex");
 const userKey = (name) => "u/" + hex(name), achKey = (name) => "a/" + hex(name), placedKey = (name) => "b/" + hex(name), daysKey = (name) => "d/" + hex(name);
+const favKey = (name) => "f/" + hex(name);
+export const FAV_MAX = 15; // a favorites page holds this many (the author: as many as fit on one page)
 const DAY = 86400000;
 /** "YYYY-MM-DD" -> ms at its UTC midnight; NaN if it isn't a real date */
 const dayMs = (d) => {
@@ -164,6 +169,27 @@ export async function handleAccounts(req, store, opts = {}) {
     });
     if (r && scored) await logEvent(store, "score", s.name, JSON.stringify([body.rank, body.score, text(body.settings, 160) || body.board]));
     return r ? json(200, r) : json(409, { error: "busy, try again" });
+  }
+  // favorites (the author, 2026-11-15): named gameplay settings (a board key: the leaderboard's settings, not starting
+  // level or looks), at most FAV_MAX, oldest first; adding a name that's there already replaces it
+  if (action === "favorites" || action === "unfavorite") {
+    const s = await session();
+    if (!s) return json(401, { error: "not logged in" });
+    const tidyFavs = (cur) => (Array.isArray(cur) ? cur.filter((f) => f && cleanName(f.name) === f.name && isKey(f.board)) : []);
+    if (action === "favorites" && req.method === "GET") return json(200, { favorites: tidyFavs(await store.get(favKey(s.name), { type: "json" })) });
+    if (req.method !== "POST") return json(405, { error: "method not allowed" });
+    const body = await readBody(req), name = body && cleanName(body.name);
+    if (!name) return json(400, { error: "bad name" });
+    if (action === "favorites" && !isKey(body.board)) return json(400, { error: "bad board" });
+    const r = await updateJSON(store, favKey(s.name), (cur) => {
+      const have = tidyFavs(cur), rest = have.filter((f) => f.name !== name);
+      if (action === "unfavorite") return { value: rest, result: { favorites: rest } };
+      if (rest.length === have.length && have.length >= FAV_MAX) return { result: { full: true, favorites: have } };
+      const next = rest.length === have.length ? [...have, { name, board: body.board }] : have.map((f) => (f.name === name ? { name, board: body.board } : f));
+      return { value: next, result: { favorites: next } };
+    });
+    if (!r) return json(409, { error: "busy, try again" });
+    return r.full ? json(409, { error: "full", favorites: r.favorites }) : json(200, { favorites: r.favorites });
   }
   if (action === "achievements") {
     if (req.method !== "GET" && req.method !== "POST") return json(405, { error: "method not allowed" });

@@ -33,7 +33,7 @@ try {
   };
 
   await p.goto(dev.url + "/"); await p.waitForTimeout(1500);
-  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Options,Leaderboards", "main menu: Play 1P, Arena, Options, Leaderboards");
+  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Favorites,Options,Leaderboards", "main menu: Play 1P, Arena, Favorites, Options, Leaderboards");
   await shot("a1-title");
 
   // the player's own settings: 6 ghosts, level 5, volume 2
@@ -63,7 +63,7 @@ try {
   const list = await api("/api/arenas");
   check(list.arenas.length === 1 && list.arenas[0].board === SIX, "server has it, with the creator's settings");
   const id = list.arenas[0].id;
-  check(await g("g.scene.menu.map((i) => i.text).join() === 'Play 1P,Share Arena,Back'"), "arena page: Play 1P, Share Arena, Back");
+  check(await g("g.scene.menu.map((i) => i.text).join() === 'Play 1P,Add Favorite,Share Arena,Back'"), "arena page: Play 1P, Add Favorite, Share Arena, Back");
   await shot("a4-arena");
 
   // Share Arena: the link opens this arena's page for someone else
@@ -160,7 +160,7 @@ try {
   check(await g("g.scene.decor.some((d) => d.text === 'finished') && g.scene.decor.some((d) => d.text === 'no running arenas')"), "under a Finished heading");
   await shot("a8-finished");
   await choose("SUNDAY CUP");
-  check(await until("g.scene.name === 'arena' && g.scene.subtitle() === 'finished' && g.scene.menu.map((i) => i.text).join() === 'Share Arena,Back'"), "a finished arena can be viewed and shared, not played");
+  check(await until("g.scene.name === 'arena' && g.scene.subtitle() === 'finished' && g.scene.menu.map((i) => i.text).join() === 'Add Favorite,Share Arena,Back'"), "a finished arena can be viewed, saved and shared, not played");
   await p.keyboard.press("Escape");
   clock += 24 * HOUR;
   await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
