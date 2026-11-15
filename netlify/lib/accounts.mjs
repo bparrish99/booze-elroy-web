@@ -37,12 +37,62 @@ import scorekey from "../../src/scorekey.js";
 import achievements from "../../src/achievements.js";
 import { json, sleep, readBody, updateJSON, sha } from "./scores.mjs";
 
-const { cleanName, isKey, MAX_SCORE } = scorekey;
+const { cleanName, isKey, configFor, MAX_SCORE } = scorekey;
 const scryptP = promisify(scrypt);
 export const PW_MIN = 4, PW_MAX = 128;
 const hex = (name) => Buffer.from(name).toString("hex");
 const userKey = (name) => "u/" + hex(name), achKey = (name) => "a/" + hex(name), placedKey = (name) => "b/" + hex(name), daysKey = (name) => "d/" + hex(name);
-const favKey = (name) => "f/" + hex(name);
+const favKey = (name) => "f/" + hex(name), retroKey = (name) => "r/" + hex(name);
+// achievements earned before they existed (the author, 2026-11-15): the score ones and the points-in-a-mode ones can be
+// read off the leaderboards (a board's key is its settings: ghost count, the mode; an entry is a name and a score). An
+// account is checked once per RETRO_VERSION: bump it when such achievements are added, and everyone is checked again.
+// (Names were only protected from 2026-11-12: an older score under an account's name might be someone else's)
+export const RETRO_VERSION = 1;
+async function retroAward(store, scoresStore, name) {
+  if ((await store.get(retroKey(name))) === String(RETRO_VERSION)) return [];
+  // this account's scores: entries under its name, or posted from it ("by", since 2026-11-15) under any name, or (older
+  // ones under another name: the author's friend RJ plays as other names) on a board it placed on with a score it
+  // logged (its "score" activity events, since 2026-11-11)
+  const placed = new Set(await store.get(placedKey(name), { type: "json" }) || []);
+  const logged = new Set();
+  const { blobs: events } = await store.list();
+  for (const ev of events) {
+    const p = ev.key.split("/");
+    if (p[0] !== "e" || p[2] !== "score" || p[3] !== hex(name)) continue;
+    try { const d = JSON.parse(decodeURIComponent(p[4])); if (Array.isArray(d) && Number.isInteger(d[1])) logged.add(d[1]); } catch { /* ignore */ }
+  }
+  const { blobs } = await scoresStore.list();
+  const best = new Map(); // board -> this account's best score there
+  for (const b of blobs) {
+    if (!isKey(b.key)) continue;
+    const entries = await scoresStore.get(b.key, { type: "json" });
+    for (const e of Array.isArray(entries) ? entries : []) {
+      if (!e || !Number.isInteger(e.score)) continue;
+      const mine = e.name === name || e.by === name || (placed.has(b.key) && logged.has(e.score));
+      if (mine) best.set(b.key, Math.max(best.get(b.key) || 0, e.score));
+    }
+  }
+  const due = achievements.LIST.filter((a) => (a.score || a.mode) && [...best].some(([key, score]) => {
+    const c = configFor(key);
+    if (!c || (a.minGhosts && !(c.ghostCount >= a.minGhosts))) return false;
+    return a.score ? score >= a.score : score >= a.points && c[a.mode.key] === a.mode.value;
+  })).map((a) => a.id);
+  let fresh = [];
+  if (due.length) {
+    const r = await updateJSON(store, achKey(name), (cur) => {
+      const have = cur && typeof cur === "object" ? cur : {}, now = Date.now();
+      const add = due.filter((id) => !have[id]);
+      if (!add.length) return { result: [] };
+      const next = { ...have }; for (const id of add) next[id] = now;
+      return { value: next, result: add };
+    });
+    if (!r) return []; // busy: try again next time (the marker isn't set)
+    fresh = r;
+    for (const id of fresh) await logEvent(store, "achievement", name, id);
+  }
+  await store.set(retroKey(name), String(RETRO_VERSION));
+  return fresh;
+}
 export const FAV_MAX = 15; // a favorites page holds this many (the author: as many as fit on one page)
 const DAY = 86400000;
 /** "YYYY-MM-DD" -> ms at its UTC midnight; NaN if it isn't a real date */
@@ -103,6 +153,13 @@ export function anonLogger(store) {
       if (token && (await store.get(sessionKey(token), { type: "json" }))) return;
       await logEvent(store, type, name, detail);
     } catch { /* ignore */ }
+  };
+}
+
+/** the account a request is logged in as, or null: score posts keep it with the entry (never shown) */
+export function accountOf(store) {
+  return async (req) => {
+    try { const token = tokenOf(req); const s = token ? await store.get(sessionKey(token), { type: "json" }) : null; return s && s.name ? s.name : null; } catch { return null; }
   };
 }
 
@@ -195,7 +252,11 @@ export async function handleAccounts(req, store, opts = {}) {
     if (req.method !== "GET" && req.method !== "POST") return json(405, { error: "method not allowed" });
     const s = await session();
     if (!s) return json(401, { error: "not logged in" });
-    if (req.method === "GET") return json(200, { achievements: (await store.get(achKey(s.name), { type: "json" })) || {} });
+    if (req.method === "GET") {
+      let retro = [];
+      if (opts.scoresStore) { try { retro = await retroAward(store, opts.scoresStore, s.name); } catch { retro = []; } } // never fails the load
+      return json(200, { achievements: (await store.get(achKey(s.name), { type: "json" })) || {}, ...(retro.length ? { retro } : {}) });
+    }
     const body = await readBody(req);
     if (!body || !achievements.isId(body.id)) return json(400, { error: "bad achievement" });
     const r = await updateJSON(store, achKey(s.name), (cur) => {

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { handle } from "../netlify/lib/scores.mjs";
 import { handleArenas, HOUR, GRACE } from "../netlify/lib/arenas.mjs";
-import { handleAccounts, nameChecker, anonLogger } from "../netlify/lib/accounts.mjs";
+import { handleAccounts, nameChecker, anonLogger, accountOf } from "../netlify/lib/accounts.mjs";
 import { startBlobs } from "./blobs.mjs";
 
 const require = createRequire(import.meta.url);
@@ -462,6 +462,29 @@ test("accounts: favorites: named settings, replaced by name, at most 15, removab
   const r = await acct("POST", "unfavorite", { name: "fav 3" }, token);
   assert.equal(r.data.favorites.length, 14);
   assert.ok(!r.data.favorites.some((f) => f.name === "FAV 3"));
+});
+
+test("accounts: achievements earned before they existed, from the leaderboards (own name, renamed scores it logged, scores posted from it)", async () => {
+  const name = "RETRO RJ";
+  const { token } = (await acct("POST", "signup", { name, password: "pw12" })).data;
+  const nameCheck = nameChecker(blobs.accountStore), whoIs = accountOf(blobs.accountStore);
+  const post = (board, nm, score, tok, withBy) => handle(new Request("http://x/api/scores", { method: "POST", headers: tok ? { authorization: "Bearer " + tok } : {}, body: JSON.stringify({ board, name: nm, score }) }),
+    blobs.store, { env, nameCheck, ...(withBy ? { accountOf: whoIs } : {}) }).then((r) => r.json());
+  const K4 = "junior.0.f.f.f.3.1.f.0.4.t.f.f", K2 = "junior.0.f.f.f.3.1.f.0.2.t.f.f", KYOLO = "junior.0.f.f.f.1.1.f.0.4.t.f.f", KFART = "junior.1.f.f.f.3.1.f.0.4.t.f.f", KBY = "junior.2.f.f.f.3.1.f.0.4.t.f.f";
+  await post(K4, name, 160000, token);            // under its own name, 4 ghosts: the score ones up to the rj special
+  await post(K2, name, 1000000, token);           // 2 ghosts: the 4-ghost minimum says no
+  await post(KYOLO, name, 31000, token);          // 1 starting life: yolo 1-3
+  await post(KFART, "FART", 210000);             // another name, logged out (an old score) ...
+  await acct("POST", "placed", { board: KFART, rank: 1, score: 210000, settings: "difficulty hard" }, token); // ... but it logged it: elroy master
+  const by = await post(KBY, "ALIAS", 600000, token, true); // posted logged in under another name: kept as its (elroy legend)
+  assert.ok(by.entries.every((e) => !("by" in e)), "the account it was posted from is never sent out");
+  assert.equal((await blobs.store.get(KBY, { type: "json" })).find((e) => e.name === "ALIAS").by, name, "but it's kept with the entry");
+  const get = async () => (await handleAccounts(new Request("http://x/api/account/achievements", { headers: { authorization: "Bearer " + token } }), blobs.accountStore, { failDelay: 0, env, scoresStore: blobs.store })).json();
+  const d = await get();
+  assert.deepEqual([...d.retro].sort(), ["blinky", "clyde", "inky", "legend", "master", "pinky", "rj", "yolo", "yolo2", "yolo3"]);
+  for (const id of d.retro) assert.ok(d.achievements[id], id + " saved");
+  assert.ok(!d.achievements.god, "not elroy god (the million was with 2 ghosts)");
+  assert.equal((await get()).retro, undefined, "checked once (per RETRO_VERSION)");
 });
 
 test("accounts: logged-out scores that place are logged (with the client's summary); logged-in and unplaced ones aren't", async () => {

@@ -26,6 +26,9 @@ export async function readBody(req) {
   try { const b = JSON.parse(text); return b && typeof b === "object" ? b : null; } catch { return null; }
 }
 export const tidy = (entries) => (Array.isArray(entries) ? entries : []).filter((e) => e && typeof e.score === "number" && typeof e.name === "string");
+// what a board shows: name, score, date. An entry posted while logged in also keeps the account that posted it ("by":
+// achievements earned before they existed, even under another name; 2026-11-15), never sent out
+export const shown = (entries) => entries.map(({ name, score, at }) => ({ name, score, at }));
 
 /** read-modify-write of one JSON blob, conditional on what was read (retried if someone else wrote first).
  *  change(current | null) returns { value, result } to write, or { result } alone to leave the blob as it is. */
@@ -45,7 +48,7 @@ export async function updateJSON(store, key, change) {
 /** put a score into a top-10 blob -> { entries, rank } (rank null: didn't place), or null if the store stayed busy.
  *  unique: one entry per name (arena boards): a better score replaces that name's old one; a worse one doesn't place
  *  ({ rank: null, best: <their score on the board> }). */
-export function addScore(store, key, name, score, unique) {
+export function addScore(store, key, name, score, unique, by) {
   return updateJSON(store, key, (data) => {
     const entries = tidy(data);
     const mine = unique ? entries.find((e) => e.name === name) : null;
@@ -54,7 +57,7 @@ export function addScore(store, key, name, score, unique) {
     const i = placeOf(others, score);
     if (i < 0) return { result: { entries, rank: null } };
     const next = others.slice();
-    next.splice(i, 0, { name, score, at: new Date().toISOString() });
+    next.splice(i, 0, { name, score, at: new Date().toISOString(), ...(by ? { by } : {}) });
     next.length = Math.min(next.length, BOARD_SIZE);
     return { value: next, result: { entries: next, rank: i + 1 } };
   });
@@ -101,7 +104,7 @@ export async function handle(req, store, opts = {}) {
   if (req.method === "GET") {
     const board = new URL(req.url).searchParams.get("board");
     if (!isKey(board)) return json(400, { error: "bad board" });
-    return json(200, { board, entries: tidy(await store.get(board, { type: "json" })) });
+    return json(200, { board, entries: shown(tidy(await store.get(board, { type: "json" }))) });
   }
 
   if (req.method === "POST") {
@@ -113,12 +116,13 @@ export async function handle(req, store, opts = {}) {
     if (!name) return json(400, { error: "bad name" });
     if (!Number.isInteger(score) || score < 1 || score > MAX_SCORE) return json(400, { error: "bad score" });
     if (opts.nameCheck && !(await opts.nameCheck(req, name))) return json(403, { error: "name taken" });
-    const r = await addScore(store, board, name, score);
+    const by = opts.accountOf ? await opts.accountOf(req) : null; // the logged-in account, if any (kept, never shown)
+    const r = await addScore(store, board, name, score, false, by);
     if (r && r.rank && opts.logAnon) { // a logged-out score that placed: on the activity page (settings: the client's summary)
       const settings = typeof body.settings === "string" ? body.settings.replace(/[^\x20-\x7e]/g, "").slice(0, 160) : "";
       await opts.logAnon(req, "anonscore", name, JSON.stringify([r.rank, score, settings || board]));
     }
-    return r ? json(200, { board, ...r }) : json(409, { error: "busy, try again" });
+    return r ? json(200, { board, ...r, entries: shown(r.entries) }) : json(409, { error: "busy, try again" });
   }
 
   return json(405, { error: "method not allowed" });

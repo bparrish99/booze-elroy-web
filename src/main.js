@@ -209,7 +209,8 @@
     rwd = BoozeRewind.create(core);
     LB.attach(core);
     const toast = (text, ms) => { core.g.toast = { text, until: performance.now() + (ms || 2500) }; }; // "\n" for a second line
-    ACC.attach({ wakka: () => LB.wakka(), setScene: (n, o) => core.setScene(n, o), toast });
+    ACC.attach({ wakka: () => LB.wakka(), setScene: (n, o) => core.setScene(n, o), toast,
+      unlocked: (got) => { if (livePlay()) held.push(...got); else showUnlocked(got); } }); // achievements earned before they existed (account.js)
     // achievements just earned share one popup (a game over and the board it lands on add up while it's showing).
     // Earned during a real game (any mode: playing, rewinding, dying, an intermission, game over): saved at once, the
     // popup held until the game is over or left (the author: never on screen mid-game).

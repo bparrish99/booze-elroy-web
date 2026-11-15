@@ -49,6 +49,8 @@
         if (res.status === 401) { save(null); return; }
         const d = res.ok ? await res.json() : null;
         ach = d && d.achievements ? { status: "ok", have: { ...d.achievements, ...ach.have } } : { status: "error", have: ach.have };
+        // earned before they existed, found on the leaderboards just now (the server saved them): say so
+        if (d && Array.isArray(d.retro) && d.retro.length && hooks && hooks.unlocked) hooks.unlocked(d.retro.map((id) => ACH.byId(id)).filter(Boolean));
       } catch { if (me === was) ach = { status: "error", have: ach.have }; }
     }
     /** earn an achievement (logged in only): the achievement the first time (shown at once, saved in the background), else null */
