@@ -25,7 +25,7 @@
       // its output turned down ~9 dB: the clipping stage lifts quiet sounds about 3x and the honk adds 7 dB, so the game
       // came out far louder than in the other looks (the author); the cracks / hisses / buzzes go in through fx, turned
       // up to match, so they stay as loud as they were tuned
-      const out = ctx.createGain(); out.gain.value = 0.3;
+      const out = ctx.createGain(); out.gain.value = 0.2; // (0.3 was still a bit loud)
       const fx = ctx.createGain(); fx.gain.value = 2.8; fx.connect(master);
       hp.connect(lp); lp.connect(honk); honk.connect(shaper); shaper.connect(wire); wire.connect(out); out.connect(ctx.destination);
       // noise for the cracks and hisses (a steady bed of pops was tried: "a geiger counter")
