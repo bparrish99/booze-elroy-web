@@ -73,8 +73,6 @@
       return m + Math.floor(r * (n - m + 1));
     };
     const isDown = env.isDown || (() => false);
-    // web edition: the Pause ability needs to know whether the ability button is still held (keyboard, gamepad, touch)
-    const abilityHeld = env.abilityHeld || (() => isDown("space") || isDown("lalt"));
     const makeSound = env.makeSound || ((name, loop) => new StubSound(loop));
 
     const animations = DATA.animations;
@@ -119,9 +117,9 @@
     // web edition: the Rewind ability (env.rewind does the work, see rewind.js). Every gameplay check sees it as "Off":
     // only the ability button behaves differently
     const REWIND = 4;
-    // web edition: the Pause ability (author's design; 2026-11-15 the author's rework): holding the ability button
-    // freezes every ghost (eyes too), up to PAUSE_MAX frames (2 s); letting go ends it (the rest is lost). Pac-Man moves
-    // freely. One charge per life and per board, refilled at READY and by an energizer, like Suck and Blow
+    // web edition: the Pause ability (author's design; 2026-11-15 the author's rework): a press of the ability button
+    // freezes every ghost (eyes too) for PAUSE_MAX frames (2 s; a fixed length, not held: easier on phones, the author).
+    // Ghost-eat pauses don't use it up. Pac-Man moves freely. One charge per life and per board, refilled at READY and by an energizer, like Suck and Blow
     // (g.pauseSpent; g.freezeLeft: frames of freeze left). (Until then it stopped Pac-Man instead, with a 1 s reload)
     // Like Rewind, every gameplay check sees it as "Off"
     const PAUSE = 5, PAUSE_MAX = 120;
@@ -150,7 +148,7 @@
     function ability() { const a = curAbility(); return a === REWIND || a === PAUSE || a === VACUUM || a === PUSH ? false : a; }
     const freezeGhosts = () => {
       if (g.pauseSpent || g.mode !== "normal") return;
-      g.pauseSpent = true; g.freezeLeft = PAUSE_MAX;
+      g.pauseSpent = true; g.freezeLeft = PAUSE_MAX; g.freezeEaten = 0;
       if (g.sounds.phase.isPlaying()) g.sounds.phase.stop();
       g.sounds.phase.play();
     };
@@ -862,6 +860,7 @@
           g.sounds.thrust.stop();
           g.sounds.ateGhost.play();
           if (T(g.ghostScore)) g.ghostScore = g.ghostScore * 2; else g.ghostScore = g.fruitFrightened ? 400 : 200;
+          if (g.freezeLeft > 0 && (g.freezeEaten = (g.freezeEaten || 0) + 1) === 4 && env.feat) env.feat("now"); // four in one Pause
           score(g.ghostScore);
           return true;
         } else if (!ghost.dead) {
@@ -1844,7 +1843,7 @@
               g.radarTimer -= 1;
             }
           }
-          if (g.freezeLeft > 0) { if (abilityHeld()) g.freezeLeft -= 1; else g.freezeLeft = 0; } // the Pause: let go, it's over
+          if (g.freezeLeft > 0) g.freezeLeft -= 1; // the Pause's freeze running down
           if (T(pac.phased)) {
             pac.phased -= 1;
             if (pac.phased === -60) { pac.phased = false; g.sounds.reload.play(); }

@@ -52,6 +52,7 @@
     // a single use of an ability (the author, 2026-11-15): core.js tells main.js through env.feat
     { id: "hoover", name: "hoover deluxe", desc: "Eat four ghosts with a single use of Suck." },
     { id: "space", name: "personal space", desc: "Blow four ghosts away with a single use of Blow." },
+    { id: "now", name: "the power of now", desc: "Eat four ghosts during a single use of Pause." },
 
     { id: "clyde", name: "clyde", desc: "Score 10,000 points in a game with " + G4 + ".", score: 10000, minGhosts: 4 },
     { id: "inky", name: "inky", desc: "Score 30,000 points in a game with " + G4 + ".", score: 30000, minGhosts: 4 },
