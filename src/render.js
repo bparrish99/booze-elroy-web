@@ -812,9 +812,8 @@
       for (const d of sc.decor) print(d.text, d.x, d.y, d.o);
       drawMenu(sc.menu, 0, 0, 1);
     }
-    // web edition: the player's profile (src/account.js): name (shimmering), achievements (a row each, plus one for the date once earned; "prev 1/2 next" when they don't fit), (earned: yellow with the date; not yet:
-    // dimmed). Hovering / tapping a name shows its description (an HTML popup, main.js). Rows 8-29 (account.js layout)
-    const localDate = (ms) => { const d = new Date(ms), p2 = (n) => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()); };
+    // web edition: the player's profile (src/account.js): name (shimmering), achievements (a row each; "prev 1/2 next" when they don't fit), (earned: yellow; not yet:
+    // dimmed). Hovering / tapping a name shows its description and, once earned, "Achieved: MM/DD/YYYY" (an HTML popup, main.js). Rows 8-29 (account.js layout)
     function drawProfile() {
       const sc = g.scene;
       begin(true); drawHeader();
@@ -829,8 +828,7 @@
       else sc.pageItems().forEach((a) => {
         const y = a.y;
         if (!a.earned) ctx.globalAlpha = 0.45;
-        print(a.name, 3, y, a.earned ? 6 : 0);
-        if (a.earned) print(localDate(a.earned), 4, y + 1, 0);
+        print(a.name, 3, y, a.earned ? 6 : 0); // (the date it was earned is in its hover popup)
         ctx.globalAlpha = 1;
       });
       drawMenu(sc.menu, 12, 33, 1);

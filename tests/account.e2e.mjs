@@ -225,12 +225,12 @@ try {
   { // hovering an achievement's name: its description in a popup; off it, gone
     const r = await p.evaluate(() => { const c = document.getElementById("screen").getBoundingClientRect(); return { x: c.left, y: c.top, w: c.width, h: c.height }; });
     await p.mouse.move(r.x + (3 * 8 + 20) / 224 * r.w, r.y + (8 * 8 + 4) / 288 * r.h);
-    check(await p.evaluate(() => document.getElementById("tip").classList.contains("on") && document.getElementById("tip").textContent) === "Finish a game.", "hovering an achievement shows its description");
+    check(await p.evaluate(() => document.getElementById("tip").classList.contains("on") && document.getElementById("tip").textContent) === "Finish a game.\nAchieved: " + await p.evaluate(() => { const d = new Date(), p2 = (n) => String(n).padStart(2, "0"); return p2(d.getMonth() + 1) + "/" + p2(d.getDate()) + "/" + d.getFullYear(); }), "hovering an achievement shows its description and the date it was earned (MM/DD/YYYY)");
     await shot("acc7-tip");
-    // the last pixel row of the first name's date line is still the first achievement; the next row is the second
+    // the last pixel row of the first name's row is still the first achievement; the next row is the second
     const tipAt = async (gy) => { await p.mouse.move(r.x + (3 * 8 + 20) / 224 * r.w, r.y + gy / 288 * r.h); return p.evaluate(() => document.getElementById("tip").textContent); };
     const first = await p.evaluate(() => window.__core.g.scene.pageItems()[0]), second = await p.evaluate(() => window.__core.g.scene.pageItems()[1]);
-    check(await tipAt(second.y * 8 - 0.5) === first.desc && await tipAt(second.y * 8 + 0.5) === second.desc, "hover boxes switch exactly at the next row");
+    check((await tipAt(second.y * 8 - 0.5)).startsWith(first.desc) && (await tipAt(second.y * 8 + 0.5)).startsWith(second.desc), "hover boxes switch exactly at the next row");
     await p.mouse.move(r.x + r.w / 2, r.y + 40 / 288 * r.h);
     check(await p.evaluate(() => !document.getElementById("tip").classList.contains("on")), "moving off hides it");
   }
@@ -243,7 +243,7 @@ try {
       sc.page = 0; return out.map((pg) => pg.map((a) => ({ name: a.name, y: a.y, earned: !!a.earned })));
     });
     const all = pages.flat(), count = await p.evaluate(() => window.BoozeAchievements.LIST.length);
-    check(all.length === count && all.every((a) => a.y >= 8 && a.y + (a.earned ? 1 : 0) <= 29), "every achievement fits on a page (" + pages.length + " page(s))");
+    check(all.length === count && all.every((a) => a.y >= 8 && a.y <= 29), "every achievement fits on a page (" + pages.length + " page(s))");
     if (pages.length > 1) {
       await p.keyboard.press("ArrowRight");
       check(await p.evaluate(() => window.__core.g.scene.page) === 1, "right: the next page");

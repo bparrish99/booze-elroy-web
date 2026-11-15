@@ -65,8 +65,9 @@
     // ---------------------------------------------------------------- profile scene
     // hooks: wakka() (menu-move sound), setScene(name, opt), toast(text)
     let hooks = null;
-    // where render.js drawProfile puts things: the list in rows 8-29, one row per achievement plus a row for the date
-    // once it's earned, as many as fit on a page; the "prev  1/2  next" line on row 6 (PAGE_ROW)
+    // where render.js drawProfile puts things: the list in rows 8-29, one row per achievement (the date it was earned is
+    // in its hover popup: the author, 2026-11-15, it had a row of its own), as many as fit on a page; the
+    // "prev  1/2  next" line on row 6 (PAGE_ROW)
     const ROW0 = 8, ROW_LAST = 29, NAME_X = 3, PAGE_ROW = 6;
     /** [[{ name, desc, earned, y }]]: the achievements split into pages, each with its row */
     function layout() {
@@ -74,9 +75,8 @@
       let y = ROW0;
       for (const a of ACH.LIST) {
         const it = { name: a.name, desc: a.desc, earned: ach.have[a.id] || null };
-        const h = it.earned ? 2 : 1;
-        if (y + h - 1 > ROW_LAST) { out.push([]); y = ROW0; }
-        out[out.length - 1].push({ ...it, y }); y += h;
+        if (y > ROW_LAST) { out.push([]); y = ROW0; }
+        out[out.length - 1].push({ ...it, y }); y += 1;
       }
       return out;
     }
@@ -95,9 +95,10 @@
       // the page's achievement names (hovering or tapping one shows its description: main.js, an HTML popup, link.tip),
       // and prev / next when there's more than one page
       get links() {
-        // exactly the achievement's own rows (the name, and the date under it once earned): the rows touch, so any
-        // padding would overlap the next one and switch late
-        const ls = this.pageItems().map((a) => ({ x0: NAME_X * 8 - 4, x1: (NAME_X + a.name.length) * 8 + 4, y0: a.y * 8, y1: (a.y + (a.earned ? 2 : 1)) * 8, tip: a.desc }));
+        // exactly the achievement's own row: the rows touch, so any padding would overlap the next one and switch late.
+        // The popup: its description, and once earned "Achieved: MM/DD/YYYY" (the player's local date)
+        const md = (ms) => { const d = new Date(ms), p2 = (n) => String(n).padStart(2, "0"); return p2(d.getMonth() + 1) + "/" + p2(d.getDate()) + "/" + d.getFullYear(); };
+        const ls = this.pageItems().map((a) => ({ x0: NAME_X * 8 - 4, x1: (NAME_X + a.name.length) * 8 + 4, y0: a.y * 8, y1: (a.y + 1) * 8, tip: a.desc + (a.earned ? "\nAchieved: " + md(a.earned) : "") }));
         if (pages() > 1) {
           const t = this.pageLabel(), x = 14 - t.length / 2, y = PAGE_ROW * 8;
           ls.push({ x0: x * 8 - 6, x1: (x + 4) * 8 + 6, y0: y - 4, y1: y + 12, action: () => this.flip(-1) });
