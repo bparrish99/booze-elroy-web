@@ -91,3 +91,17 @@ test("Push: works with Pac-Man standing in a side tunnel", () => {
   assert.equal(g.mode, "push");
   assert.equal(g.pushGhosts.length, 1, "Blinky gets blown");
 });
+
+test("Push: a ghost a tile short of a tunnel mouth is thrown well clear, not nudged one tile", () => {
+  // the author's repro: Blinky heading left along the tunnel row toward the pen, met from the left. Straight on, the
+  // only landing spot was the one tile before the tunnel (never landed in), and he moved one tile: it looked like
+  // nothing happened
+  const { core, g, cm } = start();
+  const b = g.chars.blinky;
+  Object.assign(b, { x: 21 * 8 + 4, y: 14 * 8 + 4, dir: 2, facing: 2, iDir: 2 });
+  Object.assign(g.chars.pac, { x: 18 * 8 + 4, y: 14 * 8 + 4, speed: 0 });
+  core.keypressed("space");
+  settle(core);
+  const [x, y] = tileOf(cm, b);
+  assert.ok(Math.hypot(x - 18, y - 14) >= 5, "at least 2 tiles further than the 3 he was (" + x + "," + y + ")");
+});

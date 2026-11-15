@@ -769,13 +769,18 @@
         let ux = gX - pX, uy = gY - pY;                                    // away from him (on his tile: behind him)
         if (!ux && !uy) { ux = back.x; uy = back.y; }
         const ul = Math.hypot(ux, uy); ux /= ul; uy /= ul;
-        let best = null, bestScore = -Infinity;
+        // the landing: far and along the line, both counting (the line used to count so much more that a ghost a tile
+        // short of a tunnel mouth was "pushed" one tile on, and it looked like nothing happened: the author); at least
+        // 2 tiles further than it was if anywhere allows, otherwise anywhere further at all
+        let best = null, bestScore = -Infinity, bestNear = null, bestNearScore = -Infinity;
         for (const key of open) {
           const [x, y] = key.split(",").map(Number), dx = x - pX, dy = y - pY, dd = Math.hypot(dx, dy);
           if (dd > PUSH_MAX || dd <= d0) continue;
-          const align = (dx * ux + dy * uy) / dd, score = align * 3 + dd * 0.25;
-          if (score > bestScore) { bestScore = score; best = [x, y]; }
+          const align = (dx * ux + dy * uy) / dd, score = align * 2 + dd * 0.6;
+          if (dd >= d0 + 2) { if (score > bestScore) { bestScore = score; best = [x, y]; } }
+          else if (score > bestNearScore) { bestNearScore = score; bestNear = [x, y]; }
         }
+        if (!best) best = bestNear;
         if (!best) continue;                                               // nowhere further to go: stays put
         // facing away: the open way out of the landing tile that best follows the push
         let dir = ch.dir, bestA = -Infinity;
