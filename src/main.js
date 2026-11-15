@@ -464,7 +464,7 @@
     // starts slowly isn't one) until it lifts or moves
     const touches = new Map(); let touchDir = null, twoFinger = false, touchHold = false, holdTimer = 0;
     const HOLD_MS = 120;
-    const pauseAbility = () => core.g.config.ability === core.PAUSE;
+    const pauseAbility = () => core.curAbility() === core.PAUSE;
     const endHold = () => { clearTimeout(holdTimer); touchHold = false; };
     const setTouchDir = (d) => {
       if (d === touchDir) return;

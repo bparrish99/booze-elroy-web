@@ -20,8 +20,8 @@ function start(ability) {
 }
 const eatEnergizer = (g) => { const e = g.powers.shift(); e.action(e.x, e.y); };
 
-test("Rewind, Suck and Blow: a spent charge comes back with an energizer", () => {
-  for (const [ab, flag] of [[4, "rewindSpent"], [6, "vacuumSpent"], [7, "pushSpent"]]) {
+test("Rewind, Pause, Suck and Blow: a spent charge comes back with an energizer", () => {
+  for (const [ab, flag] of [[4, "rewindSpent"], [5, "pauseSpent"], [6, "vacuumSpent"], [7, "pushSpent"]]) {
     const { g } = start(ab);
     g[flag] = true;
     eatEnergizer(g);
@@ -38,8 +38,8 @@ test("Suck: an energizer it swallows recharges it (they chain)", () => {
   assert.equal(g.vacuumSpent, false, "and is ready again");
 });
 
-test("Phase / Boost / Stun / Pause: an energizer leaves their reload alone (their own timers)", () => {
-  for (const ab of [1, 2, 3, 5]) {
+test("Phase / Boost / Stun: an energizer leaves their reload alone (their own timers)", () => {
+  for (const ab of [1, 2, 3]) {
     const { g } = start(ab);
     g.chars.pac.phased = -20;
     eatEnergizer(g);

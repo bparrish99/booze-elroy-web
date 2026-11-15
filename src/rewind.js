@@ -16,7 +16,7 @@
   const HOLD = 45;      // then everything holds still this many frames (about Suck's / Blow's stop: the author), so you see where you are
   // plain values on g that aren't part of the play to rewind (settings, scene and mode bookkeeping, presentation)
   const SKIP = new Set(["scaleOption", "autoplay", "currentMaze", "mode", "attract", "muted", "levelNumber", "paused",
-    "currentMazeColor", "currentBackground", "modeTimer", "diedSoundPlayed", "newLevel", "rewindSpent", "rewinding"]);
+    "currentMazeColor", "currentBackground", "modeTimer", "diedSoundPlayed", "newLevel", "rewindSpent", "rewinding", "randomAbility"]);
   // state kept in objects, captured explicitly
   const OBJECTS = new Set(["state", "particles", "powers", "dots", "chars", "level"]);
 
@@ -64,7 +64,7 @@
     let lastMode = null;
     g.rewindSpent = false; g.rewinding = false;
     // the attract demo and autoplay use it too (the autoplayer rewinds when a ghost gets too close, like the other abilities)
-    const enabled = () => g.scene.name === "game" && g.config.ability === core.REWIND;
+    const enabled = () => g.scene.name === "game" && core.curAbility() === core.REWIND;
 
     /** after every game frame: keep the history, refill the charge on a new life / board */
     function record() {

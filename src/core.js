@@ -119,11 +119,12 @@
     // web edition: the Rewind ability (env.rewind does the work, see rewind.js). Every gameplay check sees it as "Off":
     // only the ability button behaves differently
     const REWIND = 4;
-    // web edition: the Pause ability (author's design, 2026-11-13). Holding the ability button stops Pac-Man in his
-    // tracks, up to PAUSE_MAX frames; then it reloads for PAUSE_COOLDOWN frames, like Phase and Boost. Uses pac.phased
-    // the abilities' way: > 0 while held (frames left), counting down from 0 to -PAUSE_COOLDOWN while it reloads.
-    // Like Rewind, every gameplay check sees it as "Off"; only Pac-Man's own movement stops
-    const PAUSE = 5, PAUSE_MAX = 90, PAUSE_COOLDOWN = 60;
+    // web edition: the Pause ability (author's design; 2026-11-15 the author's rework): holding the ability button
+    // freezes every ghost (eyes too), up to PAUSE_MAX frames (2 s); letting go ends it (the rest is lost). Pac-Man moves
+    // freely. One charge per life and per board, refilled at READY and by an energizer, like Suck and Blow
+    // (g.pauseSpent; g.freezeLeft: frames of freeze left). (Until then it stopped Pac-Man instead, with a 1 s reload)
+    // Like Rewind, every gameplay check sees it as "Off"
+    const PAUSE = 5, PAUSE_MAX = 120;
     // web edition: the Vacuum ability (author's design, 2026-11-14): one charge per life and per board (refilled at every
     // READY, like Rewind; g.vacuumSpent). The button sucks up everything within VACUUM_RADIUS tiles in a straight line,
     // through walls: energizers first (so a ghost they turn blue is eaten, not deadly), then dots, the fruit, and ghosts
@@ -137,10 +138,19 @@
     // a flood fill from him, the house and tunnels left out) that best lies along that line, at most PUSH_MAX tiles from
     // him, facing away. Play stops while they fly (mode "push", PUSH_FX frames). No daze (the author)
     const PUSH = 7, PUSH_REACH = 4, PUSH_MAX = 8, PUSH_FX = 40;
-    function ability() { const a = g.config.ability; return a === REWIND || a === PAUSE || a === VACUUM || a === PUSH ? false : a; }
-    const pausing = () => g.config.ability === PAUSE && T(g.chars.pac.phased) && g.chars.pac.phased > 0;
-    const pausePac = () => {
-      g.chars.pac.phased = PAUSE_MAX;
+    // web edition: the Random ability (the author, 2026-11-15): a new one of the seven picked at every new board (never
+    // the same twice running; kept through lives lost on that board), with the game's own RNG so it replays the same.
+    // curAbility() is the ability in play: the setting, or Random's pick; everything asks it, not the setting
+    const RANDOM = 8, ABILITY_NAMES = ["", "phase", "boost", "stun", "rewind", "pause", "suck", "blow"];
+    function curAbility() { return g.config.ability === RANDOM ? (g.randomAbility || 1) : g.config.ability; }
+    function pickRandomAbility() {
+      const pool = [1, 2, 3, 4, 5, 6, 7].filter((a) => a !== g.randomAbility);
+      g.randomAbility = pool[rand(pool.length) - 1];
+    }
+    function ability() { const a = curAbility(); return a === REWIND || a === PAUSE || a === VACUUM || a === PUSH ? false : a; }
+    const freezeGhosts = () => {
+      if (g.pauseSpent || g.mode !== "normal") return;
+      g.pauseSpent = true; g.freezeLeft = PAUSE_MAX;
       if (g.sounds.phase.isPlaying()) g.sounds.phase.stop();
       g.sounds.phase.play();
     };
@@ -695,15 +705,16 @@
         }
       }
     };
-    // web edition (the author, 2026-11-14): the one-charge abilities (Rewind, Suck, Blow) refill at every READY (a new
+    // web edition (the author, 2026-11-14): the one-charge abilities (Rewind, Suck, Blow; Pause since 2026-11-15) refill at every READY (a new
     // life, a new board) and, new, when Pac-Man eats an energizer; the reload sound says so. Energizers the Suck swallows
     // recharge it too, so sucked energizers chain. (Phase / Boost / Stun / Pause keep their own reload timers)
     function rechargeAbilities() {
-      const a = g.config.ability;
+      const a = curAbility();
       let did = false;
       if (a === REWIND && g.rewindSpent && !g.rewinding) { g.rewindSpent = false; did = true; }
       if (a === VACUUM && g.vacuumSpent) { g.vacuumSpent = false; did = true; }
       if (a === PUSH && g.pushSpent) { g.pushSpent = false; did = true; }
+      if (a === PAUSE && g.pauseSpent && !(g.freezeLeft > 0)) { g.pauseSpent = false; did = true; }
       if (did) g.sounds.reload.play();
     }
     function vacuum() {
@@ -1133,6 +1144,7 @@
             if (!g.attract) for (const k of Object.keys(g.music)) if (g.music[k].isPlaying()) g.music[k].stop();
             for (const p of g.powers) p.frame = 1;
             g.chars.pac.frame = 1;
+            if (g.config.ability === RANDOM && (g.newLevel || !g.randomAbility)) pickRandomAbility(); // Random: a new board's pick
             if (g.newLevel) g.newLevel = false; else g.lives = g.lives - 1;
             if (g.lives < 0) mode.setMode("gameover");
             else {
@@ -1142,6 +1154,7 @@
               g.starvation = 0;
               g.vacuumSpent = false; g.vacuumQueue = []; g.vacuumFx = 0; g.vacuumFly = []; g.vacuumGhosts = []; // the Vacuum's charge, back at every READY
               g.pushSpent = false; g.pushGhosts = []; g.pushFx = 0;             // and the Push's
+              g.pauseSpent = false; g.freezeLeft = 0;                            // and the Pause's
               characters.reset();
               levels.resetLevel();
             }
@@ -1504,8 +1517,8 @@
           isScaryMonster(oneAhead.xTile, oneAhead.yTile, (pac.dir + 1) % 4, 1) ||
           isScaryMonster(oneAhead.xTile, oneAhead.yTile, mod(pac.dir - 1, 4), 1)) {
           if (T(ability()) && !T(pac.phased)) phasePac();
-          if (g.config.ability === REWIND && env.rewind) env.rewind(); // web edition: the autoplayer rewinds out of trouble too
-          if (g.config.ability === PUSH) push(); // web edition: and blows them away (once a life / board / energizer)
+          if (curAbility() === REWIND && env.rewind) env.rewind(); // web edition: the autoplayer rewinds out of trouble too
+          if (curAbility() === PUSH) push(); // web edition: and blows them away (once a life / board / energizer)
           if (!T(pac.phased)) {
             pac.iDir = (pac.dir + 2) % 4;
             return;
@@ -1785,6 +1798,7 @@
         g.scenery = {};
         if (g.attract) mode.setMode("ready"); else mode.setMode("pregame");
         g.lives = g.config.startingLives;
+        g.randomAbility = null; // (Random picks afresh for a new game)
         if (!g.attract) g.score = 0;
         g.paused = false;
         g.wakka = false;
@@ -1824,11 +1838,8 @@
               g.radarTimer -= 1;
             }
           }
-          if (g.config.ability === PAUSE && T(pac.phased)) {
-            if (pac.phased > 0 && !abilityHeld()) pac.phased = 1; // let go: the reload starts now
-            pac.phased -= 1;
-            if (pac.phased === -PAUSE_COOLDOWN) { pac.phased = false; g.sounds.reload.play(); }
-          } else if (T(pac.phased)) {
+          if (g.freezeLeft > 0) { if (abilityHeld()) g.freezeLeft -= 1; else g.freezeLeft = 0; } // the Pause: let go, it's over
+          if (T(pac.phased)) {
             pac.phased -= 1;
             if (pac.phased === -60) { pac.phased = false; g.sounds.reload.play(); }
             if (pac.phased === 0 && (g.config.movement === 0 || g.config.movement === 1) && ability() === 2) pac.speed = logic.getPacSpeed();
@@ -1852,11 +1863,11 @@
           handleModeSwitching();
           handlePlayerInput();
           g.ghostEatenThisFrame = false;
-          const held = pausing(); // the Pause ability: Pac-Man stands still (turns too wait for him to move again)
-          if (!held) logic.turn(g.chars.pac);
+          const frozen = g.freezeLeft > 0; // the Pause ability: the ghosts stand still
+          logic.turn(g.chars.pac);
           for (const name of charKeys()) {
             const char = g.chars[name];
-            if (held && char === g.chars.pac) { char.moved = false; continue; }
+            if (frozen && char !== g.chars.pac) { char.moved = false; continue; }
             if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
           }
           if (T(g.fruitTimer)) {
@@ -1869,7 +1880,7 @@
             graphics.emitBlinkyBubbles(b.x, b.y);
           }
           graphics.updateParticles();
-          if (g.chars.pac.moved || (g.config.movement === 3 && g.chars.pac.speed > 0.3 && !held)) graphics.updateAnimation(g.chars.pac, gameFc);
+          if (g.chars.pac.moved || (g.config.movement === 3 && g.chars.pac.speed > 0.3)) graphics.updateAnimation(g.chars.pac, gameFc);
         } else if (g.mode === "ateGhost") {
           for (const name of charKeys()) {
             const c = g.chars[name];
@@ -1880,7 +1891,7 @@
         if (g.chars && g.mode !== "playerUp" && g.mode !== "ready" && g.mode !== "levelComplete") {
           for (const p of g.powers) graphics.updateAnimation(p, gameFc);
           if (g.mode !== "ateGhost") {
-            for (const name of charKeys()) { const c = g.chars[name]; if (c.target) graphics.updateAnimation(c, gameFc); }
+            if (!(g.freezeLeft > 0)) for (const name of charKeys()) { const c = g.chars[name]; if (c.target) graphics.updateAnimation(c, gameFc); } // (frozen: not even their feet)
           }
         }
 
@@ -1939,18 +1950,18 @@
           g.muted = !g.muted;
           return;
         }
-        if (abilityKeys() && (key === "space" || key === "lalt") && g.config.ability === REWIND && env.rewind) env.rewind();
-        if (abilityKeys() && (key === "space" || key === "lalt") && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
-        if (abilityKeys() && (key === "space" || key === "lalt") && g.config.ability === VACUUM) vacuum();
-        if (abilityKeys() && (key === "space" || key === "lalt") && g.config.ability === PUSH) push();
+        if (abilityKeys() && (key === "space" || key === "lalt") && curAbility() === REWIND && env.rewind) env.rewind();
+        if (abilityKeys() && (key === "space" || key === "lalt") && curAbility() === PAUSE) freezeGhosts();
+        if (abilityKeys() && (key === "space" || key === "lalt") && curAbility() === VACUUM) vacuum();
+        if (abilityKeys() && (key === "space" || key === "lalt") && curAbility() === PUSH) push();
         if (abilityKeys() && (key === "space" || key === "lalt") && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (key === "tab" || key === "p") togglePause();
       },
       gamepadpressed(button) {
-        if (abilityKeys() && button === "a" && g.config.ability === REWIND && env.rewind) env.rewind();
-        if (abilityKeys() && button === "a" && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
-        if (abilityKeys() && button === "a" && g.config.ability === VACUUM) vacuum();
-        if (abilityKeys() && button === "a" && g.config.ability === PUSH) push();
+        if (abilityKeys() && button === "a" && curAbility() === REWIND && env.rewind) env.rewind();
+        if (abilityKeys() && button === "a" && curAbility() === PAUSE) freezeGhosts();
+        if (abilityKeys() && button === "a" && curAbility() === VACUUM) vacuum();
+        if (abilityKeys() && button === "a" && curAbility() === PUSH) push();
         if (abilityKeys() && button === "a" && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (button === "x") togglePause();
       },
@@ -1996,7 +2007,7 @@
       Object.assign(opt("radar", [false, 30, 60, 90, 120], ["Off", "Tame", "Tricky", "Tough", "Terror"]), { y: 9 }),
       Object.assign(opt("startingLives", [1, 3, 5]), { y: 12 }),
       Object.assign(opt("freeGuy", [1, 2, 3, 4, 5], ["10000", "20000", "every 10k", "every 5k", "none"]), { y: 13 }),
-      Object.assign(opt("ability", [false, 1, 2, 3, 4, 5, 6, 7], ["Off", "Phase", "Boost", "Stun", "Rewind", "Pause", "Suck", "Blow"]), { y: 14 }),
+      Object.assign(opt("ability", [false, 1, 2, 3, 4, 5, 6, 7, 8], ["Off", "Phase", "Boost", "Stun", "Rewind", "Pause", "Suck", "Blow", "Random"]), { y: 14 }),
       Object.assign(opt("movement", [0, 1, 2, 3], ["Normal", "Faster", "Fastest", "Jetpack"]), { y: 15 }),
       Object.assign(opt("ghostCount", range(0, 7)), { y: 18 }),
       Object.assign(ON_OFF("pinkyBug"), { y: 19 }),
@@ -2040,7 +2051,7 @@
     const OPT_VALUES = {
       mazepack: PACKS, startingLevel: range(1, 21), difficulty: [0, 1, 2], plusMode: [false, true],
       afterDark: [false, 1, 2, 3, 4, 5], radar: [false, 30, 60, 90, 120], startingLives: [1, 3, 5], freeGuy: [1, 2, 3, 4, 5],
-      ability: [false, 1, 2, 3, 4, 5, 6, 7], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
+      ability: [false, 1, 2, 3, 4, 5, 6, 7, 8], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
       scatterOption: [false, 1, 2, 3], freeGhost: [true, false], background: bgNames, mazeColor: MAZE_COLORS,
       crtEffect: [true, false], volume: range(0, 10), proMode: [false, true],
     };
@@ -2133,7 +2144,7 @@
 
     return {
       g, init, setScene, keypressed, update: () => g.scene.update(FIXED_DT),
-      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, REWIND, PAUSE, VACUUM, VACUUM_FX, PUSH, PUSH_FX, PUSH_MAX,
+      FIXED_DT, mode, maze, levels, graphics, getCurrentMaze, applyVolume, applyMusicVolume, resetConfigs, rand, curAbility, ABILITY_NAMES, RANDOM, REWIND, PAUSE, VACUUM, VACUUM_FX, PUSH, PUSH_FX, PUSH_MAX,
       // web edition (rewind.js): put the looping sounds back in line with the game state, the way the game itself picks
       // them: eyes heading home -> "dead", any ghost frightened -> "scared", otherwise the siren for the dots left
       resyncLoops() {

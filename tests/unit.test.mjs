@@ -61,7 +61,7 @@ test("share codes: short, reversible for every option value, reject junk", () =>
   for (const [k, vals] of SK.FIELDS) for (const v of vals) {
     const cfg = { ...def, [k]: v }, code = SK.shareCode(cfg);
     // Rewind needs the 7-character format, Pause the 8-character one
-    assert.match(code, k === "ability" && v === 4 ? /^[0-9a-z]{7}$/ : k === "ability" && v === 5 ? /^[0-9a-z]{8}$/ : k === "ability" && v === 6 ? /^[0-9a-z]{9}$/ : k === "ability" && v === 7 ? /^[0-9a-z]{10}$/ : /^[0-9a-z]{6}$/);
+    assert.match(code, k === "ability" && v === 4 ? /^[0-9a-z]{7}$/ : k === "ability" && v === 5 ? /^[0-9a-z]{8}$/ : k === "ability" && v === 6 ? /^[0-9a-z]{9}$/ : k === "ability" && v === 7 ? /^[0-9a-z]{10}$/ : k === "ability" && v === 8 ? /^[0-9a-z]{11}$/ : /^[0-9a-z]{6}$/);
     assert.equal(SK.keyFor(SK.configFromCode(code)), SK.keyFor(cfg), k + "=" + v);
     seen.add(code);
   }
@@ -113,6 +113,10 @@ test("share codes: links shared before Rewind existed still mean the same settin
   const pu = { ...def, ability: 7 }, pucode = SK.shareCode(pu);
   assert.match(pucode, /^[0-9a-z]{10}$/);
   assert.deepEqual(SK.configFromCode(pucode), pu);
+  assert.equal(pucode, "00012gwirq"); // 10-character (Blow) codes stay the same now that Random exists (11 characters)
+  const ra = { ...def, ability: 8 }, racode = SK.shareCode(ra);
+  assert.match(racode, /^[0-9a-z]{11}$/);
+  assert.deepEqual(SK.configFromCode(racode), ra);
 });
 
 test("achievements: the list the server checks ids against", () => {

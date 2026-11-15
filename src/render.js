@@ -146,13 +146,11 @@
         setColor(1, 1, 1, alpha / 60);
       }
       if (T(phased)) {
-        const ab = g.config.ability;
+        const ab = core.curAbility();
         if (ab === 1) {
           if (phased >= 0) setColor(Math.random(), Math.random(), Math.random()); else setHollow();
         } else if (ab === 2) {
           if (phased < 0) setHollow(); // web edition: plain yellow while boosting (the Lua tinted him green)
-        } else if (ab === core.PAUSE) {
-          if (phased < 0) setHollow(); // web edition: the Pause ability reloading
         } else if (ab === 3) {
           if (phased > 40) {
             const pac = g.chars.pac;
@@ -171,10 +169,11 @@
         }
       }
       // web edition: the Vacuum's charge, the same way: solid until it's used, hollow until the next READY
-      if (inGame && o === g.chars.pac && g.config.ability === core.VACUUM && g.vacuumSpent) setHollow();
-      if (inGame && o === g.chars.pac && g.config.ability === core.PUSH && g.pushSpent) setHollow();
+      if (inGame && o === g.chars.pac && core.curAbility() === core.VACUUM && g.vacuumSpent) setHollow();
+      if (inGame && o === g.chars.pac && core.curAbility() === core.PUSH && g.pushSpent) setHollow();
+      if (inGame && o === g.chars.pac && core.curAbility() === core.PAUSE && g.pauseSpent && !(g.freezeLeft > 0)) setHollow();
       // web edition: the Rewind ability's charge shows the abilities' way: solid when ready, hollow once used
-      if (inGame && o === g.chars.pac && g.config.ability === core.REWIND && g.rewindSpent && !g.rewinding) setHollow(); // full while it plays back; spent once it's done
+      if (inGame && o === g.chars.pac && core.curAbility() === core.REWIND && g.rewindSpent && !g.rewinding) setHollow(); // full while it plays back; spent once it's done
       let angle = 0;
       if (T(o.stunned)) angle = (o.stunned * 6 * (o.spinDirection > 0.5 ? 1 : -1)) * Math.PI / 180;
       blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0), angle, 8, 8);
@@ -329,6 +328,25 @@
         }
       });
     }
+    // web edition (the author, 2026-11-15): the ability in play, top right in a real game (where 2UP would be; the login
+    // corner shows there only on menus and in the demo): Pac-Man yellow while it's ready, a paler yellow once spent
+    function abilityReady() {
+      const a = core.curAbility(), pac = g.chars && g.chars.pac;
+      if (!a || !pac) return false;
+      if (a === 1 || a === 2 || a === 3) return !T(pac.phased);
+      if (a === core.REWIND) return !g.rewindSpent;
+      if (a === core.PAUSE) return !g.pauseSpent;
+      if (a === core.VACUUM) return !g.vacuumSpent;
+      if (a === core.PUSH) return !g.pushSpent;
+      return false;
+    }
+    function drawAbility() {
+      const a = core.curAbility(), name = core.ABILITY_NAMES[a];
+      if (!name) return;
+      const x = 28 - name.length;
+      if (abilityReady()) print(name, x, 0, 6);
+      else { setColor(1, 1, 0.55); print(name, x, 0, 0); setColor(1, 1, 1); }
+    }
     function drawHeader() {
       print("1up", 3, 0); print("high score", 9, 0);
       print(core.formatScore(g.score || 0), 0, 1, 0);
@@ -446,6 +464,7 @@
         if (g.attract || g.autoplay) drawHighScore();
         else if (g.highScore) print(core.formatScore(g.highScore), 10, 1);
         if (g.attract) drawAccount();
+        else drawAbility();
       }
       if (g.mode === "gameover") {
         print("game", cm.w / 2 - 5, cm.ready, 1, true);
@@ -499,8 +518,8 @@
       const routes = debug && g.state.showGhosts && !g.state.hideMaze ? ghostRoutes() : null;
       if (routes) drawRoutes(routes);
       if (g.state.showPac) drawChar(g.chars.pac, g.chars.pac.x, g.chars.pac.y, g.chars.pac.phased, true);
-      if (g.vacuumFx > 0 && g.config.ability === core.VACUUM) drawVacuum();
-      if (g.pushFx > 0 && g.config.ability === core.PUSH) drawPush();
+      if (g.vacuumFx > 0 && core.curAbility() === core.VACUUM) drawVacuum();
+      if (g.pushFx > 0 && core.curAbility() === core.PUSH) drawPush();
       if (g.state.showGhosts) {
         for (const name of core.charKeys()) { const c = g.chars[name]; if (c.target && !c.hidden) drawChar(c, c.x, c.y, false, true); }
       }
