@@ -22,7 +22,11 @@
       for (let i = 0; i < curve.length; i++) { const x = i / 511.5 - 1; curve[i] = Math.tanh(x * 3.2) / Math.tanh(3.2); }
       shaper.curve = curve;
       const wire = ctx.createGain(); wire.gain.value = 1;                       // the loose wire (dropouts)
-      const out = ctx.createGain(); out.gain.value = 0.85;
+      // its output turned down ~9 dB: the clipping stage lifts quiet sounds about 3x and the honk adds 7 dB, so the game
+      // came out far louder than in the other looks (the author); the cracks / hisses / buzzes go in through fx, turned
+      // up to match, so they stay as loud as they were tuned
+      const out = ctx.createGain(); out.gain.value = 0.3;
+      const fx = ctx.createGain(); fx.gain.value = 2.8; fx.connect(master);
       hp.connect(lp); lp.connect(honk); honk.connect(shaper); shaper.connect(wire); wire.connect(out); out.connect(ctx.destination);
       // noise for the cracks and hisses (a steady bed of pops was tried: "a geiger counter")
       const len = ctx.sampleRate * 2, noise = ctx.createBuffer(1, len, ctx.sampleRate), d = noise.getChannelData(0);
@@ -35,7 +39,7 @@
       capIn.gain.value = 0; fb.gain.value = 0; loopOut.gain.value = 0;
       split.connect(dry); dry.connect(hp);
       split.connect(capIn); capIn.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(loopOut); loopOut.connect(hp);
-      return { input: split, wire, noise, dry, capIn, delay, fb, loopOut };
+      return { input: split, wire, noise, dry, capIn, delay, fb, loopOut, fx };
     }
     // a crack (a snap, from a tick to a bang) or a hiss (a hard burst of static), through the master gain and the speaker
     let stuckUntil = 0;
@@ -52,7 +56,7 @@
       const osc = ctx.createOscillator(), of = ctx.createBiquadFilter(), og = ctx.createGain();
       osc.type = "square"; osc.frequency.value = 120; of.type = "lowpass"; of.frequency.value = 900;
       og.gain.setValueAtTime(0, t); og.gain.setValueAtTime(0.05, on); og.gain.setValueAtTime(0, off);
-      osc.connect(of); of.connect(og); og.connect(R.input); osc.start(t); osc.stop(off + 0.05);
+      osc.connect(of); of.connect(og); og.connect(R.fx); osc.start(t); osc.stop(off + 0.05);
     }
     // an electrical buzz (a bad ground, an arcing transformer), steady or sputtering. Dirty on purpose (clean oscillators
     // sounded like "a nice note from a synthesizer"): three detuned saws and a square beating against each other, hard
@@ -77,7 +81,7 @@
       const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 180;
       const spike = ctx.createBiquadFilter(); spike.type = "peaking"; spike.frequency.value = 1800 + Math.random() * 1200; spike.Q.value = 2; spike.gain.value = 9;
       const g = ctx.createGain();
-      clip.connect(hp); chop.connect(hp); hp.connect(spike); spike.connect(g); g.connect(master);
+      clip.connect(hp); chop.connect(hp); hp.connect(spike); spike.connect(g); g.connect(ruin.fx);
       const peak = 0.06 + Math.random() * 0.07;
       g.gain.setValueAtTime(0, t);
       if (Math.random() < 0.5) { g.gain.linearRampToValueAtTime(peak, t + 0.005); g.gain.setValueAtTime(peak, end - 0.01); } // steady
@@ -99,7 +103,7 @@
         g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.004); g.gain.setValueAtTime(peak * 0.85, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.015);
         src.start(t, Math.random() * 0.4, dur + 0.05);
       }
-      src.connect(f); f.connect(g); g.connect(master);
+      src.connect(f); f.connect(g); g.connect(ruin.fx);
     }
     function dropouts() { // now and then the wire lets go for a moment, or snaps, or hisses
       clearTimeout(dropTimer);
