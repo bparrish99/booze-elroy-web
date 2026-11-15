@@ -789,8 +789,15 @@
       const k = 1 - g.modeTimer / PUSH_FX, e = 1 - (1 - k) * (1 - k);
       for (const v of g.pushGhosts || []) { v.ch.x = Math.round(v.x0 + (v.x1 - v.x0) * e); v.ch.y = Math.round(v.y0 + (v.y1 - v.y0) * e); }
     }
+    // they've landed. Their plan (iDir, the turn they'd decided on for the next tile) is reset to where they're heading:
+    // a stale one could point back the way they came, and a reversal is taken at once without a wall check, so a ghost
+    // landed under a wall turned into it and stood stuck until an energizer reversed everyone (found by the author).
+    // Speed too, for where they are now (flung out of a tunnel, say)
     function pushEnd() {
-      for (const v of g.pushGhosts || []) { v.ch.x = v.x1; v.ch.y = v.y1; v.ch.dir = v.dir; v.ch.facing = v.dir; v.ch.accum16 = 0; }
+      for (const v of g.pushGhosts || []) {
+        v.ch.x = v.x1; v.ch.y = v.y1; v.ch.dir = v.dir; v.ch.facing = v.dir; v.ch.iDir = v.dir; v.ch.accum16 = 0;
+        updateGhostSpeed(v.ch, Math.floor(v.x1 / TILE), Math.floor(v.y1 / TILE));
+      }
       g.pushGhosts = [];
     }
     // while it sucks: the ghosts it caught slide in toward Pac-Man, faster as they come
@@ -975,6 +982,15 @@
           } else {
             if (g.chars.pac.speed > 0.8) g.sounds.bonk.play();
             g.chars.pac.speed = 0;
+          }
+        } else if (!isPac && !c.housing && !c.leaving && !c.entering) {
+          // web edition safety net: a ghost blocked with no legal turn planned. Never happens in ordinary play (a ghost
+          // always plans a legal turn ahead; the golden replay proves this branch never runs there), but the Blow could
+          // leave one facing a wall with a stale plan, and it stood stuck until an energizer reversed it (found by the
+          // author, twice). It takes an open way, sideways first, back the way it came last, and plans from there.
+          // No RNG, so nothing else shifts
+          for (const d of [(c.dir + 1) % 4, (c.dir + 3) % 4, (c.dir + 2) % 4]) {
+            if (!cm.isWall(xTile + DELTAS[d].x, yTile + DELTAS[d].y)) { c.dir = d; c.facing = d; c.iDir = d; break; }
           }
         }
       }
