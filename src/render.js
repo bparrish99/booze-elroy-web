@@ -298,8 +298,10 @@
       const now = performance.now(), dt = flameT ? Math.min(3, (now - flameT) / 16.67) : 1; flameT = now;
       const pac = g.chars && g.chars.pac;
       const live = g.scene.name === "game" && g.mode === "normal" && !g.paused && !g.rewinding;
-      if (live && pac && core.curAbility() === 2 && pac.phased > 0 && pac.dir >= 0 && pac.dir <= 3) {
-        const v = [[1, 0], [0, 1], [-1, 0], [0, -1]][pac.dir], bx = -v[0], by = -v[1];
+      // out of his back, the way he's thrusting (facing), not the way he's moving: braking in Jetpack fires forwards
+      const aim = pac && (pac.facing >= 0 && pac.facing <= 3 ? pac.facing : pac.dir);
+      if (live && pac && core.curAbility() === 2 && pac.phased > 0 && aim >= 0 && aim <= 3) {
+        const v = [[1, 0], [0, 1], [-1, 0], [0, -1]][aim], bx = -v[0], by = -v[1];
         const px = pac.x + bx * 4, py = pac.y + by * 4;
         const ri = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1)); // Lua's math.random(lo, hi)
         const ox = px + ri(-1, 1), oy = py + ri(-1, 1);
