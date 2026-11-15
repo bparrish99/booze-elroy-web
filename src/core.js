@@ -674,7 +674,7 @@
 
     // ------------------------------------------------------------------ logic
     const logic = {};
-    const THRUSTER_SPEED = 0.008, MAX_THRUST = 1.6, STUN_DISTANCE = 6, BOOST_THRUST = 2.5;
+    const THRUSTER_SPEED = 0.008, MAX_THRUST = 1.6, STUN_DISTANCE = 6, BOOST_THRUST = 2;
     const phaseActive = () => (ability() && ability() === 1 && T(g.chars.pac.phased) && g.chars.pac.phased >= 0);
 
     const checkCollisions = (collectibles, xTile, yTile) => {
