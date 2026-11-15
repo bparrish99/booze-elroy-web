@@ -290,6 +290,40 @@
       ctx.drawImage(spr, Math.round(cx - spr.width / 2), Math.round(cy - spr.height / 2));
       ctx.globalAlpha = 1;
     }
+    // web edition (the author, 2026-11-15): a bit of the Jetpack's thruster while Boost is on, render only (Math.random,
+    // its own list), so the core's particles and RNG are untouched: the same burst as the Jetpack's (core.js handlePlayerInput), frame for frame
+    const flames = [];
+    let flameT = 0;
+    function updateFlames() {
+      const now = performance.now(), dt = flameT ? Math.min(3, (now - flameT) / 16.67) : 1; flameT = now;
+      const pac = g.chars && g.chars.pac;
+      const live = g.scene.name === "game" && g.mode === "normal" && !g.paused && !g.rewinding;
+      if (live && pac && core.curAbility() === 2 && pac.phased > 0 && pac.dir >= 0 && pac.dir <= 3) {
+        const v = [[1, 0], [0, 1], [-1, 0], [0, -1]][pac.dir], bx = -v[0], by = -v[1];
+        const px = pac.x + bx * 4, py = pac.y + by * 4;
+        const ri = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1)); // Lua's math.random(lo, hi)
+        const ox = px + ri(-1, 1), oy = py + ri(-1, 1);
+        for (let i = 0; i < 15; i++) { // the Jetpack's own burst: 5 orange-yellow, then 10 green
+          const orange = i < 5, spread = (Math.random() - 0.5) * 0.5, sp = 1 + Math.random() * 5;
+          flames.push({ x: ox, y: oy, vx: (bx + spread * (by !== 0 ? 1 : 0)) * sp, vy: (by + spread * (bx !== 0 ? 1 : 0)) * sp,
+            c: orange ? [240, 60 + ri(0, 120), 10 + ri(0, 30)] : [0.3 * 255, (0.6 + Math.random() * 0.4) * 255, 0.3 * 255],
+            life: orange ? 3 + ri(0, 3) : 1 + ri(0, 2), size: 0.5 + Math.random() });
+        }
+      }
+      if (!live) flames.length = 0;
+      for (let i = flames.length - 1; i >= 0; i--) {
+        const f = flames[i];
+        f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= 0.97; f.vy *= 0.97; f.life -= dt;
+        if (f.life <= 0) flames.splice(i, 1);
+      }
+    }
+    function drawFlames() {
+      for (const f of flames) {
+        ctx.fillStyle = `rgb(${f.c[0] | 0},${f.c[1] | 0},${f.c[2] | 0})`;
+        ctx.beginPath(); ctx.arc(-g.startX + f.x, -g.startY + f.y + 24, f.size, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
     function drawParticles() {
       // the core clears its particles with a fresh list (a new game, a death, the board done): the bubbles from the old one
       // go too, or the title's / demo's bubbles would float on into a new game
@@ -493,6 +527,7 @@
         }
         if (g.mode === "playerUp") setColor(1, 1, 1);
         drawParticles();
+        updateFlames(); drawFlames(); setColor(1, 1, 1);
         unclip();
         if (!g.state.hideLives) {
           for (let i = 1; i <= Math.min(5, g.lives); i++) drawSpriteAtTile("spr16", 85, i * 2, 34);
