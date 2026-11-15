@@ -61,3 +61,20 @@ test("Push: one charge, back at READY", () => {
   for (let f = 0; f < 600 && g.mode !== "normal"; f++) core.update();
   assert.equal(g.pushSpent, false);
 });
+
+test("Push: a ghost thrown back against its old plan keeps the new heading (its stale turn doesn't flip it back)", () => {
+  // the author's repro: Pinky just turned down (his plan for the next tile: down too), blown up into the corridor
+  // above. Reversals are taken at once without a wall check, so the stale "down" used to flip him straight back down,
+  // and where there was a wall below him he stood stuck until an energizer
+  const { core, g, cm } = start();
+  const pk = g.chars.pinky;
+  Object.assign(pk, { x: 9 * 8 + 4, y: 11 * 8 + 4, dir: 1, facing: 1, iDir: 1, speed: 0.75 }); // (moving: start() parks them)
+  Object.assign(g.chars.pac, { x: 9 * 8 + 4, y: 14 * 8 + 4, speed: 0 });
+  core.keypressed("space");
+  settle(core);
+  const [, y0] = tileOf(cm, pk);
+  assert.ok(y0 < 11, "thrown up");
+  assert.equal(pk.dir, 3, "heading up");
+  for (let f = 0; f < 30; f++) core.update();
+  assert.ok(tileOf(cm, pk)[1] <= y0, "and still going up, not back down");
+});
