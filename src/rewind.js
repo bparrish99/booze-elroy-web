@@ -13,6 +13,7 @@
   "use strict";
   const HISTORY = 180;  // frames kept: 3 seconds
   const SPEED = 2;      // playback: 2 frames of history per screen frame (3 s back in 1.5 s, slow enough to follow)
+  const HOLD = 45;      // then everything holds still this many frames (about Suck's / Blow's stop: the author), so you see where you are
   // plain values on g that aren't part of the play to rewind (settings, scene and mode bookkeeping, presentation)
   const SKIP = new Set(["scaleOption", "autoplay", "currentMaze", "mode", "attract", "muted", "levelNumber", "paused",
     "currentMazeColor", "currentBackground", "modeTimer", "diedSoundPlayed", "newLevel", "rewindSpent", "rewinding"]);
@@ -59,6 +60,7 @@
     const g = core.g;
     let history = [];          // oldest first
     let playback = null;       // { i } while the rewind plays on screen
+    let hold = 0;              // frames left of the stop after it lands
     let lastMode = null;
     g.rewindSpent = false; g.rewinding = false;
     // the attract demo and autoplay use it too (the autoplayer rewinds when a ghost gets too close, like the other abilities)
@@ -66,7 +68,7 @@
 
     /** after every game frame: keep the history, refill the charge on a new life / board */
     function record() {
-      if (playback) return; // the playback restores old frames: they're not new history
+      if (playback || hold) return; // the playback restores old frames, and the stop after it adds none: not new history
       if (g.scene.name !== "game") { history = []; lastMode = null; return; }
       if (g.mode !== lastMode) { if (g.mode === "ready") g.rewindSpent = false; lastMode = g.mode; }
       if (!enabled()) { history = []; return; }
@@ -86,13 +88,14 @@
     }
     /** in place of the game's own update while the rewind plays; true if it took the frame */
     function update() {
-      if (!playback) return false;
-      if (g.scene.name !== "game") { playback = null; g.rewinding = false; history = []; return false; }
+      if (!playback && !hold) return false;
+      if (g.scene.name !== "game") { playback = null; hold = 0; g.rewinding = false; history = []; return false; }
+      if (hold) { hold -= 1; return true; } // standing still where it landed
       playback.i = Math.max(0, playback.i - SPEED);
       restore(g, history[playback.i]);
       if (playback.i === 0) { // back as far as it goes: play on from here
         history = []; // the frame it lands on is recorded by record(), like any other
-        playback = null; g.rewinding = false;
+        playback = null; g.rewinding = false; hold = HOLD;
         core.resyncLoops();
       }
       return true;
@@ -100,7 +103,7 @@
     return { record, trigger, update, active: () => !!playback, historyLength: () => history.length };
   }
 
-  const api = { create, snapshot, restore, HISTORY, SPEED, SKIP };
+  const api = { create, snapshot, restore, HISTORY, SPEED, HOLD, SKIP };
   root.BoozeRewind = api;
   if (typeof module === "object" && module.exports) module.exports = api; // Node (tests)
 })(typeof self !== "undefined" ? self : globalThis);

@@ -48,7 +48,7 @@ function play(overrides, seed, frames) {
       if (rw.active()) {
         let n = 0;
         while (rw.update()) n++;
-        assert.ok(n >= 1 && n <= Math.ceil(RW.HISTORY / RW.SPEED) + 1, "playback length " + n);
+        assert.ok(n >= 1 && n <= Math.ceil(RW.HISTORY / RW.SPEED) + 1 + RW.HOLD, "playback length (and the stop after it) " + n);
         const d = firstDiff(full(g), want);
         assert.equal(d, null, "rewind didn't restore " + d);
         assert.equal(g.rewindSpent, true);
