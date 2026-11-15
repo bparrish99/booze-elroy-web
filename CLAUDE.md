@@ -49,6 +49,8 @@ Pinback's Pac-Man variant "Booze Elroy" (original: Love2D/Lua, not in this repo)
 
 - Spelling (the author, 2026-11-14): in any text that has upper and lower case (achievement descriptions, tips, the activity page, HTML), it's always "Pac-Man". The game font is all caps, so it doesn't matter there.
 
+- `public/abilities.webm` (https://booze-elroy.com/abilities.webm, 2026-11-14): a ~20 s silent demo of Suck, Blow and Rewind, recorded headless with Playwright's recordVideo from the local dev server (captions overlaid for the recording only). Not linked from the game.
+
 ## Workflow
 `npm run build` -> `public/index.html` (commit it). Node 24 via nvm (`.nvmrc`; system Node is an old 12, so `. ~/.nvm/nvm.sh` first). `npm run lint` (ESLint 9, must stay clean), `npm test` (unit + golden replay + rewind + smoke + leaderboard/arena e2e). `npm run dev` = local preview with the API. `assets/` was generated once by `tools/prep_assets.py` from the original source (needs Pillow, ffmpeg and BOOZE_SRC). The Lua is over (author, 2026-11-09): `assets/data.json` is now edited by the maze editor, so don't re-run `tools/export_data.py` (it would drop the editor's mazes).
 Verification against the original was done with a headless Lua-vs-JS trace diff kept outside this repo.
