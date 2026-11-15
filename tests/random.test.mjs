@@ -14,7 +14,10 @@ test("Random: a pick each board, never the same twice running, kept through a de
   core.init(); Object.assign(core.g.config, { proMode: true, ability: core.RANDOM, ghostCount: 0, startingLives: 5 });
   core.g.autoplay = false; core.g.attract = false; core.setScene("game");
   const g = core.g, toNormal = () => { for (let f = 0; f < 900 && g.mode !== "normal"; f++) core.update(); core.update(); };
+  core.update();
+  const first = core.curAbility(); // picked as the game starts (the header used to show a stand-in until READY)
   toNormal();
+  assert.equal(core.curAbility(), first, "the same one through READY into play");
   const picks = [core.curAbility()];
   assert.ok(picks[0] >= 1 && picks[0] <= 7, "a real ability: " + picks[0]);
   core.mode.setMode("caught"); toNormal();

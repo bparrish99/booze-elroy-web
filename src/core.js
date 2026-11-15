@@ -804,6 +804,7 @@
         }
         g.pushGhosts.push({ ch, x0: ch.x, y0: ch.y, x1: best[0] * TILE + CENTER, y1: best[1] * TILE + CENTER, dir });
       }
+      if (g.pushGhosts.length >= 4 && env.feat) env.feat("space"); // four ghosts in one Blow
       mode.setMode("push");
     }
     // while it pushes: the ghosts fly out, fast at first, easing as they land
@@ -834,6 +835,7 @@
       for (const v of caught) { v.ch.x = pac.x; v.ch.y = pac.y; }
       for (const v of caught) if (!T(v.ch.frightened) && !T(v.ch.dead) && handleGhostCollision(v.ch, 0, 0, 0, 0)) { g.vacuumQueue = []; return; }
       g.vacuumQueue = caught.filter((v) => T(v.ch.frightened)).map((v) => v.ch);
+      if (g.vacuumQueue.length >= 4 && env.feat) env.feat("hoover"); // four blue ghosts in one Suck (all eaten, one by one)
       vacuumNext();
     }
     // the next blue ghost the vacuum caught, if it's still blue (one per ateGhost pause)
@@ -1144,7 +1146,8 @@
             if (!g.attract) for (const k of Object.keys(g.music)) if (g.music[k].isPlaying()) g.music[k].stop();
             for (const p of g.powers) p.frame = 1;
             g.chars.pac.frame = 1;
-            if (g.config.ability === RANDOM && (g.newLevel || !g.randomAbility)) pickRandomAbility(); // Random: a new board's pick
+            if (g.config.ability === RANDOM && ((g.newLevel && !g.randomFresh) || !g.randomAbility)) pickRandomAbility(); // Random: a new board's pick
+            g.randomFresh = false;
             if (g.newLevel) g.newLevel = false; else g.lives = g.lives - 1;
             if (g.lives < 0) mode.setMode("gameover");
             else {
@@ -1798,7 +1801,10 @@
         g.scenery = {};
         if (g.attract) mode.setMode("ready"); else mode.setMode("pregame");
         g.lives = g.config.startingLives;
-        g.randomAbility = null; // (Random picks afresh for a new game)
+        // Random picks for the first board now, as the game starts (picked at its first READY instead, the header showed a
+        // stand-in for a moment first: the author)
+        g.randomAbility = null; g.randomFresh = false;
+        if (g.config.ability === RANDOM) { pickRandomAbility(); g.randomFresh = true; }
         if (!g.attract) g.score = 0;
         g.paused = false;
         g.wakka = false;

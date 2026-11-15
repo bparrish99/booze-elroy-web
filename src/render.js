@@ -329,7 +329,7 @@
       });
     }
     // web edition (the author, 2026-11-15): the ability in play, top right in a real game (where 2UP would be; the login
-    // corner shows there only on menus and in the demo): Pac-Man yellow while it's ready, a paler yellow once spent
+    // corner shows there only on menus and in the demo): Pac-Man yellow while it's ready, a dark yellow once spent
     function abilityReady() {
       const a = core.curAbility(), pac = g.chars && g.chars.pac;
       if (!a || !pac) return false;
@@ -345,7 +345,7 @@
       if (!name) return;
       const x = 28 - name.length;
       if (abilityReady()) print(name, x, 0, 6);
-      else { setColor(1, 1, 0.55); print(name, x, 0, 0); setColor(1, 1, 1); }
+      else { setColor(0.42, 0.42, 0.42); print(name, x, 0, 6); setColor(1, 1, 1); } // spent: a dark yellow (paler read too much like ready)
     }
     function drawHeader() {
       print("1up", 3, 0); print("high score", 9, 0);

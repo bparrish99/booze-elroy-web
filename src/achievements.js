@@ -49,11 +49,18 @@
     { id: "scratch3", name: "without a scratch 3", desc: "Make it to the third intermission without losing a life, in a game with " + G4 + " started on level 1.", minGhosts: 4 },
     // the ninth key: boards 13-21 carry the key (pancakes in Plus Mode); earned past board 21
     { id: "fever", name: "pac-man fever", desc: "Complete the ninth key, in a game with " + G4 + " started on level 1.", minGhosts: 4 },
+    // a single use of an ability (the author, 2026-11-15): core.js tells main.js through env.feat
+    { id: "hoover", name: "hoover deluxe", desc: "Eat four ghosts with a single use of Suck." },
+    { id: "space", name: "personal space", desc: "Blow four ghosts away with a single use of Blow." },
 
     { id: "clyde", name: "clyde", desc: "Score 10,000 points in a game with " + G4 + ".", score: 10000, minGhosts: 4 },
     { id: "inky", name: "inky", desc: "Score 30,000 points in a game with " + G4 + ".", score: 30000, minGhosts: 4 },
     { id: "pinky", name: "pinky", desc: "Score 60,000 points in a game with " + G4 + ".", score: 60000, minGhosts: 4 },
     { id: "blinky", name: "blinky", desc: "Score 100,000 points in a game with " + G4 + ".", score: 100000, minGhosts: 4 },
+    { id: "rj", name: "the rj special", desc: "Score 150,000 points in a game with " + G4 + ".", score: 150000, minGhosts: 4 }, // the author's, 2026-11-15
+    { id: "master", name: "elroy master", desc: "Score 200,000 points in a game with " + G4 + ".", score: 200000, minGhosts: 4 },
+    { id: "legend", name: "elroy legend", desc: "Score 500,000 points in a game with " + G4 + ".", score: 500000, minGhosts: 4 },
+    { id: "god", name: "elroy god", desc: "Score 1,000,000 points in a game with " + G4 + ".", score: 1000000, minGhosts: 4 },
 
     ...modeTiers,
     { id: "elephant", name: "elephantine memory", desc: "Complete a large maze with Blindfold: Blackout and " + G4 + ".", minGhosts: 4 }, // the author: right after photographic memory 3

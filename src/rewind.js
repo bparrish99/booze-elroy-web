@@ -16,7 +16,7 @@
   const HOLD = 45;      // then everything holds still this many frames (about Suck's / Blow's stop: the author), so you see where you are
   // plain values on g that aren't part of the play to rewind (settings, scene and mode bookkeeping, presentation)
   const SKIP = new Set(["scaleOption", "autoplay", "currentMaze", "mode", "attract", "muted", "levelNumber", "paused",
-    "currentMazeColor", "currentBackground", "modeTimer", "diedSoundPlayed", "newLevel", "rewindSpent", "rewinding", "randomAbility"]);
+    "currentMazeColor", "currentBackground", "modeTimer", "diedSoundPlayed", "newLevel", "rewindSpent", "rewinding", "randomAbility", "randomFresh"]);
   // state kept in objects, captured explicitly
   const OBJECTS = new Set(["state", "particles", "powers", "dots", "chars", "level"]);
 

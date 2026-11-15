@@ -190,7 +190,7 @@
         if (!rwd) return;
         const was = rwd.active(); rwd.trigger();
         if (!was && rwd.active() && !core.g.attract && !core.g.autoplay) earned(["kind"]); // be kind (rewind)
-      }, testMode: () => fpsOn /* test mode (xyzzy): Pro Mode always */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      }, feat: (id) => { if (!core.g.attract && !core.g.autoplay) earned([id]); }, // a single use of an ability (hoover deluxe, personal space) testMode: () => fpsOn /* test mode (xyzzy): Pro Mode always */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => LB.saveBest(s),
       saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
