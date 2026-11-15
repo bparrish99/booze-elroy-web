@@ -2123,8 +2123,17 @@
     }
 
     // love.keypressed from main.lua
+    // web edition (the author, 2026-11-15): in the attract demo, Enter / Space (a tap on touch) / gamepad A or Start starts
+    // a real game, as Play 1P does (it used to take Esc to the title, then Play 1P); Esc still goes to the title
+    function playFromDemo() {
+      setScene("attract", true);
+      const it = attractMenu.find((i) => i.text === "Play 1P");
+      g.sounds.coindrop.stop(); g.sounds.coindrop.play();
+      if (it) it.action();
+    }
     function keypressed(key) {
       if (g.scene.captureInput) { g.scene.keypressed(key); return; } // web-edition scenes handle Esc/Backspace themselves
+      if (g.scene === game && g.attract && (key === "return" || key === "space")) { playFromDemo(); return; }
       if (key === "escape" || key === "backspace") {
         if (g.scene === attract) { if (env.quit) env.quit(); }
         else if (g.scene === game && !g.attract) { // web edition: an arena game goes back to its arena, silencing the game like the title does
@@ -2141,6 +2150,7 @@
     // love.gamepadpressed from main.lua
     function gamepadpressed(button) {
       if (g.scene.captureInput) { g.scene.gamepadpressed(button); return; }
+      if (g.scene === game && g.attract && (button === "a" || button === "start")) { playFromDemo(); return; } // the demo: a game
       if (button === "start") { setScene("attract"); return; }
       if (button === "b") {
         if (g.scene === credits && creditsReturn === "options") setScene("options", true);

@@ -450,9 +450,12 @@
     // easter egg: tapping the "OY" block on the maze plays oy.mp3 (doesn't swallow the tap); the attract demo mutes the game, so use the real volume
     const oySnd = audio.makeSound("oy");
     canvas.addEventListener("pointerdown", (e) => {
+      let oyHit = false;
       { const B = R.oyBlock(), p = toGame(e);
-        if (B && p.x >= B.x0 && p.x < B.x1 && p.y >= B.y0 && p.y < B.y1) { earned(["neil"]); audio.unlock(); oySnd.stop(); oySnd.setVolume((core.g.attract && core.g.originalVolume != null ? core.g.originalVolume : core.g.config.volume) / 10); oySnd.play(); } }
+        if (B && p.x >= B.x0 && p.x < B.x1 && p.y >= B.y0 && p.y < B.y1) { oyHit = true; earned(["neil"]); audio.unlock(); oySnd.stop(); oySnd.setVolume((core.g.attract && core.g.originalVolume != null ? core.g.originalVolume : core.g.config.volume) / 10); oySnd.play(); } }
       if (accountAt(e)) { e.preventDefault(); audio.unlock(); openAccount(); return; }
+      // a click in the attract demo starts a game, like Enter (not on the OY block or the login corner); touch: the tap does it
+      if (e.pointerType === "mouse" && core.g.scene.name === "game" && core.g.attract && !oyHit) { e.preventDefault(); audio.unlock(); core.keypressed("return"); return; }
       if (gestureStart(e)) return;
       { const L = linkAt(e); if (L && L.tip) { e.preventDefault(); showTip(L.tip, e); return; } hideTip();
         if (L && L.secret) earned([L.secret]); // the credits' "what is seeing this?": time to wake up

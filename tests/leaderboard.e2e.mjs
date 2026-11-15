@@ -40,6 +40,14 @@ try {
   check(await until("g.highScore === 5000 && g.highScoreName === 'PINBACK'"), "(board restored)");
   await ev(() => { performance.now = window.__realNow; });
   check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arenas,Favorites,Options,Leaderboards", "main menu: Play 1P, Arenas, Favorites, Options, Leaderboards");
+  // the attract demo: Enter starts a real game (the author, 2026-11-15), like Play 1P; the demo's mute is undone
+  await ev(() => { const c = window.__core; c.g.attract = true; c.g.originalVolume = c.g.config.volume; c.g.config.volume = 0; c.setScene("game"); });
+  await p.waitForTimeout(300);
+  check(await g("g.scene.name === 'game' && g.attract"), "the demo is playing");
+  await p.keyboard.press("Enter");
+  check(await until("g.scene.name === 'game' && !g.attract && g.config.volume > 0", 6000), "Enter in the demo starts a real game (sound back)");
+  await p.keyboard.press("Escape");
+  check(await until("g.scene.name === 'attract'"), "and Esc leaves it for the title");
   // C cycles CRT (default) -> plain -> ratty old TV (not on the Options page), saved at once
   check(await g("g.config.crtEffect === true"), "CRT is on by default");
   await p.keyboard.press("c");
