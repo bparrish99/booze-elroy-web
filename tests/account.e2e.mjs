@@ -314,7 +314,7 @@ try {
     await p.keyboard.press("Enter");
     await p.waitForFunction(() => window.__core.g.scene.name === "favorites" && window.__core.g.scene.menu.some((i) => i.text === "SIX OF THEM"), null, { timeout: 5000 });
     check(true, "Favorites lists it");
-    check(await p.evaluate(() => window.__core.g.scene.decor.some((d) => d.text === "ghosts" && d.o === 6) && window.__core.g.scene.decor.some((d) => d.text === "6" && d.o === 0)), "with its settings under the list (the option's name yellow, its value white)");
+    check(await p.evaluate(() => window.__core.g.scene.decor.some((d) => d.text === "ghosts" && d.o === 0) && window.__core.g.scene.decor.some((d) => d.text === "6" && d.o === 6)), "with its settings under the list (the option's name white, its value yellow)");
     await p.keyboard.press("Enter"); await p.waitForTimeout(200);
     check(await p.evaluate(() => window.__core.g.scene.name === "favorite" && window.__core.g.scene.menu.map((i) => i.text).join() === "Play 1P,Share,Remove,Back"), "its page: Play 1P, Share, Remove, Back");
     await p.keyboard.press("Enter");

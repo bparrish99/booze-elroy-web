@@ -125,7 +125,7 @@
       return item && item.options[i] ? item.options[i].text : String(vals[i]);
     }
     // the settings that differ from the arcade's, as lines of [label, value] pairs fitting `width` columns (drawn with
-    // the option's name in Pac-Man yellow and its value white: the author, 2026-11-15); summary() is the same as text
+    // the option's name white and its value in Pac-Man yellow: the author, 2026-11-15); summary() is the same as text
     function summaryParts(width, cfg) {
       cfg = cfg || g.config;
       const diffs = [];
@@ -473,11 +473,11 @@
           else { mid("no favorites yet", 11, 2); mid("add one from options,", 14, 0); mid("a leaderboard or an arena", 16, 0); }
         }
         const sel = this.menu[this.menu.selectedItem - 1];
-        if (sel && sel.fav) summaryParts(26, SK.configFor(sel.fav.board)).slice(0, 4).forEach((line, i) => { // name yellow, value white
+        if (sel && sel.fav) summaryParts(26, SK.configFor(sel.fav.board)).slice(0, 4).forEach((line, i) => { // name white, value yellow
           let x = 14 - partsText(line).length / 2;
           for (const [l, v] of line) {
-            if (l) { decor.push({ text: l, x, y: 23 + i, o: 6 }); x += l.length + 1; }
-            decor.push({ text: v, x, y: 23 + i, o: 0 }); x += v.length + 2;
+            if (l) { decor.push({ text: l, x, y: 23 + i, o: 0 }); x += l.length + 1; }
+            decor.push({ text: v, x, y: 23 + i, o: l ? 6 : 0 }); x += v.length + 2;
           }
         });
         this.decor = decor;

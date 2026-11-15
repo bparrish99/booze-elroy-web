@@ -767,15 +767,15 @@
     // ---- web edition: online leaderboard and arcade name entry (scenes live in leaderboard.js)
     const center = (m, y, o) => print(m, 14 - m.length / 2, y, o);
     // the leaderboard page; an arena page is the same with its own title / time left (sc.title, sc.subtitle)
-    // a scene's settings summary, centred lines: each option's name in Pac-Man yellow, its value white (the author)
+    // a scene's settings summary, centred lines: each option's name white, its value in Pac-Man yellow (the author)
     function drawSummary(sc, top, maxLines) {
       if (!sc.summaryParts) { sc.summary(26).slice(0, maxLines).forEach((l, i) => center(l, top + i, 0)); return; }
       sc.summaryParts(26).slice(0, maxLines).forEach((line, i) => {
         const text = line.map(([l, v]) => (l ? l + " " : "") + v).join("  ");
         let x = 14 - text.length / 2;
         for (const [l, v] of line) {
-          if (l) { print(l, x, top + i, 6); x += l.length + 1; }
-          print(v, x, top + i, 0); x += v.length + 2;
+          if (l) { print(l, x, top + i, 0); x += l.length + 1; }
+          print(v, x, top + i, l ? 6 : 0); x += v.length + 2; // ("classic Pac-Man", with no name, stays white)
         }
       });
     }
