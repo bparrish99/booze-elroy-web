@@ -39,7 +39,7 @@ try {
   await ev(() => { const real = performance.now.bind(performance); performance.now = () => real() + 122000; });
   check(await until("g.highScore === 5000 && g.highScoreName === 'PINBACK'"), "(board restored)");
   await ev(() => { performance.now = window.__realNow; });
-  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arena,Favorites,Options,Leaderboards", "main menu: Play 1P, Arena, Favorites, Options, Leaderboards");
+  check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arenas,Favorites,Options,Leaderboards", "main menu: Play 1P, Arenas, Favorites, Options, Leaderboards");
   // C cycles CRT (default) -> plain -> ratty old TV (not on the Options page), saved at once
   check(await g("g.config.crtEffect === true"), "CRT is on by default");
   await p.keyboard.press("c");

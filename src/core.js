@@ -1329,7 +1329,7 @@
     if (env.creditsInOptions || env.creditsOnTitle) menus.main.splice(menus.main.findIndex((it) => it.text === "Credits"), 1);
     // web edition: Arenas (24-hour leaderboards) right under Play
     if (env.scenes && env.scenes.arenas) {
-      menus.main.splice(1, 0, { text: "Arena", x: 10, y: 27, action() { setScene("arenas"); } });
+      menus.main.splice(1, 0, { text: "Arenas", x: 10, y: 27, action() { setScene("arenas"); } });
       for (const it of menus.main) if (it.text === "Options") it.y = 29; else if (it.text === "Leaderboards") it.y = 31; // a blank row between items
     }
     // web edition: Favorites (the author, 2026-11-15: saved gameplay settings, logged in) under Arena; logged out it says
