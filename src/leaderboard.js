@@ -473,11 +473,12 @@
           else { mid("no favorites yet", 11, 2); mid("add one from options,", 14, 0); mid("a leaderboard or an arena", 16, 0); }
         }
         const sel = this.menu[this.menu.selectedItem - 1];
-        if (sel && sel.fav) summaryParts(26, SK.configFor(sel.fav.board)).slice(0, 4).forEach((line, i) => { // name white, value yellow
+        // (up to 8 lines, rows 22-29, above Back: every setting shows)
+        if (sel && sel.fav) summaryParts(28, SK.configFor(sel.fav.board)).slice(0, 8).forEach((line, i) => { // name white, value yellow
           let x = 14 - partsText(line).length / 2;
           for (const [l, v] of line) {
-            if (l) { decor.push({ text: l, x, y: 23 + i, o: 0 }); x += l.length + 1; }
-            decor.push({ text: v, x, y: 23 + i, o: l ? 6 : 0 }); x += v.length + 2;
+            if (l) { decor.push({ text: l, x, y: 22 + i, o: 0 }); x += l.length + 1; }
+            decor.push({ text: v, x, y: 22 + i, o: l ? 6 : 0 }); x += v.length + 2;
           }
         });
         this.decor = decor;

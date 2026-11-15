@@ -771,9 +771,10 @@
     const center = (m, y, o) => print(m, 14 - m.length / 2, y, o);
     // the leaderboard page; an arena page is the same with its own title / time left (sc.title, sc.subtitle)
     // a scene's settings summary, centred lines: each option's name white, its value in Pac-Man yellow (the author)
+    // (the full 28 columns; maxLines: the room there is, which callers make enough for every setting where they can)
     function drawSummary(sc, top, maxLines) {
-      if (!sc.summaryParts) { sc.summary(26).slice(0, maxLines).forEach((l, i) => center(l, top + i, 0)); return; }
-      sc.summaryParts(26).slice(0, maxLines).forEach((line, i) => {
+      if (!sc.summaryParts) { sc.summary(28).slice(0, maxLines).forEach((l, i) => center(l, top + i, 0)); return; }
+      sc.summaryParts(28).slice(0, maxLines).forEach((line, i) => {
         const text = line.map(([l, v]) => (l ? l + " " : "") + v).join("  ");
         let x = 14 - text.length / 2;
         for (const [l, v] of line) {
@@ -788,11 +789,16 @@
       if (sc.title) { center(sc.title(), 3, 3); center(sc.subtitle(), 4, 2); }
       else center("leaderboard", 4, 3);
       const lay = sc.layout || { summaryTop: 6, summaryLines: 5, listTop: 12, messageRow: 31 }; // the arena page packs tighter
-      drawSummary(sc, lay.summaryTop, lay.summaryLines);
+      // every setting shows (the author, 2026-11-15: lines past the room used to be cut off): when the summary needs more
+      // lines than the page's usual room, the top 10 moves down under it and goes single-spaced
+      const nLines = sc.summaryParts ? sc.summaryParts(28).length : sc.summary(28).length;
+      const fits = nLines <= lay.summaryLines;
+      drawSummary(sc, lay.summaryTop, fits ? lay.summaryLines : nLines);
+      const listTop = fits ? lay.listTop : lay.summaryTop + nLines + 1, step = fits ? 2 : 1;
       const b = sc.board();
-      if (!b.entries.length) center(sc.emptyText ? sc.emptyText(b) : b.status === "loading" ? "loading" : b.status === "error" ? "leaderboard offline" : "no scores yet", 20, 0);
+      if (!b.entries.length) center(sc.emptyText ? sc.emptyText(b) : b.status === "loading" ? "loading" : b.status === "error" ? "leaderboard offline" : "no scores yet", Math.max(20, listTop + 4), 0);
       b.entries.slice(0, 10).forEach((e, i) => {
-        const y = lay.listTop + i * 2, hi = sc.highlight === i + 1;
+        const y = listTop + i * step, hi = sc.highlight === i + 1;
         const o = hi ? (sc.fc % 30 < 15 ? 1 : 3) : 0;
         const rk = String(i + 1);
         print(rk, 3 - rk.length, y, o);
@@ -841,7 +847,7 @@
       begin(true); drawHeader();
       if (sc.mode === "createArena") {
         center("create arena", 3, 3);
-        drawSummary(sc, 5, 4);
+        drawSummary(sc, 5, 5);
         center("arena name", 10, 2);
       } else {
         center("new high score!", 4, sc.fc % 40 < 20 ? 3 : 1);
