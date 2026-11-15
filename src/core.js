@@ -747,12 +747,16 @@
       const [pX, , pY] = cm.getLoc(pac);
       // the tiles he could walk to (flood fill), leaving out the house and the tunnels
       const inHouse = (x, y) => Math.abs(x - hc.x) <= 4 && y >= hc.y - 2 && y <= hc.y + 2;
-      const open = new Set(), stack = [[pX, pY]];
+      // (it walks through tunnels, which aren't landing spots, and starts from his own tile wherever he is: from a tunnel
+      // it used to find nowhere at all, so the Push did nothing there)
+      const open = new Set(), seen = new Set(), stack = [[pX, pY, true]];
       while (stack.length) {
-        const [x, y] = stack.pop(), key = x + "," + y;
-        if (open.has(key) || x < 0 || y < 0 || x >= cm.w || y >= cm.h || cm.isWall(x, y) || cm.isTunnel(x, y) || inHouse(x, y)) continue;
-        open.add(key);
-        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+        const [x, y, first] = stack.pop(), key = x + "," + y;
+        if (seen.has(key)) continue;
+        if (!first && (x < 0 || y < 0 || x >= cm.w || y >= cm.h || cm.isWall(x, y) || inHouse(x, y))) continue;
+        seen.add(key);
+        if (!first && !cm.isTunnel(x, y)) open.add(key);
+        stack.push([x + 1, y, false], [x - 1, y, false], [x, y + 1, false], [x, y - 1, false]);
       }
       const back = DELTAS[(pac.dir + 2) % 4];
       g.pushGhosts = [];

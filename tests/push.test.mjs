@@ -78,3 +78,16 @@ test("Push: a ghost thrown back against its old plan keeps the new heading (its 
   for (let f = 0; f < 30; f++) core.update();
   assert.ok(tileOf(cm, pk)[1] <= y0, "and still going up, not back down");
 });
+
+test("Push: works with Pac-Man standing in a side tunnel", () => {
+  const { core, g, cm } = start();
+  let tx = -1, ty = -1;
+  for (let y = 0; y < cm.h && tx < 0; y++) for (let x = 0; x < cm.w; x++) if (cm.isTunnel(x, y)) { tx = x; ty = y; break; }
+  assert.ok(tx >= 0, "the maze has a tunnel");
+  const inward = tx < cm.w / 2 ? 1 : -1;
+  Object.assign(g.chars.pac, { x: tx * 8 + 4, y: ty * 8 + 4, speed: 0 });
+  Object.assign(g.chars.blinky, { x: (tx + inward * 2) * 8 + 4, y: ty * 8 + 4, speed: 0 });
+  core.keypressed("space");
+  assert.equal(g.mode, "push");
+  assert.equal(g.pushGhosts.length, 1, "Blinky gets blown");
+});
