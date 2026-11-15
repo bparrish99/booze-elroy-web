@@ -1478,6 +1478,7 @@
           isScaryMonster(oneAhead.xTile, oneAhead.yTile, mod(pac.dir - 1, 4), 1)) {
           if (T(ability()) && !T(pac.phased)) phasePac();
           if (g.config.ability === REWIND && env.rewind) env.rewind(); // web edition: the autoplayer rewinds out of trouble too
+          if (g.config.ability === PUSH) push(); // web edition: and blows them away (once a life / board / energizer)
           if (!T(pac.phased)) {
             pac.iDir = (pac.dir + 2) % 4;
             return;
