@@ -105,3 +105,18 @@ test("Push: a ghost a tile short of a tunnel mouth is thrown well clear, not nud
   const [x, y] = tileOf(cm, b);
   assert.ok(Math.hypot(x - 18, y - 14) >= 5, "at least 2 tiles further than the 3 he was (" + x + "," + y + ")");
 });
+
+test("Push: works beside the pen's right wall (the house area is just the pen)", () => {
+  // the author's repro: Inky coming down the right side of the pen, met from below, a tile away, not blown at all: the
+  // house area was a tile too wide, swallowing that corridor, so the landing search found nowhere from there
+  for (const [gy, py] of [[12, 13], [14, 15], [13, 15]]) {
+    const { core, g, cm } = start();
+    const ink = g.chars.inky;
+    Object.assign(ink, { x: 18 * 8 + 4, y: gy * 8 + 4, dir: 1, facing: 1, iDir: 1 });
+    Object.assign(g.chars.pac, { x: 18 * 8 + 4, y: py * 8 + 4, dir: 3, speed: 0 });
+    core.keypressed("space");
+    assert.equal(g.pushGhosts.length, 1, "Inky gets blown (row " + gy + ")");
+    settle(core);
+    assert.ok(tileOf(cm, ink)[1] < gy, "up and away");
+  }
+});

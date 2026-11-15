@@ -746,7 +746,9 @@
       const cm = getCurrentMaze(), hc = cm.houseCenter, pac = g.chars.pac;
       const [pX, , pY] = cm.getLoc(pac);
       // the tiles he could walk to (flood fill), leaving out the house and the tunnels
-      const inHouse = (x, y) => Math.abs(x - hc.x) <= 4 && y >= hc.y - 2 && y <= hc.y + 2;
+      // the pen itself: its inside and door, not a tile more (a wider box swallowed the corridor beside the pen's right
+      // wall, and standing there the Push found nowhere to throw a ghost and did nothing: the author)
+      const inHouse = (x, y) => x >= hc.x - 3 && x <= hc.x + 2 && y >= hc.y - 2 && y <= hc.y + 1;
       // (it walks through tunnels, which aren't landing spots, and starts from his own tile wherever he is: from a tunnel
       // it used to find nowhere at all, so the Push did nothing there)
       const open = new Set(), seen = new Set(), stack = [[pX, pY, true]];
