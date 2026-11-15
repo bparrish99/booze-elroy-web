@@ -1609,7 +1609,10 @@
         }
       }
       if (mostRecentKey) { pac.iDir = currentlyDown[mostRecentKey]; g.playerInput = true; }
-      if (jetBoost() && T(pac.iDir)) g.playerInput = true; // Boost thrusts whether the stick is held or not
+      if (jetBoost()) { // Boost thrusts whether the stick is held or not; before any steering (a new life), the way he faces
+        if (!T(pac.iDir)) pac.iDir = T(pac.facing) || pac.facing === 0 ? pac.facing : pac.dir;
+        g.playerInput = true;
+      }
 
       if (!g.playerInput && g.config.movement === 3) {
         pac.speed = Math.max(pac.speed - THRUSTER_SPEED / 2, 0);

@@ -40,6 +40,20 @@ test("Jetpack Boost: facing back it brakes, then turns him round", () => {
   assert.equal(pac.dir, (d + 2) % 4, "turned round");
 });
 
+test("Jetpack Boost at the start of a life thrusts the way he faces (left)", () => {
+  let s = 11; const rng = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  const core = create(DATA, { rng, isDown: () => false, proMode: true });
+  core.init(); Object.assign(core.g.config, { proMode: true, ability: 2, movement: 3, ghostCount: 0 });
+  core.g.autoplay = false; core.g.attract = false; core.setScene("game");
+  for (let f = 0; f < 600 && core.g.mode !== "normal"; f++) core.update();
+  core.update();
+  const pac = core.g.chars.pac, x0 = pac.x;
+  assert.equal(pac.speed, 0, "standing still, no steering yet");
+  core.keypressed("space");
+  for (let f = 0; f < 30; f++) core.update();
+  assert.ok(pac.x < x0, `moved left: ${x0} -> ${pac.x}`);
+});
+
 test("Boost outside Jetpack is unchanged (1.6 for its second)", () => {
   const { core, g } = start(0);
   core.keypressed("space");
