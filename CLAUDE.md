@@ -49,6 +49,7 @@ Pinback's Pac-Man variant "Booze Elroy" (original: Love2D/Lua, not in this repo)
 
 - Spelling (the author, 2026-11-14): in any text that has upper and lower case (achievement descriptions, tips, the activity page, HTML), it's always "Pac-Man". The game font is all caps, so it doesn't matter there.
 
+- Controls only in play (the author, 2026-11-14): the ability button does nothing while the game is paused, or in autoplay / the attract demo (core.js abilityKeys), and the player's keys / pad never steer Pac-Man there (handlePlayerInput returns after the autoplayer; they used to override it). tests/input.test.mjs.
 - `public/abilities.webm` (https://booze-elroy.com/abilities.webm, 2026-11-14): a ~20 s silent demo of Suck, Blow and Rewind, recorded headless with Playwright's recordVideo from the local dev server (captions overlaid for the recording only). Not linked from the game.
 
 ## Workflow

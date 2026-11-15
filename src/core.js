@@ -1534,6 +1534,9 @@
           }
         }
       }
+      // web edition (the author, 2026-11-14): in autoplay and the attract demo the player's keys and pad don't steer him
+      // (they used to override the autoplayer's choice)
+      if (g.autoplay || g.attract) return;
       // gamepad (d-pad has priority, then left stick)
       const pad = env.gamepad && env.gamepad();
       if (pad) {
@@ -1925,23 +1928,26 @@
           g.muted = !g.muted;
           return;
         }
-        if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === REWIND && env.rewind) env.rewind();
-        if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
-        if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === VACUUM) vacuum();
-        if (g.state.running && (key === "space" || key === "lalt") && g.config.ability === PUSH) push();
-        if (g.state.running && (key === "space" || key === "lalt") && !T(g.chars.pac.phased) && T(ability())) phasePac();
+        if (abilityKeys() && (key === "space" || key === "lalt") && g.config.ability === REWIND && env.rewind) env.rewind();
+        if (abilityKeys() && (key === "space" || key === "lalt") && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
+        if (abilityKeys() && (key === "space" || key === "lalt") && g.config.ability === VACUUM) vacuum();
+        if (abilityKeys() && (key === "space" || key === "lalt") && g.config.ability === PUSH) push();
+        if (abilityKeys() && (key === "space" || key === "lalt") && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (key === "tab" || key === "p") togglePause();
       },
       gamepadpressed(button) {
-        if (g.state.running && button === "a" && g.config.ability === REWIND && env.rewind) env.rewind();
-        if (g.state.running && button === "a" && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
-        if (g.state.running && button === "a" && g.config.ability === VACUUM) vacuum();
-        if (g.state.running && button === "a" && g.config.ability === PUSH) push();
-        if (g.state.running && button === "a" && !T(g.chars.pac.phased) && T(ability())) phasePac();
+        if (abilityKeys() && button === "a" && g.config.ability === REWIND && env.rewind) env.rewind();
+        if (abilityKeys() && button === "a" && g.config.ability === PAUSE && !T(g.chars.pac.phased)) pausePac();
+        if (abilityKeys() && button === "a" && g.config.ability === VACUUM) vacuum();
+        if (abilityKeys() && button === "a" && g.config.ability === PUSH) push();
+        if (abilityKeys() && button === "a" && !T(g.chars.pac.phased) && T(ability())) phasePac();
         if (button === "x") togglePause();
       },
     };
 
+    // web edition (the author, 2026-11-14): the ability button only works in play: not while the game is paused, and not
+    // in autoplay or the attract demo (the autoplayer uses the abilities itself)
+    function abilityKeys() { return g.state.running && !g.paused && !g.autoplay && !g.attract; }
     function togglePause() {
       if (!g.paused) {
         g.paused = true;
