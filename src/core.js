@@ -1341,6 +1341,8 @@
       } });
       for (const it of menus.main) if (it.text === "Options") it.y = 31; else if (it.text === "Leaderboards") it.y = 33;
     }
+    // web edition: the title's menu a row higher, with the rest of the title (the author, 2026-11-15; not CREDITS)
+    if (env.scenes) for (const it of menus.main) it.y -= 1;
     const menuConfirm = (menu) => {
       const item = menu[menu.selectedItem - 1];
       if (item.text && item.text === "Play") { g.sounds.coindrop.stop(); g.sounds.coindrop.play(); }

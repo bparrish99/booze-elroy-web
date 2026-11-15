@@ -25,7 +25,7 @@
     textMask.width = GW; textMask.height = GH;
     const mctx = textMask.getContext("2d");
     mctx.imageSmoothingEnabled = false;
-    let masking = false;
+    let masking = false, maskShift = 0; // maskShift: px the picture is moved by (ctx.translate) where text is drawn
     const LOGO_PIECES = "$%^&*()_";
 
     const sheets = {};
@@ -122,7 +122,7 @@
         if (idx > 0 && masking && up[i] !== " " && !LOGO_PIECES.includes(up[i])) {
           const s = sheets.text8, j = o * 64 + idx - 1;
           mctx.globalAlpha = col[3];
-          mctx.drawImage(s.img, (j % s.cols) * 8, Math.floor(j / s.cols) * 8, 8, 8, (maze ? camX() : 0) + x * TILE, (maze ? camY() : 0) + y * TILE, 8, 8);
+          mctx.drawImage(s.img, (j % s.cols) * 8, Math.floor(j / s.cols) * 8, 8, 8, (maze ? camX() : 0) + x * TILE, (maze ? camY() : 0) + y * TILE + maskShift, 8, 8);
           mctx.globalAlpha = 1;
         }
         x += 1;
@@ -415,12 +415,14 @@
       const msg1 = "jolt country games", msg2 = "presents";
       drawHeader();
       if (g.state.showHelperText) {
-        print(msg1, 14 - msg1.length / 2, 5);
-        print(msg2, 14 - msg2.length / 2, 7);
+        // (everything on the title a row higher but CREDITS: the author, 2026-11-15; the menu's rows moved in core.js)
+        print(msg1, 14 - msg1.length / 2, 4);
+        print(msg2, 14 - msg2.length / 2, 6);
         drawMenu(core.attractMenu, 6, 23, 1);
         print("credits", 14 - "credits".length / 2, 35, 2); // (it said "web edition"; the author, 2026-11-15: the credits link, same pink)
       }
       if (g.mode === "restart" && core.mode.isStarted("restart") && g.ghosts) {
+        ctx.save(); ctx.translate(0, -TILE); maskShift = -TILE; // the intro a tile higher too (the vector look's text mask with it)
         clip(0, 0, 224, 190);
         for (const name of ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"]) { const c = g.ghosts[name]; if (c) drawChar(c, c.x, c.y); }
         if (g.modeTimer > 135) ctx.drawImage(assets.banner, g.ghosts.blinky.x - 100, g.ghosts.blinky.y + 7);
@@ -439,6 +441,7 @@
             }
           }
         }
+        ctx.restore(); maskShift = 0;
       }
     }
 
