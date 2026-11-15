@@ -674,7 +674,7 @@
 
     // ------------------------------------------------------------------ logic
     const logic = {};
-    const THRUSTER_SPEED = 0.008, MAX_THRUST = 1.6, STUN_DISTANCE = 6;
+    const THRUSTER_SPEED = 0.008, MAX_THRUST = 1.6, STUN_DISTANCE = 6, BOOST_THRUST = 3;
     const phaseActive = () => (ability() && ability() === 1 && T(g.chars.pac.phased) && g.chars.pac.phased >= 0);
 
     const checkCollisions = (collectibles, xTile, yTile) => {
@@ -1058,7 +1058,7 @@
           c.facing = c.iDir;
           if (isPac && g.config.movement === 3) {
             if (g.playerInput) {
-              g.chars.pac.speed = g.chars.pac.speed - THRUSTER_SPEED;
+              g.chars.pac.speed = g.chars.pac.speed - thrust();
               if (g.chars.pac.speed < 0) { g.chars.pac.speed = Math.abs(g.chars.pac.speed); c.dir = c.iDir; }
             }
           } else {
@@ -1066,7 +1066,7 @@
           }
         }
         if (isPac && g.config.movement === 3 && c.iDir === c.dir && g.playerInput) {
-          g.chars.pac.speed = g.chars.pac.speed + THRUSTER_SPEED; // no max!
+          g.chars.pac.speed = g.chars.pac.speed + thrust(); // no max!
         }
         if (mod(c.dir - c.iDir, 2) === 1 && yTile > 0 && yTile < cm.h && xTile > 0 && xTile < cm.w) {
           const turnWindow = c.turnWindow || 0;
@@ -1494,6 +1494,11 @@
       }
       return false;
     };
+    // web edition (the author, 2026-11-15): Boost in Jetpack (which has no top speed for it to raise) is Jetpack's own
+    // thrust, BOOST_THRUST times as strong, for Boost's second, whichever way he faces, stick held or not: so he can turn
+    // round and blast off the other way. The physics are Jetpack's (braking, turning round, the crash rule).
+    const jetBoost = () => g.config.movement === 3 && ability() === 2 && T(g.chars.pac.phased) && g.chars.pac.phased > 0;
+    const thrust = () => jetBoost() ? THRUSTER_SPEED * BOOST_THRUST : THRUSTER_SPEED;
     const phasePac = () => {
       g.chars.pac.phaseDir = g.chars.pac.dir;
       g.chars.pac.phased = 60;
@@ -1604,6 +1609,7 @@
         }
       }
       if (mostRecentKey) { pac.iDir = currentlyDown[mostRecentKey]; g.playerInput = true; }
+      if (jetBoost() && T(pac.iDir)) g.playerInput = true; // Boost thrusts whether the stick is held or not
 
       if (!g.playerInput && g.config.movement === 3) {
         pac.speed = Math.max(pac.speed - THRUSTER_SPEED / 2, 0);
