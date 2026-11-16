@@ -212,54 +212,21 @@
     }
 
     // web edition: maze style "27" (config 100; the author, 2026-11-15): the standard walls (style 1) as a living rainbow.
-    // The walls are drawn into their own canvas, coloured pixel by pixel (rainbowPixels), then laid on the picture.
-    // Render only. (rainbowPaint, a spinning gradient, colours the Options swatch)
+    // The walls are drawn into their own canvas, painted over (source-atop keeps their shapes), then laid on the picture.
+    // Render only
     const RAINBOW = 100;
     const rainbowCanvas = document.createElement("canvas"), rctx = rainbowCanvas.getContext("2d");
     function rainbowPaint(c2, w, h, t) {
       c2.globalCompositeOperation = "source-atop";
-      // a swirl: the rainbow twice round, spinning about the middle (the author: "pulse and swirl more aggressively");
-      // a plain diagonal flow where conic gradients aren't supported
-      const light = 55 + Math.sin(t * 5) * 18;
-      const grad = c2.createConicGradient ? c2.createConicGradient(t * 1.6, w / 2, h / 2) : c2.createLinearGradient(0, 0, w, h);
-      const shift = c2.createConicGradient ? 0 : (t * 0.3) % 1;
+      // the rainbow flowing across the maze, quicker than at first, its direction wandering (a few slow waves added up:
+      // smooth, never repeating, never spinning: a swirl and a twisting spiral were tried and made the author queasy)
+      const dir = 0.8 + Math.sin(t * 0.15) * 1.3 + Math.sin(t * 0.085 + 1.7) * 0.9 + Math.sin(t * 0.26 + 4.1) * 0.4;
+      const len = Math.hypot(w, h) / 2, dx = Math.cos(dir) * len, dy = Math.sin(dir) * len;
+      const grad = c2.createLinearGradient(w / 2 - dx, h / 2 - dy, w / 2 + dx, h / 2 + dy);
+      const shift = (t * 0.3) % 1, light = 57 + Math.sin(t * 3.5) * 13;
       for (let i = 0; i <= 12; i++) grad.addColorStop(i / 12, "hsl(" + Math.round(((i / 12) * 2 - shift) * 360) + ",100%," + light + "%)");
       c2.fillStyle = grad; c2.fillRect(0, 0, w, h);
       c2.globalCompositeOperation = "source-over";
-    }
-    // alive (the author: "it should feel like the walls are alive"): each wall pixel coloured on its own: the rainbow in
-    // a spiral twisting round the middle, heartbeat ripples of brightness running outward, and the whole maze breathing
-    const HUE_RGB = [];
-    for (let i = 0; i < 360; i++) { // the pure, fully saturated colour of each hue
-      const k = (n) => (n + i / 30) % 12, f = (n) => 0.5 - 0.5 * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
-      HUE_RGB.push([f(0), f(8), f(4)]);
-    }
-    let polar = null; // per pixel: angle (turns) and distance from the middle (px), cached per canvas size
-    function rainbowPixels(w, h, t) {
-      if (!polar || polar.w !== w || polar.h !== h) {
-        const ang = new Float32Array(w * h), rad = new Float32Array(w * h);
-        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-          const dx = x - w / 2, dy = y - h / 2;
-          ang[y * w + x] = Math.atan2(dy, dx) / (Math.PI * 2); rad[y * w + x] = Math.hypot(dx, dy);
-        }
-        polar = { w, h, ang, rad };
-      }
-      const im = rctx.getImageData(0, 0, w, h), px = im.data, { ang, rad } = polar;
-      const spin = t * 0.35, twist = 0.006 + Math.sin(t * 0.7) * 0.003; // the spiral winds and unwinds
-      const breath = Math.sin(t * 5) * 0.14;
-      for (let i = 0, o = 0; i < ang.length; i++, o += 4) {
-        if (!px[o + 3]) continue;
-        const r = rad[i];
-        let hue = (ang[i] * 2 + r * twist - spin) % 1; if (hue < 0) hue += 1;
-        const c = HUE_RGB[(hue * 360) | 0];
-        const ripple = Math.sin(r * 0.09 - t * 7) * 0.16; // heartbeats running outward
-        const L = Math.max(0.2, Math.min(0.85, 0.55 + breath + ripple));
-        for (let ch = 0; ch < 3; ch++) {
-          const v = L <= 0.5 ? c[ch] * L * 2 : c[ch] + (1 - c[ch]) * (L - 0.5) * 2;
-          px[o + ch] = v * 255;
-        }
-      }
-      rctx.putImageData(im, 0, 0);
     }
     function drawRainbowMaze(cm, showMaze, fadeOn) {
       const INDEXES = core.INDEXES, MAXC = core.MAX_COLORS, map = cm.map, s = sheets.spr8, ad = g.config.afterDark;
@@ -281,7 +248,7 @@
         }
       }
       rctx.globalAlpha = 1;
-      rainbowPixels(w, h, performance.now() / 1000);
+      rainbowPaint(rctx, w, h, performance.now() / 1000);
       ctx.globalAlpha = col[3];
       ctx.drawImage(rainbowCanvas, camX(), camY());
       ctx.globalAlpha = 1;
