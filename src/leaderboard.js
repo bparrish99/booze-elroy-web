@@ -107,7 +107,19 @@
       if (ownConfig && scene !== "game" && scene !== "nameEntry" && !(playingBoard ? scene === "leaderboard" || scene === borrowHome : scene === "arena")) leaveArena();
       if (scene === "game") {
         // a real game is starting: refresh its board(s) so name entry has current data at game over
-        if (lastScene !== "game" && !g.attract && !g.autoplay) { load(currentKey(), true); if (ownConfig && arena) loadArena(arena.id); }
+        if (lastScene !== "game" && !g.attract && !g.autoplay) {
+          // and HIGH SCORE is that board's: the settings in play, borrowed ones too (a pick, a leaderboard's, an arena's;
+          // the author, 2026-11-16: it kept the page before's), shown from the cache, then again once the board is in
+          const key = currentKey();
+          refreshHeader(key);
+          load(key, true).then(() => {
+            if (g.scene.name !== "game" || g.attract || currentKey() !== key) return;
+            const score = g.score || 0;
+            refreshHeader(key);
+            if (score > 0 && score > (g.highScore || 0)) g.highScore = score; // never below the game's own score
+          });
+          if (ownConfig && arena) loadArena(arena.id);
+        }
         lastScene = scene;
         return; // in a game the core keeps HIGH SCORE up to date itself
       }

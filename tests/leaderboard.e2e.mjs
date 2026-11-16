@@ -177,6 +177,10 @@ try {
   check(await ev(() => { const m = window.__core.g.scene.menu; return m[m.selectedItem - 1].text; }) === "Play 1P", "PLAY 1P is selected first");
   await p.keyboard.press("Enter");
   check(await until("g.scene.name === 'game' && g.mode === 'normal' && g.config.mazepack === 'mspac' && g.config.startingLevel === 3", 12000), "PLAY 1P: a game with that board's settings, own starting level");
+  { // HIGH SCORE in the game: that board's top score, not the player's own settings' (the author, 2026-11-16)
+    const top = await ev((k) => fetch("/api/scores?board=" + encodeURIComponent(k)).then((r) => r.json()).then((d) => d.entries[0].score), MSPAC);
+    check(await until(`g.highScore === ${top}`, 5000), "HIGH SCORE in a borrowed game: the borrowed board's (" + top + ")");
+  }
   await p.keyboard.press("c"); // CRT toggled while the settings are borrowed: kept and saved as the player's own
   await p.keyboard.press("Escape");
   check(await until(`g.scene.name === 'leaderboard' && g.scene.key === '${MSPAC}' && g.config.mazepack === 'mspac'`), "Esc mid-game: back on that board");
