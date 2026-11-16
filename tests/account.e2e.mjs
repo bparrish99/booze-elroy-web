@@ -362,6 +362,25 @@ try {
   await p.evaluate(() => window.__refresh());
   await p.waitForTimeout(500);
   check(await p.evaluate(() => { const tr = document.querySelector("tr.new"); return !!tr && /NIGHT OWL\s*created an account/.test(tr.textContent) && /updated/.test(document.getElementById("live").textContent); }), "activity page: auto-refresh brings in new activity, lit up");
+  // the last 24 hours to start (the author, 2026-11-15), older entries a button away
+  {
+    const ago = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+    await p.route("**/api/account/activity", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ accounts: ["NEWBIE", "OLDIE"], events: [
+      { at: ago(1), type: "login", name: "NEWBIE", detail: "" }, { at: ago(30), type: "login", name: "YESTERDAY", detail: "" }, { at: ago(80), type: "login", name: "OLDIE", detail: "" }] }) }));
+    await p.reload(); await p.waitForTimeout(800);
+    const logText = () => p.evaluate(() => document.getElementById("log").textContent);
+    let t = await logText();
+    check(/NEWBIE/.test(t) && !/YESTERDAY|OLDIE/.test(t) && await p.evaluate(() => !document.getElementById("more").hidden && /2 earlier entries/.test(document.getElementById("moreNote").textContent)), "activity page: the last 24 hours, older a button away");
+    await p.click("#earlier"); t = await logText();
+    check(/YESTERDAY/.test(t) && !/OLDIE/.test(t), "activity page: 24 hours earlier");
+    await p.click("#all"); t = await logText();
+    check(/OLDIE/.test(t) && await p.evaluate(() => document.getElementById("more").hidden), "activity page: show everything");
+    await p.click("#all").catch(() => {});
+    await p.reload(); await p.waitForTimeout(800);
+    await p.click("#accts button[data-n=OLDIE]");
+    check(/OLDIE/.test(await logText()), "activity page: one player's entries all show, however old");
+    await p.unroute("**/api/account/activity");
+  }
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join("; ") : ""));
 } finally {
   await b.close(); await dev.stop(); rmSync(blobsDir, { recursive: true, force: true });
