@@ -46,10 +46,12 @@
     // (the vector look only draws outlines, so there he has no inside to hollow out: a dimmer yellow instead)
     const setHollow = () => { if (g.config.crtEffect === "vector") { col = [0.6, 0.6, 0.6, 1]; hollow = false; } else { col = [1, 1, 1, 1]; hollow = true; } };
     const HOLLOW_EDGE = [150, 146, 0], HOLLOW_MID = [62, 58, 0], HOLLOW_FADE = 3; // pixels from the edge to the darkest shade
+    const HOT_EDGE = [235, 60, 60], HOT_MID = [105, 22, 22]; // the same, red: spent and too fast for a wall in Jetpack
     const hollowCache = new WeakMap(); // sheet -> Map(frame -> canvas)
-    function hollowFrame(s, sx, sy) {
+    function hollowFrame(s, sx, sy, hot) {
       if (!hollowCache.has(s)) hollowCache.set(s, new Map());
-      const frames = hollowCache.get(s), k = sx + "," + sy;
+      const frames = hollowCache.get(s), k = sx + "," + sy + (hot ? "h" : "");
+      const EDGE = hot ? HOT_EDGE : HOLLOW_EDGE, MID = hot ? HOT_MID : HOLLOW_MID;
       let c = frames.get(k);
       if (c) return c;
       const w = s.fw, h = s.fh;
@@ -66,7 +68,7 @@
         for (const [ex, ey] of empty) { const dd = (ex - x) * (ex - x) + (ey - y) * (ey - y); if (dd < d) d = dd; }
         let t = Math.min(1, (Math.sqrt(d) - 1) / HOLLOW_FADE);
         t = t * t * (3 - 2 * t); // smoothstep
-        for (let ch = 0; ch < 3; ch++) px[o + ch] = Math.round(HOLLOW_EDGE[ch] + (HOLLOW_MID[ch] - HOLLOW_EDGE[ch]) * t);
+        for (let ch = 0; ch < 3; ch++) px[o + ch] = Math.round(EDGE[ch] + (MID[ch] - EDGE[ch]) * t);
       }
       cc.putImageData(im, 0, 0);
       frames.set(k, c);
@@ -82,17 +84,16 @@
       const sx = (i % s.cols) * s.fw, sy = Math.floor(i / s.cols) * s.fh;
       let src = s.img, ssx = sx, ssy = sy;
       const tinted = col[0] !== 1 || col[1] !== 1 || col[2] !== 1;
-      if (hollow) {
-        src = hollowFrame(s, sx, sy); ssx = 0; ssy = 0;
-      } else if (tinted) {
+      if (hollow) { src = hollowFrame(s, sx, sy, hollow === "hot"); ssx = 0; ssy = 0; }
+      if (tinted) { // a tint multiplies whatever is drawn, hollow included
         tctx.clearRect(0, 0, 16, 16);
         tctx.globalCompositeOperation = "source-over";
-        tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
+        tctx.drawImage(src, ssx, ssy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "multiply";
         tctx.fillStyle = `rgb(${Math.round(col[0] * 255)},${Math.round(col[1] * 255)},${Math.round(col[2] * 255)})`;
         tctx.fillRect(0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "destination-in";
-        tctx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, s.fw, s.fh);
+        tctx.drawImage(src, ssx, ssy, s.fw, s.fh, 0, 0, s.fw, s.fh);
         tctx.globalCompositeOperation = "source-over";
         src = tmp; ssx = 0; ssy = 0;
       }
@@ -138,7 +139,6 @@
       const s = sheets[a.spr];
       if (frameIndex === undefined || !s || frameIndex > s.count) return;
       const inGame = g.scene.name === "game";
-      if (inGame && o === g.chars.pac && g.config.movement === 3 && g.chars.pac.speed > core.constants.MAX_THRUST) setColor(1, 0.3, 0.3);
       if (o.target && T(o.stunned)) setColor(Math.random(), Math.random(), Math.random());
       else if (o.target && !T(o.frightened) && !T(o.dead) && inGame && T(g.config.radar) && T(g.radarTimer)) {
         let alpha = 0;
@@ -174,6 +174,12 @@
       if (inGame && o === g.chars.pac && core.curAbility() === core.PAUSE && g.pauseSpent && !(g.freezeLeft > 0)) setHollow();
       // web edition: the Rewind ability's charge shows the abilities' way: solid when ready, hollow once used
       if (inGame && o === g.chars.pac && core.curAbility() === core.REWIND && g.rewindSpent && !g.rewinding) setHollow(); // full while it plays back; spent once it's done
+      // Jetpack too fast to hit a wall: red, laid over whatever else he is (hollow / spent included, so the warning
+      // shows before the ability comes back; the author, 2026-11-15: hollow used to wipe it out)
+      if (inGame && o === g.chars.pac && g.config.movement === 3 && g.chars.pac.speed > core.constants.MAX_THRUST) {
+        if (hollow) hollow = "hot"; // a red hollow (a red tint over the yellow one came out brown)
+        else col = [col[0], col[1] * 0.3, col[2] * 0.3, col[3]];
+      }
       let angle = 0;
       if (T(o.stunned)) angle = (o.stunned * 6 * (o.spinDirection > 0.5 ? 1 : -1)) * Math.PI / 180;
       blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0), angle, 8, 8);
