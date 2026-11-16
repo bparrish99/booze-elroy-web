@@ -46,6 +46,10 @@
       set(k, v) { try { storage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } },
     };
     const BESTS = "booze-elroy-highscores", NAME = "booze-elroy-name";
+    // the name to fill in next time: logged out, the last one typed; logged in, the last one this account put on a board
+    // (a player asked, 2026-11-16: people who post under a fun name want it again, not their login), kept per account
+    const loginName = () => (opts.playerName && opts.playerName()) || null;
+    const nameKey = () => (loginName() ? NAME + "/" + loginName() : NAME);
 
     // ---------------------------------------------------------------- boards (cache + network)
     const boards = new Map(); // key -> { status: "loading" | "ok" | "error", entries, at }
@@ -615,8 +619,12 @@
         neMenu.selectedItem = (this.entry ? END : 0) + 1; // a remembered name is one press from done
         // logged in (opts.playerName): the account's name is filled in, one press from done, and can still be changed
         // (an actual player missed putting funny names up, so the author made it a pre-fill, not an auto-save)
+        // (and once the account has put a score up under another name, that name: the player's request, 2026-11-16)
         const player = this.mode === "score" && opts.playerName && SK.cleanName(opts.playerName() || "");
-        if (player) { this.entry = player; neMenu.selectedItem = END + 1; }
+        if (player) {
+          const last = store.get(nameKey(), "");
+          this.entry = (typeof last === "string" && SK.cleanName(last)) || player; neMenu.selectedItem = END + 1;
+        }
       },
       update() {
         this.fc += 1;
@@ -676,7 +684,7 @@
         if (!name) return;
         this.sending = true; this.message = null; sfx("coindrop");
         if (this.mode === "createArena") return this.createArena(name);
-        if (!(opts.playerName && opts.playerName())) store.set(NAME, name); // the remembered name is for logged-out entry
+        store.set(nameKey(), name); // remembered for next time (logged in: for this account)
         if (this.arenaId) return this.submitArena(name);
         let res = null;
         try { res = await post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  ") }); } catch { res = null; }
@@ -705,7 +713,7 @@
       // the name is an account's (and this isn't its login): pick another one, with the clock started over
       taken(name) {
         this.sending = false; this.message = "that name is taken";
-        if (store.get(NAME, "") === name) store.set(NAME, "");
+        if (store.get(nameKey(), "") === name) store.set(nameKey(), "");
         this.entry = ""; this.timer = ENTRY_FRAMES; neMenu.selectedItem = 1;
       },
       // a game in an arena: the arena board, and the regular board for these settings too

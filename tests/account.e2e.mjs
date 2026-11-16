@@ -344,6 +344,18 @@ try {
     check(await p.evaluate(() => window.__core.g.scene.name === "favorites" && !window.__core.g.scene.menu.some((i) => i.text === "SIX OF THEM")), "Remove takes it off the list");
     await p.evaluate(() => { const c = window.__core.g.config; c.ghostCount = 4; c.mazepack = "pac"; localStorage.setItem("booze-elroy-options", JSON.stringify(c)); window.__core.setScene("attract"); });
   }
+  // logged in, after a score put up under another name, that name is filled in next time (a player's request, 2026-11-16)
+  {
+    const enter = () => p.evaluate(() => { window.__core.setScene("nameEntry", { mode: "score", score: 50, place: 1 }); return window.__core.g.scene.entry; });
+    check(await enter() === "PINBACK", "logged in, before any other name: the login name");
+    await p.evaluate(() => { const s = window.__core.g.scene; s.entry = "FUNNY GUY"; s.submit(); });
+    await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 15000 });
+    check(await enter() === "FUNNY GUY", "logged in, after a score under another name: that name next time");
+    await p.evaluate(() => { const s = window.__core.g.scene; s.entry = "PINBACK"; s.submit(); });
+    await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 15000 });
+    check(await enter() === "PINBACK", "and back to the login name once it's used again");
+    await p.evaluate(() => window.__core.setScene("attract"));
+  }
   // a token the server doesn't know logs out at start-up
   await p.evaluate(() => localStorage.setItem("booze-elroy-account", JSON.stringify({ name: "GHOST", token: "x".repeat(32) })));
   await p.reload(); await p.waitForTimeout(1500);
