@@ -100,7 +100,7 @@
     function tick() {
       const scene = g.scene.name;
       // left the arena (or the leaderboard whose settings were borrowed) some other way: the player's own settings come back
-      if (ownConfig && scene !== "game" && scene !== "nameEntry" && scene !== (playingBoard ? "leaderboard" : "arena")) leaveArena();
+      if (ownConfig && scene !== "game" && scene !== "nameEntry" && !(playingBoard ? scene === "leaderboard" || scene === borrowHome : scene === "arena")) leaveArena();
       if (scene === "game") {
         // a real game is starting: refresh its board(s) so name entry has current data at game over
         if (lastScene !== "game" && !g.attract && !g.autoplay) { load(currentKey(), true); if (ownConfig && arena) loadArena(arena.id); }
@@ -187,26 +187,27 @@
     let arena = null; // the arena being viewed / played
     let ownConfig = null; // the player's own settings while an arena's (or a leaderboard's) are applied
     let playingBoard = null; // the board key while its settings are borrowed from the Leaderboards page (PLAY 1P)
+    let borrowHome = null; // the page a borrowed board's games come back to: "leaderboard" or "picks" (Pinback's Picks)
     const arenaOpen = (a) => !!a && serverNow() < a.endsAt;
     function applyArena(a) {
       if (!ownConfig) ownConfig = { ...g.config };
       Object.assign(g.config, SK.configFor(a.board), { startingLevel: 1 });
     }
-    function applyBoard(key) {
+    function applyBoard(key, home) {
       if (!ownConfig) ownConfig = { ...g.config };
       Object.assign(g.config, SK.configFor(key));
-      playingBoard = key; arena = null;
+      playingBoard = key; arena = null; borrowHome = home || "leaderboard";
     }
     function leaveArena() {
       // the player's own settings come back, except CRT: the C key may have toggled it meanwhile (main.js saves it)
       if (ownConfig) { const crt = g.config.crtEffect; Object.assign(g.config, ownConfig, { crtEffect: crt }); ownConfig = null; }
-      arena = null; playingBoard = null;
+      arena = null; playingBoard = null; borrowHome = null;
     }
     const borrowed = () => !!ownConfig; // someone else's settings are applied: never save them as the player's
     const ownSettings = () => ownConfig || g.config; // the player's own settings, borrowed or not
     const inArena = () => !!ownConfig && !playingBoard;
     // where quitting a game (Esc / the X button) goes: back to the arena or leaderboard it was started from, else the title
-    const quitGameTo = () => (!ownConfig ? null : playingBoard ? "leaderboard" : "arena");
+    const quitGameTo = () => (!ownConfig ? null : playingBoard ? borrowHome : "arena");
     // straight into a game (the title's "play" step only runs on the title scene, which would give the settings back)
     function startGame() { sfx("coindrop"); g.autoplay = false; g.attract = false; core.setScene("game"); }
     function arenaHeader() {
@@ -454,7 +455,7 @@
       decor: [], links: [],
       start() {
         leaveArena();
-        this.menu = Object.assign([], { selectedItem: 1 });
+        this.menu = Object.assign([], { selectedItem: 1 }); this.hadList = false;
         if (opts.favorites) opts.favorites.load();
         this.build(); this.menu.selectedItem = 1;
       },
@@ -466,6 +467,8 @@
         const items = f.list.map((fav, i) => ({ id: "f:" + fav.name, text: fav.name, x: 2, y: FAV_TOP + i, fav, action: () => core.setScene("favorite", { fav }) }));
         items.push({ text: "Back", x: 12, y: 31, action() { core.setScene("attract", true); } });
         rebuildMenu(this, items);
+        if (!this.hadList && f.list.length) this.menu.selectedItem = 1; // the list just arrived: its first, not Back
+        this.hadList = f.list.length > 0;
         const mid = (t, y, o) => decor.push({ text: t, x: 14 - t.length / 2, y, o });
         if (!f.list.length) {
           if (f.status === "loading" || f.status === "none") mid("loading", 12, 0);
@@ -531,6 +534,56 @@
         menuKeys(this, key);
       },
       gamepadpressed(button) { if (button === "b") core.setScene("favorites"); else menuPad(this, button); },
+    };
+
+    // ---------------------------------------------------------------- Pinback's Picks (the author, 2026-11-15)
+    // the author's favorites for everyone, from the title's sign: the list (like favorites; the highlighted one's
+    // settings underneath); picking one starts a game at once (the author: no page of its own), its settings borrowed
+    // like the Leaderboards page's, and quitting or finishing comes back to the list, where the player's own come
+    // back. Playing one earns "trust me" (opts.pickPlayed). opts.picks: { get() -> { status, list: [{ name, board }] }, load() }
+    const picksGet = () => (opts.picks ? opts.picks.get() : { status: "error", list: [] });
+    function playPick(fav) { applyBoard(fav.board, "picks"); if (opts.pickPlayed) opts.pickPlayed(); startGame(); }
+    const picksScene = {
+      name: "picks",
+      menu: Object.assign([], { selectedItem: 1 }),
+      decor: [], links: [],
+      start() {
+        leaveArena();
+        this.menu = Object.assign([], { selectedItem: 1 }); this.hadList = false;
+        if (opts.picks) opts.picks.load();
+        this.build(); this.menu.selectedItem = 1;
+      },
+      update() { this.build(); },
+      status() { return picksGet().status; },
+      title() { return "pinback's picks"; },
+      build() {
+        const f = picksGet(), decor = [];
+        const items = f.list.map((fav, i) => ({ id: "p:" + fav.name, text: fav.name, x: 2, y: FAV_TOP + i, fav, action: () => playPick(fav) }));
+        items.push({ text: "Back", x: 12, y: 31, action() { core.setScene("attract", true); } });
+        rebuildMenu(this, items);
+        if (!this.hadList && f.list.length) this.menu.selectedItem = 1; // the list just arrived: its first, not Back
+        this.hadList = f.list.length > 0;
+        const mid = (t, y, o) => decor.push({ text: t, x: 14 - t.length / 2, y, o });
+        if (!f.list.length) {
+          if (f.status === "loading" || f.status === "none") mid("loading", 12, 0);
+          else if (f.status === "error") mid("try again soon", 12, 0);
+          else mid("nothing picked yet", 12, 2);
+        }
+        const sel = this.menu[this.menu.selectedItem - 1];
+        if (sel && sel.fav) summaryParts(28, SK.configFor(sel.fav.board)).slice(0, 8).forEach((line, i) => { // name white, value yellow
+          let x = 14 - partsText(line).length / 2;
+          for (const [l, v] of line) {
+            if (l) { decor.push({ text: l, x, y: 22 + i, o: 0 }); x += l.length + 1; }
+            decor.push({ text: v, x, y: 22 + i, o: l ? 6 : 0 }); x += v.length + 2;
+          }
+        });
+        this.decor = decor;
+      },
+      keypressed(key) {
+        if (key === "escape" || key === "backspace") { wakka(); core.setScene("attract", true); return; }
+        menuKeys(this, key);
+      },
+      gamepadpressed(button) { if (button === "b") core.setScene("attract", true); else menuPad(this, button); },
     };
 
     // grid cells double as a "menu" so the mouse / touch code can hover and click them
@@ -680,7 +733,7 @@
     function afterGameOver(score) {
       if (ownConfig && !playingBoard) return afterArenaGame(score);
       // a game borrowed from the Leaderboards page ends back on that board
-      return afterBoardGame(score) || (playingBoard ? "leaderboard" : null);
+      return afterBoardGame(score) || (playingBoard ? borrowHome : null);
     }
     function afterBoardGame(score) {
       if (!api || !(score > 0)) return null;
@@ -756,7 +809,7 @@
       if (opts.playerName && !opts.playerName()) { g.toast = { text: "log in to create an arena", until: performance.now() + 2500 }; return; }
       core.setScene("nameEntry", { mode: "createArena", from });
     };
-    return { summaryParts, attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene, favorites: favoritesScene, favorite: favoriteScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
+    return { summaryParts, attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene, favorites: favoritesScene, favorite: favoriteScene, picks: picksScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
   }
 
   root.BoozeLeaderboard = { create };

@@ -321,6 +321,22 @@ try {
     await p.waitForFunction(() => window.__core.g.scene.name === "game", null, { timeout: 5000 });
     check(await p.evaluate(() => { const c = window.__core.g.config, saved = JSON.parse(localStorage.getItem("booze-elroy-options")); return c.ghostCount === 6 && c.mazepack === "mspac" && saved.ghostCount === 6; }), "Play: its settings become the player's own (saved)");
     await p.keyboard.press("Escape"); await p.waitForTimeout(400);
+    // Pinback's Picks (the author, 2026-11-15): PINBACK's favorites, for everyone, from the title's sign; a pick plays
+    // at once with its settings borrowed (the player's own come back on the list); "trust me"
+    check(await p.evaluate(() => fetch("/api/account/picks").then((r) => r.json()).then((d) => d.picks.some((f) => f.name === "SIX OF THEM"))), "picks: PINBACK's favorites, no login needed");
+    await p.evaluate(() => { const c = window.__core.g.config; c.ghostCount = 4; c.mazepack = "pac"; localStorage.setItem("booze-elroy-options", JSON.stringify(c)); window.__core.setScene("attract"); });
+    await p.waitForTimeout(300);
+    check(await p.evaluate(() => window.__R.creditsLinks().some((L) => L.scene === "picks")), "the title's sign links to the picks");
+    await p.evaluate(() => window.__core.setScene("picks"));
+    await p.waitForFunction(() => window.__core.g.scene.name === "picks" && window.__core.g.scene.menu.some((i) => i.text === "SIX OF THEM"), null, { timeout: 5000 });
+    await p.evaluate(() => { const m = window.__core.g.scene.menu; m.selectedItem = m.findIndex((i) => i.text === "SIX OF THEM") + 1; });
+    await p.keyboard.press("Enter");
+    await p.waitForFunction(() => window.__core.g.scene.name === "game", null, { timeout: 5000 });
+    check(await p.evaluate(() => { const c = window.__core.g.config, saved = JSON.parse(localStorage.getItem("booze-elroy-options")); return c.ghostCount === 6 && c.mazepack === "mspac" && saved.ghostCount === 4; }), "a pick plays at once, its settings borrowed (not saved)");
+    await p.waitForTimeout(500);
+    check(await p.evaluate(() => fetch("/api/account/achievements", { headers: window.__acc.auth() }).then((r) => r.json()).then((d) => !!d.achievements.trust)), "trust me");
+    await p.keyboard.press("Escape"); await p.waitForTimeout(400);
+    check(await p.evaluate(() => window.__core.g.scene.name === "picks" && window.__core.g.config.ghostCount === 4 && window.__core.g.config.mazepack === "pac"), "quitting comes back to the picks, the player's own settings back");
     await p.evaluate(() => { const c = window.__core; c.setScene("favorites"); });
     await p.waitForFunction(() => window.__core.g.scene.menu.some((i) => i.text === "SIX OF THEM"), null, { timeout: 5000 });
     await p.evaluate(() => { const c = window.__core; c.setScene("favorite", { fav: c.g.scene.menu.find((i) => i.fav).fav }); const m = c.g.scene.menu; m.selectedItem = m.findIndex((i) => i.text === "Remove") + 1; });

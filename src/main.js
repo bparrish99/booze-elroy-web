@@ -52,6 +52,7 @@
       // favorites (the author, 2026-11-15): the list (account.js), "Add Favorite" (asks for a name), and playing one
       // makes its settings the player's own (saved)
       favorites: { get: () => ACC.favorites(), load: () => ACC.loadFavorites(), remove: (n) => ACC.removeFavorite(n) },
+      picks: { get: () => ACC.picks(), load: () => ACC.loadPicks() }, pickPlayed: () => earned(["trust"]), // Pinback's Picks (trust me)
       addFavorite: (key) => openFavorite(key),
       saveSettings: () => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(core.g.config)); } catch { /* ignore */ } },
     });

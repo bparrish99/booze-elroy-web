@@ -173,11 +173,24 @@
       if (r.ok && r.data && Array.isArray(r.data.favorites)) favs = { status: "ok", list: r.data.favorites, of: me.name };
       return { ok: r.ok };
     }
+    // "Pinback's Picks" (the author, 2026-11-15): the author's favorites, for everyone (no login)
+    let picks = { status: "none", list: [] };
+    async function loadPicks() {
+      if (!api) { picks = { status: "error", list: [] }; return picks; }
+      if (picks.status !== "ok") picks = { status: "loading", list: picks.list };
+      try {
+        const res = await fetchFn(api + "/picks", { cache: "no-store" });
+        const d = res.ok ? await res.json() : null;
+        picks = d && Array.isArray(d.picks) ? { status: "ok", list: d.picks } : { ...picks, status: picks.list.length ? "ok" : "error" };
+      } catch { picks = { ...picks, status: picks.list.length ? "ok" : "error" }; }
+      return picks;
+    }
     const api_ = {
       online: !!api,
       placedOn, playedOn, arenaPlaced,
       favorites: () => (me && favs.of === me.name ? favs : { status: me ? "loading" : "none", list: [] }),
       loadFavorites, addFavorite, removeFavorite,
+      picks: () => picks, loadPicks,
       name: () => (me ? me.name : null),
       auth, // { authorization: "Bearer ..." } logged in, else {}
       signup: (name, password) => enter("signup", name, password),

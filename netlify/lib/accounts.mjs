@@ -16,6 +16,8 @@
 //   GET  /api/account/favorites           (Bearer) -> { favorites: [{ name, board }] }   saved gameplay settings
 //   POST /api/account/favorites { name, board } (Bearer) -> { favorites }   adds one (the same name: replaced), at most
 //        FAV_MAX (409 "full"); POST /api/account/unfavorite { name } (Bearer) -> { favorites }
+//   GET  /api/account/picks  -> { picks: [{ name, board }] }   "Pinback's Picks": the author's account's favorites, for
+//        everyone (no login; the title's sign)
 //   GET  /api/account/activity  (x-admin-key: LEADERBOARD_ADMIN_PASSWORD) -> { accounts: [names], events: [{ at, type,
 //        name, detail }] newest first, the last 1000 }   the author's secret page (public/activity.html)
 //
@@ -93,6 +95,7 @@ async function retroAward(store, scoresStore, name) {
   await store.set(retroKey(name), String(RETRO_VERSION));
   return fresh;
 }
+export const PICKS_OWNER = "PINBACK"; // whose favorites are "Pinback's Picks" (the author's account)
 export const FAV_MAX = 15; // a favorites page holds this many (the author: as many as fit on one page)
 const DAY = 86400000;
 /** "YYYY-MM-DD" -> ms at its UTC midnight; NaN if it isn't a real date */
@@ -226,6 +229,11 @@ export async function handleAccounts(req, store, opts = {}) {
     });
     if (r && scored) await logEvent(store, "score", s.name, JSON.stringify([body.rank, body.score, text(body.settings, 160) || body.board]));
     return r ? json(200, r) : json(409, { error: "busy, try again" });
+  }
+  if (action === "picks") { // public: the author's favorites, as "Pinback's Picks" (the author, 2026-11-15)
+    if (req.method !== "GET") return json(405, { error: "method not allowed" });
+    const cur = await store.get(favKey(PICKS_OWNER), { type: "json" });
+    return json(200, { picks: Array.isArray(cur) ? cur.filter((f) => f && cleanName(f.name) === f.name && isKey(f.board)) : [] });
   }
   // favorites (the author, 2026-11-15): named gameplay settings (a board key: the leaderboard's settings, not starting
   // level or looks), at most FAV_MAX, oldest first; adding a name that's there already replaces it

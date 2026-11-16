@@ -116,6 +116,11 @@
       o = o || 0;
       const up = str.toUpperCase();
       for (let i = 0; i < up.length; i++) {
+        if (up[i] === "'") { // the font has no apostrophe ('"' isn't in every colour): the top of "!", in any colour
+          const px = (maze ? camX() : 0) + x * TILE, py = (maze ? camY() : 0) + y * TILE;
+          clip(px, py, TILE, 3); print("!", x, y, o, maze); unclip();
+          x += 1; continue;
+        }
         const idx = TEXT_CHARS.indexOf(up[i]) + 1;
         if (idx > 0) drawSprite("text8", o * 64 + idx, x * TILE, y * TILE, maze);
         if (idx > 0 && masking && up[i] !== " " && !LOGO_PIECES.includes(up[i])) {
@@ -459,6 +464,7 @@
         print(msg2, 14 - msg2.length / 2, 6);
         drawMenu(core.attractMenu, 6, 23, 1);
         print("credits", 14 - "credits".length / 2, 35, 2); // (it said "web edition"; the author, 2026-11-15: the credits link, same pink)
+        drawPicks();
       }
       if (g.mode === "restart" && core.mode.isStarted("restart") && g.ghosts) {
         ctx.save(); ctx.translate(0, -TILE); maskShift = -TILE; // the intro a tile higher too (the vector look's text mask with it)
@@ -784,9 +790,50 @@
       { x0: 80, y0: 84, x1: 144, y1: 100, url: "mailto:bparrish99@gmail.com" },
       { x0: 0, y0: 264, x1: 224, y1: 284, url: "https://pinback.substack.com", secret: "wake" }, // a secret achievement (main.js)
     ];
-    // web edition: "credits" on the title opens the credits
+    // web edition: "credits" on the title opens the credits; "pinback's picks" (the sign right of the menu) opens the picks
     const TITLE_LINKS = [{ x0: 76, y0: 276, x1: 148, y1: 288, scene: "credits" }];
-    const creditsLinks = () => (g.scene.name === "credits" ? LINKS : g.scene.name === "attract" && g.state && g.state.showHelperText ? TITLE_LINKS : g.scene.links || []);
+    const creditsLinks = () => (g.scene.name === "credits" ? LINKS : g.scene.name === "attract" && g.state && g.state.showHelperText
+      ? (picksBox ? [...TITLE_LINKS, picksBox] : TITLE_LINKS) : g.scene.links || []);
+
+    // "PINBACK'S PICKS" (the author, 2026-11-15; the one place the font leaves the grid): the game font, smaller, on a
+    // jaunty angle right of the main menu, level with FAVORITES, rocking gently, a colour a line with a white shine
+    // sweeping across now and then and the odd sparkle (the author: a first, busier try was hard to read); a click / tap opens the author's favorites (leaderboard.js picks). Render only.
+    const PICKS_LINES = ["pinback's", "picks"], PICKS_SCALE = 0.875, PICKS_X = 188, PICKS_Y = 224, PICKS_ANGLE = -0.22;
+    const PICKS_COLORS = [6, 3]; // a colour a line (yellow, cyan); a white shine sweeps across now and then (the author: calmer, readable)
+    let picksBox = null;
+    const sparkles = [];
+    function picksGlyph(ch, o, x, y) { // one character at (x, y) in the sign's frame (an apostrophe: the top of "!", as print does)
+      const s = sheets.text8; if (!s) return;
+      const q = ch === "'" ? "!" : ch.toUpperCase(), idx = TEXT_CHARS.indexOf(q);
+      if (idx < 0 || q === " ") return;
+      const j = o * 64 + idx, sx = (j % s.cols) * 8, sy = Math.floor(j / s.cols) * 8;
+      if (ch === "'") ctx.drawImage(s.img, sx, sy, 8, 3, x, y, 8, 3); // the top of "!"
+      else ctx.drawImage(s.img, sx, sy, 8, 8, x, y, 8, 8);
+    }
+    function drawPicks() {
+      const t = performance.now() / 1000, shine = ((t % 3.5) / 3.5) * 22 - 4; // the shine's letter position, every 3.5 s
+      const ang = PICKS_ANGLE + Math.sin(t * 1.6) * 0.1;
+      ctx.save();
+      ctx.translate(PICKS_X, PICKS_Y); ctx.rotate(ang); ctx.scale(PICKS_SCALE, PICKS_SCALE);
+      ctx.imageSmoothingEnabled = true; ctx.globalAlpha = 1; // (smoothed: pixel for pixel, a smaller font at an angle breaks up)
+      let n = 0;
+      PICKS_LINES.forEach((line, li) => {
+        const x0 = -line.length * 4, y0 = (li - PICKS_LINES.length / 2) * 10;
+        for (let i = 0; i < line.length; i++, n++) picksGlyph(line[i], Math.abs(n - li * 2 - shine) < 0.8 ? 0 : PICKS_COLORS[li], x0 + i * 8, y0);
+      });
+      // sparkles: little four-pointed stars popping up round the words and twinkling out
+      if (Math.random() < 0.025 && sparkles.length < 2) sparkles.push({ x: (Math.random() - 0.5) * 84, y: (Math.random() - 0.5) * 30, born: t, life: 0.8 + Math.random() * 0.6 });
+      for (let i = sparkles.length - 1; i >= 0; i--) {
+        const sp = sparkles[i], k = (t - sp.born) / sp.life;
+        if (k >= 1) { sparkles.splice(i, 1); continue; }
+        const r = Math.round(Math.sin(k * Math.PI) * 2);
+        ctx.fillStyle = k < 0.5 ? "#ffffff" : "#ffff80";
+        ctx.fillRect(sp.x - r, sp.y, r * 2 + 1, 1); ctx.fillRect(sp.x, sp.y - r, 1, r * 2 + 1);
+      }
+      ctx.imageSmoothingEnabled = false;
+      ctx.restore();
+      picksBox = { x0: PICKS_X - 38, y0: PICKS_Y - 24, x1: PICKS_X + 36, y1: PICKS_Y + 16, scene: "picks" };
+    }
 
     function drawCredits() {
       begin(true); drawHeader();
@@ -916,7 +963,7 @@
       if (scene === "attract") { if (g.state && g.state.showHelperText) spec = [core.attractMenu, 6, 23, 1]; }
       else if (scene === "options") spec = [core.optMenu, 18, 5, 1];
       else if (scene === "credits") spec = [core.creditsMenu, 12, 27, 2];
-      else if ((scene === "leaderboard" || scene === "nameEntry" || scene === "arenas" || scene === "arena" || scene === "profile" || scene === "favorites" || scene === "favorite") && !g.scene.sending) spec = [g.scene.menu, 0, 0, 1];
+      else if ((scene === "leaderboard" || scene === "nameEntry" || scene === "arenas" || scene === "arena" || scene === "profile" || scene === "favorites" || scene === "favorite" || scene === "picks") && !g.scene.sending) spec = [g.scene.menu, 0, 0, 1];
       if (!spec) return [];
       const [menu, mx, my, sp] = spec, rows = [];
       menu.forEach((item, i0) => {
@@ -992,7 +1039,7 @@
     }
 
     function draw() {
-      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; film = false; backdrop = null;
+      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; film = false; backdrop = null;
       if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
       masking = g.config.crtEffect === "vector";
       const scene = g.scene.name;
@@ -1001,7 +1048,7 @@
       else if (scene === "options") drawOptions();
       else if (scene === "credits") drawCredits();
       else if (scene === "leaderboard" || scene === "arena" || scene === "favorite") drawLeaderboard();
-      else if (scene === "arenas" || scene === "favorites") drawArenas();
+      else if (scene === "arenas" || scene === "favorites" || scene === "picks") drawArenas();
       else if (scene === "mina") { begin(false); drawIntermission3(g.scene.t, true); } // the "mina" cheat
       else if (scene === "nameEntry") drawNameEntry();
       else if (scene === "profile") drawProfile();

@@ -41,6 +41,7 @@
     { id: "stylish", name: "stylish", desc: "Finish a game with a background or maze style other than the default." },
     { id: "park", name: "walk in the park", desc: "Start a game with zero ghosts." },
     { id: "kind", name: "be kind", desc: "Use Rewind in a game." },
+    { id: "trust", name: "trust me", desc: "Play a game from Pinback's Picks." }, // the title's sign (the author, 2026-11-15)
     { id: "dedication", name: "dedication", desc: "See the third intermission." },
     { id: "martini", name: "peer pressure", desc: "Enjoy a delicious martini, in a game with " + G4 + " started on level 1.", minGhosts: 4 }, // the bonus on boards 9 and 10 ("galaxian")
     { id: "streak", name: "one week chip", desc: "Play a game on seven days in a row." },
