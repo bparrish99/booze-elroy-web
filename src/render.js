@@ -217,6 +217,7 @@
     const RAINBOW = 100;
     const rainbowCanvas = document.createElement("canvas"), rctx = rainbowCanvas.getContext("2d");
     function rainbowPaint(c2, w, h, t) {
+      t *= 0.8; // everything 20% slower than first tuned (the author)
       c2.globalCompositeOperation = "source-atop";
       // the rainbow flowing across the maze, quicker than at first, its direction wandering (a few slow waves added up:
       // smooth, never repeating, never spinning: a swirl and a twisting spiral were tried and made the author queasy)
