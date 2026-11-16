@@ -563,7 +563,8 @@
     // like the Leaderboards page's, and quitting or finishing comes back to the list, where the player's own come
     // back. Playing one earns "trust me" (opts.pickPlayed). opts.picks: { get() -> { status, list: [{ name, board }] }, load() }
     const picksGet = () => (opts.picks ? opts.picks.get() : { status: "error", list: [] });
-    function playPick(fav) { applyBoard(fav.board, "picks"); if (opts.pickPlayed) opts.pickPlayed(); startGame(); }
+    let lastPick = null; // the pick just played: highlighted again back on the list, so Enter plays it again (the author)
+    function playPick(fav) { lastPick = fav.name; applyBoard(fav.board, "picks"); if (opts.pickPlayed) opts.pickPlayed(); startGame(); }
     const picksScene = {
       name: "picks",
       menu: Object.assign([], { selectedItem: 1 }),
@@ -572,7 +573,7 @@
         leaveArena();
         this.menu = Object.assign([], { selectedItem: 1 }); this.hadList = false;
         if (opts.picks) opts.picks.load();
-        this.build(); this.menu.selectedItem = 1;
+        this.build(); // (it highlights the pick last played, else the first)
       },
       update() { this.build(); },
       status() { return picksGet().status; },
@@ -583,7 +584,10 @@
         const items = f.list.map((fav, i) => ({ id: "p:" + fav.name, text: fav.name, x: 2, y: FAV_TOP + i, fav, action: () => playPick(fav) }));
         items.push({ text: "Back", x: 12, y: 31, action() { core.setScene("attract", true); } });
         rebuildMenu(this, items);
-        if (!this.hadList && f.list.length) this.menu.selectedItem = 1; // the list just arrived: its first, not Back
+        if (!this.hadList && f.list.length) { // the list just arrived: the pick last played, else the first (not Back)
+          const i = lastPick ? f.list.findIndex((fav) => fav.name === lastPick) : -1;
+          this.menu.selectedItem = i >= 0 ? i + 1 : 1;
+        }
         this.hadList = f.list.length > 0;
         const mid = (t, y, o) => decor.push({ text: t, x: 14 - t.length / 2, y, o });
         if (!f.list.length) {
