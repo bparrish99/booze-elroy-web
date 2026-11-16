@@ -270,7 +270,10 @@
         }
         const defaultColor = (g.config.plusMode && g.currentMaze === "pac") ? 5 : getCurrentMaze().defaultColor;
         if (g.config.mazeColor === 99) g.currentMazeColor = defaultColor;
-        else if (g.config.mazeColor === 0) g.currentMazeColor = rand(1, maze.maxColors - 1);
+        else if (g.config.mazeColor === 0) { // Random: 1-26 or the rainbow (web edition; still one RNG draw, so play is unchanged)
+          const pick = rand(1, maze.maxColors);
+          g.currentMazeColor = pick === maze.maxColors ? 100 : pick;
+        }
         else g.currentMazeColor = g.config.mazeColor;
         g.currentBackground = g.config.background === "random" ? BACKGROUND_OPTIONS[rand(2, BACKGROUND_OPTIONS.length) - 1] : g.config.background;
         g.startX = (getCurrentMaze().w * 8 / 2) - 224 / 2;
@@ -2023,7 +2026,9 @@
       : p + "-" + (MAZE_PACKS[p].list.length + (p === "booze" || p === "normal" ? extraBooze(DATA).length : 0)));
     const saveConfig = () => { if (env.saveConfig) env.saveConfig(g.config); };
     const AV_KEYS = ["background", "mazeColor", "crtEffect", "volume", "musicVolume", "proMode"]; // the Audio/Video section
-    const MAZE_COLORS = [99].concat(range(1, 26), [0]);
+    // web edition: 100 = style "27", the rainbow (the author, 2026-11-15; drawn by render.js, style 1's walls in a moving
+    // rainbow; 27 itself is the white flash at a board's end). Random picks it too
+    const MAZE_COLORS = [99].concat(range(1, 26), [100, 0]);
     const optMenu = Object.assign([
       Object.assign(opt("mazepack", PACKS, PACK_TEXTS, (v) => { g.currentMaze = setCurrentMaze(v); }), { y: 4 }),
       Object.assign(opt("startingLevel", range(1, 21)), { y: 5 }),
@@ -2040,7 +2045,7 @@
       Object.assign(opt("scatterOption", [false, 1, 2, 3], ["Normal", "Random", "mspac", "Never"]), { y: 20 }),
       Object.assign(ON_OFF("freeGhost"), { y: 21 }),
       Object.assign(opt("background", bgNames, bgNames.map(cap), (v) => { g.currentBackground = v === "random" ? BACKGROUND_OPTIONS[rand(2, BACKGROUND_OPTIONS.length) - 1] : v; }), { y: 24 }),
-      Object.assign(opt("mazeColor", MAZE_COLORS, ["Default"].concat(range(1, 26), ["Random"])), { y: 25 }),
+      Object.assign(opt("mazeColor", MAZE_COLORS, ["Default"].concat(range(1, 26), [27, "Random"])), { y: 25 }),
       Object.assign(ON_OFF("crtEffect"), { y: 26 }),
       Object.assign(opt("volume", range(0, 10), null, () => applyVolume()), { y: 27, x: 18 }),
       { text: "Reset Classic Pac-Man", sound: "phase", x: 6, y: 29, action() {
