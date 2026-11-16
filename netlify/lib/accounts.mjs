@@ -95,6 +95,39 @@ async function retroAward(store, scoresStore, name) {
   await store.set(retroKey(name), String(RETRO_VERSION));
   return fresh;
 }
+// chicken dinner, from the server (2026-11-16: the friend RJ won two arenas under another name and the client's check,
+// leader's name === the login, missed them): an arena closed (past the grace for late scores) with this account on top.
+// The leader's account ("by") is kept since 2026-11-16; for arenas from before that, the winning score is matched against
+// this account's logged arena scores (its "arenascore" activity events: rank, score, arena name). Checked at every
+// achievements load (one read of the arena index; the activity log only for such older arenas)
+const ARENA_GRACE = 15 * 60 * 1000;
+async function arenaWins(store, arenasStore, name, now) {
+  const have = (await store.get(achKey(name), { type: "json" })) || {};
+  if (have.dinner) return [];
+  const index = await arenasStore.get("index", { type: "json" });
+  const closed = (index && Array.isArray(index.arenas) ? index.arenas : []).filter((a) => a && a.leader && now > a.endsAt + ARENA_GRACE);
+  let won = closed.some((a) => a.leader.by === name || a.leader.name === name);
+  const older = closed.filter((a) => !("by" in a.leader));
+  if (!won && older.length) {
+    const { blobs: events } = await store.list();
+    for (const ev of events) {
+      const p = ev.key.split("/");
+      if (p[0] !== "e" || p[2] !== "arenascore" || p[3] !== hex(name)) continue;
+      try {
+        const d = JSON.parse(decodeURIComponent(p[4]));
+        if (Array.isArray(d) && older.some((a) => a.leader.score === d[1] && a.name === d[2])) { won = true; break; }
+      } catch { /* ignore */ }
+    }
+  }
+  if (!won) return [];
+  const r = await updateJSON(store, achKey(name), (cur) => {
+    const h = cur && typeof cur === "object" ? cur : {};
+    if (h.dinner) return { result: [] };
+    return { value: { ...h, dinner: Date.now() }, result: ["dinner"] };
+  });
+  if (r && r.length) await logEvent(store, "achievement", name, "dinner");
+  return r || [];
+}
 export const PICKS_OWNER = "PINBACK"; // whose favorites are "Pinback's Picks" (the author's account)
 export const FAV_MAX = 15; // a favorites page holds this many (the author: as many as fit on one page)
 const DAY = 86400000;
@@ -263,6 +296,7 @@ export async function handleAccounts(req, store, opts = {}) {
     if (req.method === "GET") {
       let retro = [];
       if (opts.scoresStore) { try { retro = await retroAward(store, opts.scoresStore, s.name); } catch { retro = []; } } // never fails the load
+      if (opts.arenasStore) { try { retro = [...retro, ...await arenaWins(store, opts.arenasStore, s.name, opts.now ? opts.now() : Date.now())]; } catch { /* never fails the load */ } }
       return json(200, { achievements: (await store.get(achKey(s.name), { type: "json" })) || {}, ...(retro.length ? { retro } : {}) });
     }
     const body = await readBody(req);

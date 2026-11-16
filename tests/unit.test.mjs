@@ -3,7 +3,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { handle } from "../netlify/lib/scores.mjs";
+import { handle, updateJSON } from "../netlify/lib/scores.mjs";
 import { handleArenas, HOUR, GRACE } from "../netlify/lib/arenas.mjs";
 import { handleAccounts, nameChecker, anonLogger, accountOf } from "../netlify/lib/accounts.mjs";
 import { startBlobs } from "./blobs.mjs";
@@ -504,4 +504,37 @@ test("accounts: logged-out scores that place are logged (with the client's summa
   assert.deepEqual(anon.filter((x) => x[1] === "JOSH").sort(), [["anonarenascore", "JOSH", [1, 700, "ANON CUP"]], ["anonscore", "JOSH", [1, 9000, "default settings  lives 1"]]]);
   assert.ok(!anon.some((x) => x[1] === "LOGGED TWO" || x[1] === "TOO LOW"));
   assert.ok(anon.some((x) => x[1] === "FILLER" && x[2][2] === B), "no summary sent: the board key");
+});
+
+test("accounts: chicken dinner from the server, whatever name won the arena (and for arenas from before \"by\" was kept)", async () => {
+  const B = "pac.0.f.f.f.3.3.f.0.4.t.f.f", t0 = clock;
+  const whoIs = accountOf(blobs.accountStore), nameCheck = nameChecker(blobs.accountStore);
+  const arena = (opts) => (req) => handleArenas(req, blobs.arenaStore, { env, failDelay: 0, nameCheck, accountOf: whoIs, ...opts });
+  const now = () => clock;
+  const mk = async (name) => (await arena({ now })(new Request("http://x/api/arenas", { method: "POST", body: JSON.stringify({ name, board: B }) })).then((r) => r.json())).arena;
+  const score = (id, name, sc, tok) => arena({ now })(new Request("http://x/api/arenas/score", { method: "POST", headers: tok ? { authorization: "Bearer " + tok } : {}, body: JSON.stringify({ id, name, score: sc }) })).then((r) => r.json());
+  const ach = (tok) => handleAccounts(new Request("http://x/api/account/achievements", { headers: { authorization: "Bearer " + tok } }), blobs.accountStore, { failDelay: 0, env, now, arenasStore: blobs.arenaStore }).then((r) => r.json());
+  const rj = (await acct("POST", "signup", { name: "rj dinner", password: "pw12" })).data.token;
+  const other = (await acct("POST", "signup", { name: "loser dinner", password: "pw12" })).data.token;
+  // a new arena, won logged in under another name
+  const a = await mk("dinner cup");
+  await score(a.id, "THE CHAMP", 5000, rj);
+  await score(a.id, "loser dinner", 4000, other);
+  const list = await arena({ now })(new Request("http://x/api/arenas")).then((r) => r.json());
+  assert.ok(list.arenas.every((x) => !x.leader || !("by" in x.leader)), "the leader's account is never sent out");
+  assert.equal((await ach(rj)).achievements.dinner, undefined, "not while it's open");
+  clock = a.endsAt + GRACE + 1000;
+  const d = await ach(rj);
+  assert.ok(d.achievements.dinner && d.retro.includes("dinner"), "won under another name: chicken dinner");
+  assert.equal((await ach(other)).achievements.dinner, undefined, "not the runner-up");
+  // an older arena: its leader has no "by"; the winning score matched with the account's logged arena score
+  clock = t0;
+  const oldie = (await acct("POST", "signup", { name: "old dinner", password: "pw12" })).data.token;
+  const b = await mk("old dinner cup");
+  await score(b.id, "SOMEONE", 7777);
+  await updateJSON(blobs.arenaStore, "index", (data) => ({ value: { arenas: data.arenas.map((x) => (x.id === b.id ? { ...x, leader: { name: "SOMEONE", score: 7777 } } : x)) }, result: null }));
+  await acct("POST", "placed", { arena: "OLD DINNER CUP", rank: 1, score: 7777 }, oldie);
+  clock = b.endsAt + GRACE + 1000;
+  assert.ok((await ach(oldie)).achievements.dinner, "an older arena: matched through the activity log");
+  clock = t0;
 });

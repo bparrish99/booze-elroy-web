@@ -126,6 +126,9 @@
       lastScene = scene;
       if (scene === "arena" || (scene === "nameEntry" && ownConfig && arena)) { arenaHeader(); return; }
       if (scene === "leaderboard" && g.scene.key) { refreshHeader(g.scene.key); return; } // the board on show
+      // the favorites / picks lists: the highlighted one's board; a favorite's page: its board (the author, 2026-11-16)
+      const shownKey = g.scene.headerKey && g.scene.headerKey();
+      if (shownKey) { load(shownKey); refreshHeader(shownKey); return; }
       const key = currentKey();
       if (key !== lastKey) { lastKey = key; keyChangedAt = performance.now(); }
       // flicking through Options changes the key a lot: only fetch once it settles. After that load() refetches once its
@@ -478,6 +481,7 @@
       update() { this.build(); },
       status() { return favGet().status; },
       title() { return "favorites"; },
+      headerKey() { const it = this.menu[this.menu.selectedItem - 1]; return it && it.fav ? it.fav.board : null; },
       build() {
         const f = favGet(), decor = [];
         const items = f.list.map((fav, i) => ({ id: "f:" + fav.name, text: fav.name, x: 2, y: FAV_TOP + i, fav, action: () => core.setScene("favorite", { fav }) }));
@@ -542,6 +546,7 @@
       },
       title() { return this.fav.name; },
       subtitle() { return "favorite"; },
+      headerKey() { return this.fav ? this.fav.board : null; },
       summary(width) { return summary(width, SK.configFor(this.fav.board)); },
       summaryParts(width) { return summaryParts(width, SK.configFor(this.fav.board)); },
       board() { return boardFor(this.fav.board); },
@@ -572,6 +577,7 @@
       update() { this.build(); },
       status() { return picksGet().status; },
       title() { return "pinback's picks"; },
+      headerKey() { const it = this.menu[this.menu.selectedItem - 1]; return it && it.fav ? it.fav.board : null; },
       build() {
         const f = picksGet(), decor = [];
         const items = f.list.map((fav, i) => ({ id: "p:" + fav.name, text: fav.name, x: 2, y: FAV_TOP + i, fav, action: () => playPick(fav) }));

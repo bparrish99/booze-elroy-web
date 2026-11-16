@@ -37,8 +37,8 @@ export async function startDev(opts = {}) {
         const chunks = []; for await (const c of req) chunks.push(c);
         const body = chunks.length ? Buffer.concat(chunks) : undefined;
         const request = new Request(u, { method: req.method, headers: req.headers, body: req.method === "GET" ? undefined : body });
-        const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now, nameCheck, logAnon })
-          : u.pathname.startsWith("/api/account/") ? await handleAccounts(request, accountStore, { env, failDelay: opts.failDelay, now: opts.now, scoresStore: store })
+        const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now, nameCheck, logAnon, accountOf: whoIs })
+          : u.pathname.startsWith("/api/account/") ? await handleAccounts(request, accountStore, { env, failDelay: opts.failDelay, now: opts.now, scoresStore: store, arenasStore: arenaStore })
           : await handle(request, store, { env, nameCheck, logAnon, accountOf: whoIs });
         res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer()));
         if (!quiet) console.log(req.method, u.pathname + u.search, r.status);

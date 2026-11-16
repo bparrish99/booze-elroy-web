@@ -21,7 +21,7 @@
   const JOY_DIRS = { down: 1, right: 0, z: 1, left: 2, up: 3, a: 2, w: 3, d: 0, s: 1, q: 3 };
   const FRUIT_FRIGHT = [6, 6, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
   const BACKGROUND_OPTIONS = ["none", "stars", "beach", "arcade", "forest", "city", "canyon", "clouds", "planets", "abstract",
-    "wave1", "wave2", "lines", "retro", "tan", "aqua", "green", "blue", "pac1", "pac2", "pac3"];
+    "wave1", "wave2", "lines", "retro", "tan", "aqua", "green", "blue", "purple", "pac1", "pac2", "pac3"]; // (purple: web edition, the author, 2026-11-16)
   const SOUND_NAMES = ["thrust", "crash", "bonk", "ping", "reload", "opening", "wakka1", "wakka2", "fruit", "died", "scared", "ateGhost", "siren1", "siren2", "siren3",
     "siren4", "siren5", "dead", "extrapac", "coindrop", "phase", "intermission1"];
   const LOOPING = new Set(["scared", "siren1", "siren2", "siren3", "siren4", "siren5", "dead"]);

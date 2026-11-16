@@ -27,7 +27,8 @@ const newId = () => { let s = ""; for (const b of randomBytes(10)) s += "0123456
 
 const listOf = (data) => (data && Array.isArray(data.arenas) ? data.arenas : []);
 const live = (arenas, now) => arenas.filter((a) => a.endsAt + LISTED_FOR > now);
-const show = (a) => ({ id: a.id, name: a.name, board: a.board, createdAt: a.createdAt, endsAt: a.endsAt, leader: a.leader || null });
+// (the leader's account, "by", stays on the server: chicken dinner, whatever name won; netlify/lib/accounts.mjs arenaWins)
+const show = (a) => ({ id: a.id, name: a.name, board: a.board, createdAt: a.createdAt, endsAt: a.endsAt, leader: a.leader ? { name: a.leader.name, score: a.leader.score } : null });
 
 export async function handleArenas(req, store, opts = {}) {
   const env = opts.env || process.env;
@@ -81,7 +82,8 @@ export async function handleArenas(req, store, opts = {}) {
     if (!a) return json(404, { error: "no such arena" });
     if (now > a.endsAt + GRACE) return json(410, { error: "arena closed", arena: show(a) });
     if (opts.nameCheck && !(await opts.nameCheck(req, name))) return json(403, { error: "name taken" });
-    const r = await addScore(store, entriesKey(id), name, score, true); // one entry per name
+    const by = opts.accountOf ? await opts.accountOf(req) : null; // the logged-in account, if any (kept, never shown)
+    const r = await addScore(store, entriesKey(id), name, score, true, by); // one entry per name
     if (!r) return json(409, { error: "busy, try again" });
     if (r.rank && opts.logAnon) await opts.logAnon(req, "anonarenascore", name, JSON.stringify([r.rank, score, a.name])); // logged out: on the activity page
     let arena = a;
@@ -92,7 +94,7 @@ export async function handleArenas(req, store, opts = {}) {
         if (i < 0) return { result: null };
         const cur = all[i].leader;
         if (cur && cur.score >= top.score) { arena = all[i]; return { result: null }; }
-        arena = { ...all[i], leader: { name: top.name, score: top.score } };
+        arena = { ...all[i], leader: { name: top.name, score: top.score, by: top.by || null } };
         const next = all.slice(); next[i] = arena;
         return { value: { arenas: next }, result: null };
       });
