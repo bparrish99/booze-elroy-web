@@ -1059,7 +1059,7 @@
     // Blindfold: Lantern (afterDark 6; the author, 2026-11-16): dark but for a circle of light round Pac-Man, 8 tiles across
     // each way, its edge fading; energizers and the fruit always show, and blue ghosts while they're blue. The lights come
     // up at game over and when a board is cleared. Render only (the core never looks at 6)
-    const LANTERN = 6, LANTERN_R = 8 * TILE, LANTERN_SOFT = 1 * TILE, LANTERN_BG = 0.4, LANTERN_TEXT = 0.45; // (faded to these, unlit)
+    const LANTERN = 6, LANTERN_R = 8 * TILE, LANTERN_SOFT = 4 * TILE, LANTERN_BG = 0.4, LANTERN_TEXT = 0.45; // (faded to these, unlit)
     const dark = document.createElement("canvas"); dark.width = GW; dark.height = GH;
     const dctx = dark.getContext("2d");
     const lanternOn = () => g.config.afterDark === LANTERN && !g.state.hideMaze && g.mode !== "gameover" && g.mode !== "levelAnimation"
@@ -1086,8 +1086,8 @@
       if (bg && g.config.crtEffect !== "vector") { dctx.globalAlpha = LANTERN_BG; dctx.drawImage(bg, 0, 0, GW, GH); dctx.globalAlpha = 1; }
       dctx.globalCompositeOperation = "destination-out";
       const glow = dctx.createRadialGradient(cx, cy, LANTERN_R - LANTERN_SOFT, cx, cy, LANTERN_R);
-      // (the light drops away fast at the rim, then trails off: the author wanted a more aggressive edge than 2 tiles even)
-      glow.addColorStop(0, "rgba(0,0,0,1)"); glow.addColorStop(0.35, "rgba(0,0,0,0.45)"); glow.addColorStop(1, "rgba(0,0,0,0)");
+      // (a wide, gradual fade: the light starts dimming halfway out; the author wanted more fade than 2 tiles, not less)
+      glow.addColorStop(0, "rgba(0,0,0,1)"); glow.addColorStop(0.5, "rgba(0,0,0,0.5)"); glow.addColorStop(1, "rgba(0,0,0,0)");
       dctx.fillStyle = glow; dctx.fillRect(0, 0, GW, GH);
       ctx.globalAlpha = k; ctx.drawImage(dark, 0, 0); ctx.globalAlpha = 1;
       // the lettering (PLAYER ONE, READY!), faded where it's dark
