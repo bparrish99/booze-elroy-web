@@ -269,25 +269,17 @@ try {
   check((await api("?board=" + DEFAULT)).entries.length === 0, "all boards cleared on the server");
   check(await until("g.highScore === false"), "header cleared");
 
-  // Share Config: copies a link with the gameplay settings; opening it preselects them (and nothing else)
+  // ?cfg= links (made by the Share Config / Share buttons until 2026-11-16, when the last one became Create Arena: the
+  // author): the code holds the gameplay settings; opening such a link still preselects them (and nothing else)
   {
-    const ctx = await b.newContext({ viewport: { width: 672, height: 864 }, permissions: ["clipboard-read", "clipboard-write"] });
+    const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
     const q = await ctx.newPage(); q.on("pageerror", (e) => errs.push(e.message));
     await q.goto(dev.url + "/"); await q.waitForTimeout(1000);
     await q.evaluate(() => { const c = window.__core.g.config; c.mazepack = "mspac"; c.ghostCount = 2; c.radar = 60; c.startingLevel = 7; c.volume = 3; });
-    // (Share on a favorite's page: the only place settings are shared now; a favorite of the current settings)
-    await q.evaluate(() => { const c = window.__core; c.setScene("favorite", { fav: { name: "TEST", board: window.BoozeScoreKey.keyFor(c.g.config) } }); const m = c.g.scene.menu; m.selectedItem = m.findIndex((i) => i.text === "Share") + 1; });
-    await q.keyboard.press("Enter");
-    await q.waitForTimeout(200);
-    check(await q.evaluate(() => window.__core.g.toast && window.__core.g.toast.text) === "link copied to clipboard", "Share Config shows the popup");
-    if (process.env.SHOTS) await q.screenshot({ path: join(process.env.SHOTS, "6-share.png") });
-    const link = await q.evaluate(() => navigator.clipboard.readText());
+    const link = await q.evaluate(() => location.origin + "/?cfg=" + window.BoozeScoreKey.shareCode(window.__core.g.config));
     const code = new URL(link).searchParams.get("cfg");
-    check(link.startsWith(new URL(dev.url).origin + "/?cfg=") && /^[0-9a-z]{6}$/.test(code), "link carries a short share code: " + link);
+    check(/^[0-9a-z]{6}$/.test(code), "a share code is short: " + link);
     check(await q.evaluate((c) => window.BoozeScoreKey.keyFor(window.BoozeScoreKey.configFromCode(c)), code) === "mspac.0.f.f.60.3.1.f.0.2.t.f.f", "the code holds only the gameplay settings");
-    await q.evaluate(() => { const c = window.__core; c.setScene("favorite", { fav: { name: "TEST", board: window.BoozeScoreKey.keyFor(c.g.config) } }); const m = c.g.scene.menu; m.selectedItem = m.findIndex((i) => i.text === "Share") + 1; window.__core.g.toast = null; });
-    await q.keyboard.press("Enter"); await q.waitForTimeout(200);
-    check(await q.evaluate(() => !!window.__core.g.toast), "and again");
     await ctx.close();
 
     const ctx2 = await b.newContext({ viewport: { width: 672, height: 864 } });
