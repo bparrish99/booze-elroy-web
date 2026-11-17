@@ -162,6 +162,44 @@
       xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // test mode: frame rate, tiles, ghost targets and paths; Pro Mode always
     };
     // the frame-rate readout: off by default, remembered; counted in the frame loop, shown twice a second
+    // test mode's training readout (the author, 2026-11-16; a new player wanted to learn the ghosts): the scatter / chase
+    // clock, the blue time, who leaves the pen next and why, and Blinky's Elroy countdown. Read-only: it only looks at g
+    const secs = (f) => (Math.max(0, f) / 60).toFixed(1) + "s";
+    function trainingRows(g) {
+      const rows = [], L = g.level, ch = (n) => g.chars[n];
+      // scatter / chase: the level's switch times count up in L.timer, which stands still while the ghosts are blue
+      const sw = L.switch || [], next = sw.find((t) => t > L.timer), opt = g.config.scatterOption;
+      const phase = L.chase ? "CHASE" : "SCATTER";
+      if (opt === 3) rows.push("mode   CHASE (no scatter)");
+      else if (opt === 2 && sw.indexOf(next) > 1) rows.push(`mode   ${phase}, no more switches`);
+      else if (next === undefined || next >= 65520) rows.push(`mode   ${phase} for good`);
+      else rows.push(`mode   ${phase}, ${L.chase ? "scatter" : "chase"} in ${secs(next - L.timer)}${typeof g.frightened === "number" && g.frightened > 0 ? " (held)" : ""}`);
+      // blue: time left, and when they start flashing (the last 2 seconds)
+      if (typeof g.frightened === "number" && g.frightened > 0) {
+        rows.push(`<span style="color:#6f8cff">blue   ${secs(g.frightened)}${g.frightened > 120 ? ", flashing in " + secs(g.frightened - 120) : ", flashing"}</span>`);
+      }
+      // the pen: the ghosts still in it, in leaving order, and what lets the next one out
+      const inPen = core.charKeys().map(ch).filter((c) => c && c.housing && c.leavingPreference != null).sort((a, b) => a.leavingPreference - b.leavingPreference);
+      if (inPen.length) {
+        const nm = (c) => core.charKeys().find((n) => ch(n) === c);
+        const starve = `no dot for ${secs(g.starvation || 0)} of ${secs(L.starvation)}`;
+        if (typeof g.globalCounter === "number") { // after a death: one shared count, each ghost leaving at its own number
+          rows.push(`pen    shared count ${g.globalCounter}: ` + inPen.map((c) => `${nm(c)} at ${c.globalCounter}`).join(", "));
+        } else rows.push(`pen    ${nm(inPen[0])} out in ${inPen[0].dotCounter} dot${inPen[0].dotCounter === 1 ? "" : "s"}`);
+        rows.push(`       or ${starve}`);
+      }
+      // Cruise Elroy: Blinky speeds up (and stops scattering) at elroy1 dots left, faster again at elroy2
+      if (ch("blinky")) {
+        const left = g.dots.length;
+        let e;
+        if (g.suspendElroy) e = "on hold until clyde leaves the pen";
+        else if (left <= L.elroy2) e = `ELROY 2 (${Math.round(L.elroy2Speed * 100)}%)`;
+        else if (left <= L.elroy1) e = `ELROY 1 (${Math.round(L.elroy1Speed * 100)}%), 2 in ${left - L.elroy2} dots`;
+        else e = `in ${left - L.elroy1} dots (${left} left)`;
+        rows.push(`<span style="color:#ff5050">elroy  ${e}</span>`);
+      }
+      return rows;
+    }
     const fpsEl = document.getElementById("fps");
     let fpsOn = false, fpsFrames = 0, fpsAt = 0, fpsText = "", fpsHtml = "";
     try { fpsOn = localStorage.getItem("booze-elroy-fps") === "1"; } catch { /* ignore */ }
@@ -192,7 +230,7 @@
         earned(["quarter", ...(LB.inArena() ? ["arena"] : []), ...(styled ? ["stylish"] : []),
           ...ach.filter((a) => a.mode && s >= a.points && c[a.mode.key] === a.mode.value).map((a) => a.id), // points in a mode (house of horrors, ...)
           ...ach.filter((a) => a.score && s >= a.score).map((a) => a.id)]); // clyde / inky / pinky / blinky: the final score
-        return LB.afterGameOver(s);
+        return LB.afterGameOver(s, fpsOn); // (test mode: no leaderboards, the author, 2026-11-16)
       }, rewind: () => {
         if (!rwd) return;
         const was = rwd.active(); rwd.trigger();
@@ -707,9 +745,12 @@
           for (const name of ["pac", ...core.charKeys().filter((n) => n !== "pac")]) {
             const c = g.chars[name]; if (!c) continue;
             const [x, , y] = cm.getLoc(c);
-            rows.push(`<span style="color:${name === "pac" ? "#ffd400" : R.ghostColor(name)}">${name.padEnd(6)} ${String(x).padStart(2)},${String(y).padStart(2)}</span>`);
+            // (and its speed now, % of the arcade's full speed: tunnels, frightened, Elroy, eating; the author, 2026-11-16)
+            const pct = typeof c.speed === "number" ? String(Math.round(c.speed * 100)).padStart(4) + "%" : "";
+            rows.push(`<span style="color:${name === "pac" ? "#ffd400" : R.ghostColor(name)}">${name.padEnd(6)} ${String(x).padStart(2)},${String(y).padStart(2)}${pct}</span>`);
           }
         }
+        if (g.scene.name === "game" && g.chars && g.chars.pac && !g.state.hideMaze && g.level) rows.push("", ...trainingRows(g));
         const html = rows.join("\n");
         if (html !== fpsHtml) { fpsEl.innerHTML = html; fpsHtml = html; }
       }

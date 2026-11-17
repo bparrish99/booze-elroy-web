@@ -111,10 +111,17 @@ try {
   await ev(() => { const c = window.__core; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });
   check(await until("g.mode === 'normal'", 3000) && await ev(() => /pac +\d+, *\d+/.test(document.getElementById("fps").textContent) && /blinky +\d+, *\d+/.test(document.getElementById("fps").textContent)), "test mode shows the characters' tiles");
   check(await ev(() => window.__core.projectGhost(window.__core.g.chars.blinky).path.length > 1), "and Blinky's projected path");
+  // the training readout (the author, 2026-11-16): the scatter / chase clock, the pen, Elroy, speeds; and the no-up tiles
+  check(await ev(() => { const t = document.getElementById("fps").textContent; return /mode +SCATTER, chase in \d+\.\ds/.test(t) && /pen +\w+ out in \d+ dots?/.test(t) && /elroy +in \d+ dots/.test(t) && /pac +\d+, *\d+ +\d+%/.test(t); }), "test mode: the scatter / chase clock, the pen, Elroy and speeds");
+  await ev(() => { const e = window.__core.g.powers[0]; e.action(e.x, e.y); });
+  check(await until("true", 300) && await ev(() => /blue +\d+\.\ds, flashing in \d+\.\ds/.test(document.getElementById("fps").textContent)), "test mode: the blue time and when they flash");
   await p.keyboard.press("m");
   check(await ev(() => document.getElementById("mute").classList.contains("muted") && !window.__core.g.muted && window.__core.g.config.volume === 8), "M mutes the page (the button shows it), not the game's own volume");
   await p.keyboard.press("m");
   check(await ev(() => !document.getElementById("mute").classList.contains("muted")), "and M again unmutes");
+  // and its games stay off the leaderboards (a score that would place: no name entry, a toast)
+  await ev(() => { const c = window.__core; c.g.score = 999990; c.mode.setMode("gameover"); });
+  check(await until("g.scene.name === 'attract'", 8000) && await g("g.toast && g.toast.text === 'test mode: score not posted'"), "test mode: a game over posts nothing (no name entry)");
   await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
   // test mode also skips the opening jingle: straight from the blank pregame to READY
   await ev(() => { const c = window.__core; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });

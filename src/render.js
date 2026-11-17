@@ -620,7 +620,7 @@
 
       clip(0, 24, 224, 248);
       const routes = debug && g.state.showGhosts && !g.state.hideMaze ? ghostRoutes() : null;
-      if (routes) drawRoutes(routes);
+      if (routes) { drawNoUp(cm); drawRoutes(routes); }
       if (g.state.showPac) drawChar(g.chars.pac, g.chars.pac.x, g.chars.pac.y, g.chars.pac.phased, true);
       if (g.vacuumFx > 0 && core.curAbility() === core.VACUUM) drawVacuum();
       if (g.pushFx > 0 && core.curAbility() === core.PUSH) drawPush();
@@ -1038,6 +1038,17 @@
     // will take there by its own rules (core.projectGhost), in the ghost's colour (read off its sprite). Drawn on the
     // game picture, so it goes through the look like everything else
     let debug = false;
+    // test mode: the tiles where a ghost may not turn up (above the pen, above Pac-Man's start: the arcade's hiding
+    // spots), a red bar across the top of each, unless Unrestricted is on (the author, 2026-11-16)
+    function drawNoUp(cm) {
+      ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = "#ff3030";
+      for (let y = 0; y < cm.h; y++) for (let x = 0; x < cm.w; x++) {
+        if (!cm.isDisallowed(x, y)) continue;
+        const px = camX() + x * TILE, py = camY() + (y + 3) * TILE;
+        ctx.fillRect(px + 1, py, 6, 1); ctx.fillRect(px + 3, py + 1, 2, 2); // a bar with a little stop under it
+      }
+      ctx.restore();
+    }
     const ghostColors = {};
     function ghostColor(name) {
       if (ghostColors[name]) return ghostColors[name];
