@@ -1911,7 +1911,9 @@
           graphics.updateParticles();
           if (g.chars.pac.moved || (g.config.movement === 3 && g.chars.pac.speed > 0.3)) graphics.updateAnimation(g.chars.pac, gameFc);
         } else if (g.mode === "ateGhost") {
-          for (const name of charKeys()) {
+          // (the eyes head home during the pause, as in the arcade; not while the Pause ability has the ghosts frozen:
+          // a second ghost eaten used to set the first one's eyes going again, the author, 2026-11-17)
+          if (!(g.freezeLeft > 0)) for (const name of charKeys()) {
             const c = g.chars[name];
             if (c.dead && !c.hidden) updateCharacterMovement(c);
           }

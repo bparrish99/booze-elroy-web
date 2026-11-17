@@ -53,3 +53,23 @@ test("Pause: four ghosts eaten during one freeze earns the power of now", () => 
   for (let f = 0; f < 600 && !feats.includes("now"); f++) core.update();
   assert.ok(feats.includes("now"), "earned");
 });
+
+test("Pause: eaten ghosts' eyes stay frozen while another ghost is eaten (the author, 2026-11-17)", () => {
+  const { core, g } = start(4);
+  const pac = g.chars.pac, b = g.chars.blinky, p = g.chars.pinky;
+  g.frightened = 600;
+  for (const c of [b, p]) Object.assign(c, { x: pac.x, y: pac.y, housing: false, leaving: false, entering: false, dead: false, frightened: 600, hidden: false });
+  core.keypressed("space");
+  let f = 0;
+  for (; f < 300 && !b.dead && !p.dead; f++) core.update();
+  const first = b.dead ? b : p, second = first === b ? p : b;
+  assert.ok(first.dead, "one eaten");
+  const here = at(first);
+  let sawSecondEaten = false;
+  for (; f < 600 && g.freezeLeft > 0; f++) {
+    core.update();
+    if (second.dead && g.mode === "ateGhost") sawSecondEaten = true;
+    if (g.freezeLeft > 0) assert.equal(at(first), here, "the first one's eyes still frozen at frame " + f + " (" + g.mode + ")");
+  }
+  assert.ok(sawSecondEaten, "the second was eaten during the freeze");
+});
