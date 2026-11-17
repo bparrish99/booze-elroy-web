@@ -48,7 +48,8 @@ tr.new td{animation:glow 6s ease-out}
 </div>
 <div id="out" hidden>
   <div class="box stats" id="stats"></div>
-  <div class="box"><div class="bar"><strong>ACCOUNTS</strong> <span class="sub" id="filterNote" style="margin:0"></span><button id="clear" hidden>Show everyone</button></div><div class="accts" id="accts"></div></div>
+  <div class="box"><div class="bar"><strong>ACCOUNTS</strong> <span class="sub" id="filterNote" style="margin:0"></span><button id="clear" hidden>Show everyone</button><button id="pinback"></button></div><div class="accts" id="accts"></div></div>
+  <div class="box" id="achBox" hidden><div class="bar"><strong id="achHead"></strong></div><table><tbody id="achList"></tbody></table></div>
   <div class="box"><div class="bar"><strong>ACTIVITY</strong> <span class="sub" id="spanNote" style="margin:0"></span><button id="reload">Refresh</button><span class="live" id="live"></span></div><table><tbody id="log"></tbody></table>
     <div class="bar more" id="more" hidden><span class="sub" id="moreNote" style="margin:0"></span><button id="earlier">24 hours earlier</button><button id="all">Show everything</button></div></div>
 </div>
@@ -61,7 +62,8 @@ tr.new td{animation:glow 6s ease-out}
   let key = decodeURIComponent(location.hash.slice(1)), data = null, who = null, days = 1; // days: how far back the log shows
   // the author's own account is left out of everything here (events, accounts, stats), old events included: it made the
   // page look like they were the only player (2026-11-14). activity.html?all#<key> shows it
-  const HIDE = new Set(new URLSearchParams(location.search).has("all") ? [] : ["PINBACK"]);
+  // (a button toggles it: the author, 2026-11-16; hidden to start, shown to start with ?all)
+  let HIDE = new Set(new URLSearchParams(location.search).has("all") ? [] : ["PINBACK"]);
   // auto-refresh: every 30 s (and at once when the tab comes back); events not seen before light up, and while the tab
   // is in the background the title counts them
   const EVERY = 30000, TITLE = document.title;
@@ -106,6 +108,16 @@ tr.new td{animation:glow 6s ease-out}
     $("accts").innerHTML = data.accounts.length ? data.accounts.map((n) => '<button class="name' + (n === who ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + "</button>").join("") : '<span class="sub">none yet</span>';
     $("filterNote").textContent = who ? "showing " + who : "click a name to see just theirs";
     $("clear").hidden = !who;
+    $("pinback").textContent = HIDE.size ? "Show PINBACK" : "Hide PINBACK";
+    // a player picked: their achievements, earned / all, then the earned ones in the game's order with the date
+    const mine = who && data.achievements ? data.achievements[who] || {} : null, ids = Object.keys(ACH);
+    $("achBox").hidden = !mine;
+    if (mine) {
+      const got = ids.filter((id) => mine[id]);
+      $("achHead").textContent = who + "'S ACHIEVEMENTS " + got.length + "/" + ids.length;
+      $("achList").innerHTML = got.length ? got.map((id) => '<tr><td class="t">' + esc(new Date(mine[id]).toLocaleDateString()) + '</td><td>' + esc(ACH[id].toUpperCase()) + "</td></tr>").join("")
+        : '<tr><td class="sub">none yet</td></tr>';
+    }
     let html = "", last = "";
     for (const e of ev) {
       const d = new Date(e.at), dk = d.toDateString();
@@ -148,6 +160,7 @@ tr.new td{animation:glow 6s ease-out}
   document.addEventListener("click", (e) => { const b = e.target.closest("button.name"); if (b) { who = who === b.dataset.n ? null : b.dataset.n; render(); } });
   $("clear").addEventListener("click", () => { who = null; render(); });
   $("reload").addEventListener("click", () => load());
+  $("pinback").addEventListener("click", () => { HIDE = new Set(HIDE.size ? [] : ["PINBACK"]); seen = null; if (HIDE.has(who)) who = null; load(); });
   $("earlier").addEventListener("click", () => { days += 1; render(); });
   $("all").addEventListener("click", () => { days = Infinity; render(); });
   window.__refresh = () => load(true); // tests: an auto-refresh now

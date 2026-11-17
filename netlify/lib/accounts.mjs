@@ -19,7 +19,7 @@
 //   GET  /api/account/picks  -> { picks: [{ name, board }] }   "Pinback's Picks": the author's account's favorites, for
 //        everyone (no login; the title's sign)
 //   GET  /api/account/activity  (x-admin-key: LEADERBOARD_ADMIN_PASSWORD) -> { accounts: [names], events: [{ at, type,
-//        name, detail }] newest first, the last 1000 }   the author's secret page (public/activity.html)
+//        name, detail }] newest first, the last 1000, achievements: { name: { id: ms earned } } }   the author's secret page (public/activity.html)
 //
 // Names follow the leaderboard's rules (scorekey cleanName: up to 16 of A-Z 0-9 ! - / space, upper-cased), so
 // "pinback" and "PINBACK" are the same account. Passwords: 4 to 128 characters, anything goes; stored as scrypt hashes.
@@ -217,7 +217,14 @@ export async function handleAccounts(req, store, opts = {}) {
     const events = blobs.filter((b) => b.key.startsWith("e/")).map((b) => b.key.split("/")).filter((p) => p.length >= 5)
       .map((p) => ({ at: p[1], type: p[2], name: unhex(p[3]), detail: p[4] === "-" ? "" : decodeURIComponent(p[4]) }))
       .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, ACTIVITY_MAX);
-    return json(200, { accounts, events });
+    // each account's earned achievements, { id: ms } (the author, 2026-11-16: "x/y and a list"; the log alone misses
+    // ones earned before logging began and the retroactive ones' history)
+    const achievements = {};
+    await Promise.all(blobs.filter((b) => b.key.startsWith("a/")).map(async (b) => {
+      const a = await store.get(b.key, { type: "json" }).catch(() => null);
+      if (a && typeof a === "object") achievements[unhex(b.key.slice(2))] = a;
+    }));
+    return json(200, { accounts, events, achievements });
   }
   if (action === "me") {
     if (req.method !== "GET") return json(405, { error: "method not allowed" });

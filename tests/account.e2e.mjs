@@ -402,6 +402,25 @@ try {
     check(/OLDIE/.test(await logText()), "activity page: one player's entries all show, however old");
     await p.unroute("**/api/account/activity");
   }
+  // PINBACK hidden to start, a button shows it; a player picked: their achievements, x/y and the earned ones (2026-11-16)
+  {
+    const ago = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+    await p.route("**/api/account/activity", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ accounts: ["PINBACK", "RJ"],
+      events: [{ at: ago(1), type: "login", name: "PINBACK", detail: "" }, { at: ago(2), type: "login", name: "RJ", detail: "" }],
+      achievements: { RJ: { quarter: Date.now() - 864e5, dinner: Date.now() } } }) }));
+    await p.goto(dev.url + "/activity.html#dev"); await p.reload(); await p.waitForTimeout(800);
+    const txt = () => p.evaluate(() => ["log", "accts"].map((id) => document.getElementById(id).textContent).join(" "));
+    check(!/PINBACK/.test(await txt()) && await p.evaluate(() => document.getElementById("pinback").textContent === "Show PINBACK"), "activity page: PINBACK hidden to start");
+    await p.click("#pinback"); await p.waitForTimeout(500);
+    check(/PINBACK/.test(await txt()) && await p.evaluate(() => document.getElementById("pinback").textContent === "Hide PINBACK"), "activity page: the button shows PINBACK");
+    await p.click("#pinback"); await p.waitForTimeout(500);
+    check(!/PINBACK/.test(await txt()), "activity page: and hides it again");
+    check(await p.evaluate(() => document.getElementById("achBox").hidden), "activity page: no achievements box until a player is picked");
+    await p.click("#accts button[data-n=RJ]");
+    check(await p.evaluate(() => { const h = document.getElementById("achHead").textContent, l = document.getElementById("achList").textContent;
+      return !document.getElementById("achBox").hidden && /^RJ'S ACHIEVEMENTS 2\/\d+$/.test(h) && /SPENT A QUARTER/.test(l) && /CHICKEN DINNER/.test(l) && l.indexOf("SPENT A QUARTER") < l.indexOf("CHICKEN DINNER"); }), "activity page: a player's achievements, earned / all, the earned ones listed");
+    await p.unroute("**/api/account/activity");
+  }
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join("; ") : ""));
 } finally {
   await b.close(); await dev.stop(); rmSync(blobsDir, { recursive: true, force: true });
