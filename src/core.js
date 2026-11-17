@@ -2034,7 +2034,7 @@
       Object.assign(opt("startingLevel", range(1, 21)), { y: 5 }),
       Object.assign(opt("difficulty", [0, 1, 2], ["Normal", "Hard", "Plus"]), { y: 6 }),
       Object.assign(opt("plusMode", [false, true], ["Off", "On"]), { y: 7 }),
-      Object.assign(opt("afterDark", [false, 1, 2, 3, 4, 5], ["Off", "Maze", "Dots", "Maze/Dots", "Haunted", "Blackout"]), { y: 8 }),
+      Object.assign(opt("afterDark", [false, 1, 2, 3, 4, 5, 6], ["Off", "Maze", "Dots", "Maze/Dots", "Haunted", "Blackout", "Lantern"]) /* 6: Lantern, web edition (render.js) */, { y: 8 }),
       Object.assign(opt("radar", [false, 30, 60, 90, 120], ["Off", "Tame", "Tricky", "Tough", "Terror"]), { y: 9 }),
       Object.assign(opt("startingLives", [1, 3, 5]), { y: 12 }),
       Object.assign(opt("freeGuy", [1, 2, 3, 4, 5], ["10000", "20000", "every 10k", "every 5k", "none"]), { y: 13 }),
@@ -2083,7 +2083,7 @@
     // value lists kept alongside for selection lookup
     const OPT_VALUES = {
       mazepack: PACKS, startingLevel: range(1, 21), difficulty: [0, 1, 2], plusMode: [false, true],
-      afterDark: [false, 1, 2, 3, 4, 5], radar: [false, 30, 60, 90, 120], startingLives: [1, 3, 5], freeGuy: [1, 2, 3, 4, 5],
+      afterDark: [false, 1, 2, 3, 4, 5, 6], radar: [false, 30, 60, 90, 120], startingLives: [1, 3, 5], freeGuy: [1, 2, 3, 4, 5],
       ability: [false, 1, 2, 3, 4, 5, 6, 7, 8], movement: [0, 1, 2, 3], ghostCount: range(0, 7), pinkyBug: [true, false],
       scatterOption: [false, 1, 2, 3], freeGhost: [true, false], background: bgNames, mazeColor: MAZE_COLORS,
       crtEffect: [true, false], volume: range(0, 10), proMode: [false, true],

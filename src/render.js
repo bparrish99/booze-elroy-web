@@ -266,7 +266,7 @@
     function drawMaze(cm, color) {
       const ad = g.config.afterDark;
       const showMaze = !T(ad) || ad === 2 || ad >= 4;
-      const fadeOn = T(ad) && ad >= 4 && g.mode !== "gameover";
+      const fadeOn = (ad === 4 || ad === 5) && g.mode !== "gameover"; // (Haunted / Blackout fade; Lantern, 6, doesn't)
       const rainbow = color === RAINBOW;
       if (rainbow) drawRainbowMaze(cm, showMaze, fadeOn); // (the decorations still go on top, below)
       color = rainbow ? 0 : (color || 1) - 1;
@@ -288,9 +288,9 @@
       }
       const dec = decorations[cm.name];
       if (dec && showMaze) {
-        if (T(ad) && ad >= 4) setColor(1, 1, 1, g.fadeTimer / g.fadeLength());
+        if (ad === 4 || ad === 5) setColor(1, 1, 1, g.fadeTimer / g.fadeLength());
         dec();
-        if (T(ad) && ad >= 4) setColor(1, 1, 1);
+        if (ad === 4 || ad === 5) setColor(1, 1, 1);
       }
     }
 
@@ -562,6 +562,13 @@
       clearScreen();
       const inter = g.mode === "intermission1" || g.mode === "placeholderIntermission" || g.mode === "intermission2" || g.mode === "intermission3";
       if (!inter) drawBackground();
+      if (!inter && lanternOn() && assets.backgrounds[g.currentBackground] && g.config.crtEffect !== "vector") {
+        // Lantern: the background above and below the maze faded like the dark inside it (no seam); the score and lives
+        // go on top at full brightness
+        const v = g.config.crtEffect ? 13 : 0;
+        const k = lanternDark();
+        ctx.fillStyle = `rgba(${v},${v},${v},${(1 - LANTERN_BG) * k})`; ctx.fillRect(0, 0, GW, 24); ctx.fillRect(0, 272, GW, GH - 272);
+      }
 
       if (g.mode === "playerUp") {
         print("player one", cm.w / 2 - 5, cm.playerone, 3, true);
@@ -593,7 +600,7 @@
         const ad = g.config.afterDark;
         if (((!T(ad) || ad === 1 || ad >= 4) && !g.mazeFrightened) || g.mode === "gameover") {
           if (g.mode === "playerUp") setColor(1, 1, 1, (135 - g.modeTimer) / 135);
-          const f = T(ad) && ad >= 4 && g.mode !== "playerUp" && g.mode !== "gameover";
+          const f = (ad === 4 || ad === 5) && g.mode !== "playerUp" && g.mode !== "gameover";
           for (const sc of g.dots) drawScenery(sc, sc.x, sc.y, f);
           if (g.mode === "playerUp") setColor(1, 1, 1);
         }
@@ -638,6 +645,7 @@
       if (g.state.showGhosts) {
         for (const name of core.charKeys()) { const c = g.chars[name]; if (c.target && !c.hidden) drawChar(c, c.x, c.y, false, true); }
       }
+      if (lanternOn(cm)) { drawLantern(cm); if (routes) drawRoutes(routes); }
       unclip();
       if (routes) drawTargets(routes);
 
@@ -1048,6 +1056,56 @@
     // web edition, test mode (xyzzy): each ghost's target (a crosshair; off the maze: a ring at the edge) and the path it
     // will take there by its own rules (core.projectGhost), in the ghost's colour (read off its sprite). Drawn on the
     // game picture, so it goes through the look like everything else
+    // Blindfold: Lantern (afterDark 6; the author, 2026-11-16): dark but for a circle of light round Pac-Man, 6 tiles across
+    // each way, its edge fading; energizers and the fruit always show, and blue ghosts while they're blue. The lights come
+    // up at game over and when a board is cleared. Render only (the core never looks at 6)
+    const LANTERN = 6, LANTERN_R = 6 * TILE, LANTERN_SOFT = 2 * TILE, LANTERN_BG = 0.4, LANTERN_TEXT = 0.45; // (faded to these, unlit)
+    const dark = document.createElement("canvas"); dark.width = GW; dark.height = GH;
+    const dctx = dark.getContext("2d");
+    const lanternOn = () => g.config.afterDark === LANTERN && !g.state.hideMaze && g.mode !== "gameover" && g.mode !== "levelAnimation"
+      && !/^intermission/.test(g.mode);
+    // the whole maze shows at READY (a new life, a new board), then the dark comes down quickly once play starts (the
+    // author, 2026-11-16); later stops in play (eating a ghost, Suck, Blow) don't bring it back
+    const LANTERN_FADE = 600; // ms
+    let lanternFrom = 0, lanternReady = true;
+    function lanternDark() {
+      if (g.mode === "ready" || g.mode === "playerUp") { lanternReady = true; return 0; }
+      if (lanternReady) { lanternReady = false; lanternFrom = performance.now(); }
+      return Math.min(1, (performance.now() - lanternFrom) / LANTERN_FADE);
+    }
+    function drawLantern(cm) {
+      const k = lanternDark();
+      if (k <= 0) return;
+      const pac = g.chars.pac, cx = camX() + pac.x, cy = camY() + pac.y + 24;
+      // the dark: the screen's own blank and the background picture, faded (the author: the background and lettering stay,
+      // dimmed; only the maze, dots and ghosts are hidden)
+      dctx.globalCompositeOperation = "source-over"; dctx.clearRect(0, 0, GW, GH);
+      const v = g.config.crtEffect && g.config.crtEffect !== "vector" ? 13 : 0; // (clearScreen's blank)
+      dctx.fillStyle = `rgb(${v},${v},${v})`; dctx.fillRect(0, 0, GW, GH);
+      const bg = assets.backgrounds[g.currentBackground];
+      if (bg && g.config.crtEffect !== "vector") { dctx.globalAlpha = LANTERN_BG; dctx.drawImage(bg, 0, 0, GW, GH); dctx.globalAlpha = 1; }
+      dctx.globalCompositeOperation = "destination-out";
+      const glow = dctx.createRadialGradient(cx, cy, LANTERN_R - LANTERN_SOFT, cx, cy, LANTERN_R);
+      glow.addColorStop(0, "rgba(0,0,0,1)"); glow.addColorStop(1, "rgba(0,0,0,0)");
+      dctx.fillStyle = glow; dctx.fillRect(0, 0, GW, GH);
+      ctx.globalAlpha = k; ctx.drawImage(dark, 0, 0); ctx.globalAlpha = 1;
+      // the lettering (PLAYER ONE, READY!), faded where it's dark
+      setColor(1, 1, 1, LANTERN_TEXT);
+      if (g.mode === "playerUp") { print("player one", cm.w / 2 - 5, cm.playerone, 3, true); print("ready!", cm.w / 2 - 3, cm.ready, 6, true); }
+      else if (g.state.showReady) print("ready!", cm.w / 2 - 3, cm.ready, 6, true);
+      setColor(1, 1, 1);
+      // always seen: the energizers, the fruit, and blue ghosts
+      for (const sc of g.powers) drawScenery(sc, sc.x, sc.y, false);
+      if (T(g.fruitTimer)) {
+        const fl = cm.fruitLoc; let f = g.level.fruit;
+        if (g.config.plusMode) f = core.levels.plusModeFruitMap(f);
+        drawSprite(f.sheet, f.quad, fl.x - 8, fl.y + 24 - 8, true);
+      }
+      if (g.state.showGhosts) for (const name of core.charKeys()) {
+        const c = g.chars[name];
+        if (c.target && !c.hidden && T(c.frightened) && !c.dead) drawChar(c, c.x, c.y, false, true);
+      }
+    }
     let debug = false;
     // test mode: the tiles where a ghost may not turn up (above the pen, above Pac-Man's start: the arcade's hiding
     // spots), a red bar across the top of each, unless Unrestricted is on (the author, 2026-11-16)

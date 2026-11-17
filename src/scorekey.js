@@ -16,7 +16,7 @@
     ["mazepack", ["pac", "booze", "mspac", "junior", "ultra", "arrange", "mega", "normal", "large", "random"]],
     ["difficulty", [0, 1, 2]],
     ["plusMode", [false, true]],
-    ["afterDark", [false, 1, 2, 3, 4, 5]],
+    ["afterDark", [false, 1, 2, 3, 4, 5, 6]], // 6 = Lantern (web edition, appended 2026-11-16; see RANDOM_LENGTHS)
     ["radar", [false, 30, 60, 90, 120]],
     ["startingLives", [1, 3, 5]],
     ["freeGuy", [1, 2, 3, 4, 5]],
@@ -64,13 +64,15 @@
   //  - 8 characters (7 + check): the Pause ability's format, frozen too (PAUSE_LENGTHS).
   //  - 9 characters (8 + check): the Vacuum ability's format, frozen too (VACUUM_LENGTHS).
   //  - 10 characters (9 + check): the Push (Blow) ability's format, frozen too (PUSH_LENGTHS).
-  //  - 11 characters (10 + check): settings none of those can hold (values appended since, e.g. Random). Its lengths
-  //    follow FIELDS; appending another value later means freezing these too and adding a 12-character format.
+  //  - 11 characters (10 + check): the Random ability's format, frozen too (RANDOM_LENGTHS).
+  //  - 12 characters (11 + check): settings none of those can hold (values appended since, e.g. Blindfold: Lantern). Its
+  //    lengths follow FIELDS; appending another value later means freezing these too and adding a 13-character format.
   const LEGACY_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 4, 4, 8, 2, 4, 2]; // never change: the 6-character format depends on it
   const REWIND_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 5, 4, 8, 2, 4, 2]; // never change: the 7-character format depends on it
   const PAUSE_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 6, 4, 8, 2, 4, 2];  // never change: the 8-character format depends on it
   const VACUUM_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 7, 4, 8, 2, 4, 2]; // never change: the 9-character format depends on it
   const PUSH_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 8, 4, 8, 2, 4, 2];   // never change: the 10-character format depends on it
+  const RANDOM_LENGTHS = [10, 3, 2, 6, 5, 3, 5, 9, 4, 8, 2, 4, 2]; // never change: the 11-character format depends on it
   const LENGTHS = FIELDS.map(([, vals]) => vals.length);
   const prod = (ls) => ls.reduce((n, l) => n * l, 1);
   const COMBOS = prod(LEGACY_LENGTHS);
@@ -82,7 +84,7 @@
     return ((t0 % m) + m) % m;
   };
   const FORMATS = {};
-  [[6, LEGACY_LENGTHS], [7, REWIND_LENGTHS], [8, PAUSE_LENGTHS], [9, VACUUM_LENGTHS], [10, PUSH_LENGTHS], [11, LENGTHS]].forEach(([len, lengths]) => {
+  [[6, LEGACY_LENGTHS], [7, REWIND_LENGTHS], [8, PAUSE_LENGTHS], [9, VACUUM_LENGTHS], [10, PUSH_LENGTHS], [11, RANDOM_LENGTHS], [12, LENGTHS]].forEach(([len, lengths]) => {
     const combos = prod(lengths);
     FORMATS[len] = { len, lengths, combos, inv: inverse(combos) };
   });
@@ -92,7 +94,7 @@
   function shareCode(config) {
     const idx = [];
     for (const [k, vals] of FIELDS) { const i = indexOf(vals, config[k]); if (i < 0) return null; idx.push(i); }
-    const f = FORMATS[fits(idx, 6) ? 6 : fits(idx, 7) ? 7 : fits(idx, 8) ? 8 : fits(idx, 9) ? 9 : fits(idx, 10) ? 10 : 11];
+    const f = FORMATS[fits(idx, 6) ? 6 : fits(idx, 7) ? 7 : fits(idx, 8) ? 8 : fits(idx, 9) ? 9 : fits(idx, 10) ? 10 : fits(idx, 11) ? 11 : 12];
     let n = 0;
     idx.forEach((i, k) => { n = n * f.lengths[k] + i; });
     const body = ((mulmod(n, MUL, f.combos) + ADD) % f.combos).toString(36).padStart(f.len - 1, "0");
@@ -100,7 +102,7 @@
   }
   /** the gameplay settings a share code stands for, or null if it isn't a valid code */
   function configFromCode(s) {
-    if (typeof s !== "string" || !/^[0-9a-z]{6,11}$/i.test(s)) return null;
+    if (typeof s !== "string" || !/^[0-9a-z]{6,12}$/i.test(s)) return null;
     s = s.toLowerCase();
     const f = FORMATS[s.length], body = s.slice(0, -1);
     if (check(body) !== s[s.length - 1]) return null;

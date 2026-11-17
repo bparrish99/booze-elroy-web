@@ -61,7 +61,7 @@ test("share codes: short, reversible for every option value, reject junk", () =>
   for (const [k, vals] of SK.FIELDS) for (const v of vals) {
     const cfg = { ...def, [k]: v }, code = SK.shareCode(cfg);
     // Rewind needs the 7-character format, Pause the 8-character one
-    assert.match(code, k === "ability" && v === 4 ? /^[0-9a-z]{7}$/ : k === "ability" && v === 5 ? /^[0-9a-z]{8}$/ : k === "ability" && v === 6 ? /^[0-9a-z]{9}$/ : k === "ability" && v === 7 ? /^[0-9a-z]{10}$/ : k === "ability" && v === 8 ? /^[0-9a-z]{11}$/ : /^[0-9a-z]{6}$/);
+    assert.match(code, k === "ability" && v === 4 ? /^[0-9a-z]{7}$/ : k === "ability" && v === 5 ? /^[0-9a-z]{8}$/ : k === "ability" && v === 6 ? /^[0-9a-z]{9}$/ : k === "ability" && v === 7 ? /^[0-9a-z]{10}$/ : k === "ability" && v === 8 ? /^[0-9a-z]{11}$/ : k === "afterDark" && v === 6 ? /^[0-9a-z]{12}$/ : /^[0-9a-z]{6}$/);
     assert.equal(SK.keyFor(SK.configFromCode(code)), SK.keyFor(cfg), k + "=" + v);
     seen.add(code);
   }
@@ -117,6 +117,14 @@ test("share codes: links shared before Rewind existed still mean the same settin
   const ra = { ...def, ability: 8 }, racode = SK.shareCode(ra);
   assert.match(racode, /^[0-9a-z]{11}$/);
   assert.deepEqual(SK.configFromCode(racode), ra);
+  // 11-character (Random) codes stay the same now that Blindfold: Lantern exists; Lantern gets 12 characters
+  assert.equal(racode, "0000213s83m"); // (what the shipped version gave before Lantern)
+  const la = { ...def, afterDark: 6 }, lacode = SK.shareCode(la);
+  assert.match(lacode, /^[0-9a-z]{12}$/);
+  assert.deepEqual(SK.configFromCode(lacode), la);
+  assert.equal(SK.keyFor(la).split(".")[3], "6", "Lantern has its own boards");
+  const both = { ...def, afterDark: 6, ability: 8, ghostCount: 7, mazepack: "random" };
+  assert.deepEqual(SK.configFromCode(SK.shareCode(both)), both);
 });
 
 test("achievements: the list the server checks ids against", () => {

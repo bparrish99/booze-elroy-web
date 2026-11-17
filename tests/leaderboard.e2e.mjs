@@ -123,6 +123,21 @@ try {
   await ev(() => { const c = window.__core; c.g.score = 999990; c.mode.setMode("gameover"); });
   check(await until("g.scene.name === 'attract'", 8000) && await g("!g.toast"), "test mode: a game over posts nothing, silently (no name entry, no toast)");
   await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
+  // Blindfold: Lantern (the author, 2026-11-16): dark but for a circle of light round Pac-Man
+  {
+    await ev(() => { const c = window.__core; c.g.config.afterDark = 6; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });
+    await until("g.mode === 'ready'", 5000); await p.waitForTimeout(100);
+    const wall = () => ev(() => { const d = window.__R.screen.getContext("2d").getImageData(0, 0, 224, 60).data; let n = 0; for (let k = 0; k < d.length; k += 4) if (d[k + 2] > 150 && d[k] < 100) n++; return n; }); // blue wall pixels up top
+    check(await wall() > 50, "Lantern: the whole maze shows at READY");
+    await until("g.mode === 'normal'", 5000); await p.waitForTimeout(900); // (then the dark comes down in 0.6 s)
+    check(await wall() < 10, "and goes dark once play starts");
+    const lit = (fx, fy) => ev(([fx, fy]) => { const d = window.__R.screen.getContext("2d").getImageData(fx, fy, 1, 1).data; return d[0] + d[1] + d[2]; }, [fx, fy]);
+    const pacPx = await ev(() => { const pc = window.__core.g.chars.pac; return [Math.round(pc.x), Math.round(pc.y + 24)]; });
+    check(await lit(pacPx[0], pacPx[1]) > 200 && await lit(112, 40) < 60, "Lantern: Pac-Man lit, the far end of the maze dark");
+    check(await ev(() => window.__core.optMenu.find((i) => i.key === "afterDark").options.some((o) => o.text === "Lantern")), "Lantern is a Blindfold choice");
+    await ev(() => { window.__core.g.config.afterDark = false; });
+    await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
+  }
   // test mode also skips the opening jingle: straight from the blank pregame to READY
   await ev(() => { const c = window.__core; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });
   check(await until("g.mode === 'ready'", 3000) && await g("!g.sounds.opening.isPlaying()"), "test mode: a game skips the opening jingle");
