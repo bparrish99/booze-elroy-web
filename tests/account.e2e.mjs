@@ -324,7 +324,15 @@ try {
       check(await p.waitForFunction(() => window.__core.g.highScore === 43210, null, { timeout: 5000 }).then(() => true, () => false), "Favorites: HIGH SCORE is the highlighted favorite's board");
     }
     await p.keyboard.press("Enter"); await p.waitForTimeout(200);
-    check(await p.evaluate(() => window.__core.g.scene.name === "favorite" && window.__core.g.scene.menu.map((i) => i.text).join() === "Play 1P,Share,Remove,Back"), "its page: Play 1P, Share, Remove, Back");
+    check(await p.evaluate(() => window.__core.g.scene.name === "favorite" && window.__core.g.scene.menu.map((i) => i.text).join() === "Play 1P,Create Arena,Remove,Back"), "its page: Play 1P, Create Arena, Remove, Back");
+    check(await p.evaluate(() => { const c = window.__core.g.config, saved = JSON.parse(localStorage.getItem("booze-elroy-options")); return c.ghostCount === 6 && c.mazepack === "mspac" && saved.ghostCount === 6; }), "picking a favorite makes its settings the player's own at once (saved), no need to play it");
+    // Create Arena (it was Share; the author, 2026-11-16): an arena with the favorite's settings, not the current ones
+    await p.evaluate(() => { const m = window.__core.g.scene.menu; m.selectedItem = m.findIndex((i) => i.text === "Create Arena") + 1; });
+    await p.keyboard.press("Enter"); await p.waitForTimeout(200);
+    check(await p.evaluate(() => { const s = window.__core.g.scene; return s.name === "nameEntry" && s.mode === "createArena" && /ghosts 6/.test(s.summary(28).join(" ")); }), "Create Arena: names an arena with the favorite's settings");
+    await p.keyboard.press("Escape"); await p.waitForTimeout(200);
+    check(await p.evaluate(() => window.__core.g.scene.name === "favorite"), "Esc there goes back to the favorite");
+    await p.evaluate(() => { const m = window.__core.g.scene.menu; m.selectedItem = 1; });
     await p.keyboard.press("Enter");
     await p.waitForFunction(() => window.__core.g.scene.name === "game", null, { timeout: 5000 });
     check(await p.evaluate(() => { const c = window.__core.g.config, saved = JSON.parse(localStorage.getItem("booze-elroy-options")); return c.ghostCount === 6 && c.mazepack === "mspac" && saved.ghostCount === 6; }), "Play: its settings become the player's own (saved)");

@@ -513,7 +513,7 @@
       gamepadpressed(button) { if (button === "b") core.setScene("attract", true); else menuPad(this, button); },
     };
     // one favorite: its settings and that board's top 10 (drawn like the leaderboard page); Play 1P makes them the
-    // player's settings and starts a game; Share Config copies its link; Remove
+    // player's settings and starts a game; Create Arena makes an arena with them; Remove
     const favoriteScene = {
       name: "favorite",
       captureInput: true,
@@ -522,11 +522,17 @@
       fav: null, highlight: null, message: null, fc: 0,
       start(o) {
         o = o || {};
-        if (o.fav) this.fav = o.fav;
+        if (o.fav) { // opened from the list: its settings become the player's own at once, saved (the author, 2026-11-16:
+          this.fav = o.fav; // picking one of your own favorites is enough; Pinback's Picks are still only borrowed)
+          leaveArena();
+          Object.assign(g.config, SK.configFor(this.fav.board));
+          if (opts.saveSettings) opts.saveSettings();
+        }
         this.fc = 0; this.highlight = null; this.message = null;
         load(this.fav.board, true);
         const items = [{ text: "Play 1P", x: 10.5, y: 30, action: () => this.play() }];
-        if (opts.share) items.push({ text: "Share", share: true, x: 11.5, y: 31.5, action: () => opts.share(SK.configFor(this.fav.board)) }); // (the only place settings are shared: the author)
+        // (it had Share, copying a ?cfg= link; the author, 2026-11-16: nobody shares settings, they make an arena for their friends)
+        items.push({ text: "Create Arena", x: 8, y: 31.5, action: () => createArena("favorite", this.fav.board) });
         items.push({ text: "Remove", x: 11, y: 33, action: () => this.remove() });
         items.push({ text: "Back", x: 12, y: 34.5, action: () => core.setScene("favorites") });
         this.menu = Object.assign(items, { selectedItem: 1 });
@@ -837,9 +843,10 @@
     const attach = (c) => { core = c; g = c.g; };
     // Create Arena on the Options page: names a new arena with the current settings; Esc goes back to Options
     // creating an arena takes an account (the author's first restriction, 2026-11-12): logged out, just a note
-    const createArena = (from) => {
+    // key: the settings (a board key) the arena gets; the current ones if not given (a favorite's page gives its own)
+    const createArena = (from, key) => {
       if (opts.playerName && !opts.playerName()) { g.toast = { text: "log in to create an arena", until: performance.now() + 2500 }; return; }
-      core.setScene("nameEntry", { mode: "createArena", from });
+      core.setScene("nameEntry", { mode: "createArena", from, ...(key ? { key } : {}) });
     };
     return { summaryParts, attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene, favorites: favoritesScene, favorite: favoriteScene, picks: picksScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
   }
