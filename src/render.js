@@ -1094,12 +1094,13 @@
       if (g.mode === "playerUp") { print("player one", cm.w / 2 - 5, cm.playerone, 3, true); print("ready!", cm.w / 2 - 3, cm.ready, 6, true); }
       else if (g.state.showReady) print("ready!", cm.w / 2 - 3, cm.ready, 6, true);
       setColor(1, 1, 1);
-      // always seen: the energizers, the fruit, and blue ghosts
+      // always seen: the energizers and blue ghosts; the fruit too, but faded like the lettering (the author, 2026-11-16;
+      // in the light it's drawn bright underneath anyway)
       for (const sc of g.powers) drawScenery(sc, sc.x, sc.y, false);
       if (T(g.fruitTimer)) {
         const fl = cm.fruitLoc; let f = g.level.fruit;
         if (g.config.plusMode) f = core.levels.plusModeFruitMap(f);
-        drawSprite(f.sheet, f.quad, fl.x - 8, fl.y + 24 - 8, true);
+        setColor(1, 1, 1, LANTERN_TEXT); drawSprite(f.sheet, f.quad, fl.x - 8, fl.y + 24 - 8, true); setColor(1, 1, 1);
       }
       if (g.state.showGhosts) for (const name of core.charKeys()) {
         const c = g.chars[name];

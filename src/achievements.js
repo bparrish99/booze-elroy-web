@@ -22,6 +22,7 @@
     ["booze", "best mazes ever", "with the Booze maze pack", "mazepack", "booze"],
     ["seven", "desaturating seven", "with 7 ghosts", "ghostCount", 7],
     ["yolo", "yolo", "with 1 starting life", "startingLives", 1],
+    ["spelunker", "spelunker", "with Blindfold: Lantern", "afterDark", 6], // the author, 2026-11-16 (before photographic memory: elephantine memory follows that one)
     ["photo", "photographic memory", "with Blindfold: Blackout", "afterDark", 5],
   ];
   const TIERS = [[10000, ""], [20000, "2"], [30000, "3"]];

@@ -129,13 +129,13 @@ test("share codes: links shared before Rewind existed still mean the same settin
 
 test("achievements: the list the server checks ids against", () => {
   const ACH = require("../src/achievements.js");
-  const MODES = ["haunted", "terror", "afterdark", "rocketman", "coke", "booze", "seven", "yolo", "photo"];
+  const MODES = ["haunted", "terror", "afterdark", "rocketman", "coke", "booze", "seven", "yolo", "spelunker", "photo"];
   assert.deepEqual(ACH.LIST.map((a) => a.id), ["quarter", "respects", "stylish", "park", "kind", "trust", "dedication", "martini", "streak", "scratch", "scratch2", "scratch3", "fever", "hoover", "space", "now", "clyde", "inky", "pinky", "blinky", "rj", "master", "legend", "god",
     ...MODES.flatMap((m) => [m, m + "2", m + "3"]), "elephant", "arena", "planner", "dinner", "trailblazer", "billy", "pug", "beagle", "boxer", "hound", "wake", "neil"]);
   assert.equal(ACH.byId("yolo2").name, "yolo 2");
   assert.equal(ACH.byId("seven2").desc, "Score 20,000 points with 7 ghosts.");
   assert.equal(ACH.byId("photo3").desc, "Score 30,000 points with Blindfold: Blackout, with at least 4 ghosts.");
-  assert.equal(ACH.LIST.filter((a) => a.minGhosts === 4).length, 41); // the author's list: 27 points-in-a-mode, 8 scores, 6 getting far
+  assert.equal(ACH.LIST.filter((a) => a.minGhosts === 4).length, 44); // the author's list: 30 points-in-a-mode (spelunker since 2026-11-16), 8 scores, 6 getting far
   assert.deepEqual(ACH.byId("coke").mode, { key: "plusMode", value: true });
   assert.equal(new Set(ACH.LIST.map((a) => a.id)).size, ACH.LIST.length);
   const font = "abcdefghijklmnopqrstuvwxyz0123456789!-/ ";
