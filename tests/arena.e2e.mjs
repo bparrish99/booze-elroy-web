@@ -201,6 +201,28 @@ try {
   check(await until("g.scene.name === 'options'"), "and Esc returns to where it was typed");
 
   check((await api("/api/scores?board=" + DEFAULT)).entries.map((e) => e.name + e.score).join() === "PINBACK5000", "the regular board for the default settings is untouched");
+  // new arenas (the author, 2026-11-16): ARENAS on the title pulses white / green while an open arena is newer than the
+  // newest this browser saw in the list; the list's new ones pulse the same; visiting clears them (logged in or not)
+  {
+    const nc = await b.newContext({ viewport: { width: 672, height: 864 } });
+    const n = await nc.newPage(); n.on("pageerror", (e) => errs.push(e.message));
+    await n.goto(dev.url + "/"); await n.waitForTimeout(1500);
+    const flag = () => n.evaluate(() => window.__core.g.newArena);
+    check(await flag() === true, "new arenas: a first visit with an arena open marks ARENAS");
+    await n.evaluate(() => window.__core.setScene("arenas")); await n.waitForTimeout(800);
+    check(await n.evaluate(() => window.__core.g.scene.menu.some((i) => i.fresh)), "the list marks the new ones");
+    await n.evaluate(() => window.__core.setScene("attract")); await n.waitForTimeout(300);
+    check(await flag() === false, "visiting the list clears the title's mark");
+    await n.evaluate(() => window.__core.setScene("arenas")); await n.waitForTimeout(500);
+    check(await n.evaluate(() => !window.__core.g.scene.menu.some((i) => i.fresh)), "and the next visit marks nothing");
+    clock += 1000; // (the fake server clock stands still between moves: a later arena needs a later time)
+    await n.evaluate(() => fetch("/api/arenas", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "BRAND NEW", board: "pac.0.f.f.f.3.1.f.0.4.t.f.f" }) }));
+    await n.reload(); await n.waitForTimeout(1500);
+    check(await flag() === true, "another new arena: marked again");
+    await n.evaluate(() => window.__core.setScene("arenas")); await n.waitForTimeout(800);
+    check(await n.evaluate(() => window.__core.g.scene.menu.filter((i) => i.fresh).map((i) => i.text).join()) === "BRAND NEW", "only it is marked");
+    await nc.close();
+  }
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join(" | ") : ""));
 } finally {
   await b.close(); await dev.stop(); rmSync(blobsDir, { recursive: true, force: true });

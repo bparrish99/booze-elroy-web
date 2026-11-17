@@ -103,6 +103,8 @@
     // once per frame, from main.js
     function tick() {
       const scene = g.scene.name;
+      g.newArena = hasNewArena(); // (render: the title's green dot)
+      if (scene === "attract" && arenaApi && performance.now() - arenaList.at > 120000) loadArenas(); // a new one turns up
       // left the arena (or the leaderboard whose settings were borrowed) some other way: the player's own settings come back
       if (ownConfig && scene !== "game" && scene !== "nameEntry" && !(playingBoard ? scene === "leaderboard" || scene === borrowHome : scene === "arena")) leaveArena();
       if (scene === "game") {
@@ -178,6 +180,17 @@
         .catch(() => { if (arenaList.status !== "ok") arenaList.status = "error"; })
         .finally(() => { arenaList.at = performance.now(); arenaList.p = null; });
       return arenaList.p;
+    }
+    // new arenas (the author, 2026-11-16): the newest arena this browser has seen in the arena list ("createdAt", server
+    // ms; 0: never looked, so every open arena is new). The title shows a pulsing green energizer by ARENAS while an open
+    // arena is newer; the list marks those the same way on that visit, and visiting clears them
+    const SEEN = "booze-elroy-arenas-seen";
+    let seenAt = Number(store.get(SEEN, 0)) || 0;
+    const openArenas = () => arenaList.arenas.filter((a) => a && a.endsAt > serverNow());
+    const hasNewArena = () => arenaList.status === "ok" && openArenas().some((a) => a.createdAt > seenAt);
+    function markArenasSeen() {
+      const newest = Math.max(seenAt, ...arenaList.arenas.map((a) => a.createdAt || 0));
+      if (newest > seenAt) { seenAt = newest; store.set(SEEN, seenAt); }
     }
     // arenas the logged-in player (opts.playerName) won: closed, past the 15-minute grace for late scores, theirs on top
     // -> opts.arenaWon(arena) (achievements; may be told more than once)
@@ -354,6 +367,7 @@
       start() {
         leaveArena();
         this.fc = 0; this.scroll = 0; this.lastSel = 0;
+        this.newSince = seenAt; // the arenas newer than this get the green dot on this visit
         this.menu = Object.assign([], { selectedItem: 1 });
         loadArenas(true);
         this.build();
@@ -372,8 +386,9 @@
         // virtual rows { h, item?, draw(y) }, laid out top to bottom and scrolled
         const rows = [], items = [], decor = [];
         const pick = (a) => () => core.setScene("arena", { arena: a });
+        if (arenaList.status === "ok") markArenasSeen(); // seen now: the title's dot goes, and next visit's marks start here
         for (const a of open) {
-          const it = { id: a.id, text: a.name, x: 2, action: pick(a) };
+          const it = { id: a.id, text: a.name, x: 2, action: pick(a), fresh: a.createdAt > this.newSince };
           items.push(it);
           rows.push({ h: 2, item: it, draw: (y) => { const t = timeLeft(a.endsAt - now); decor.push({ text: t, x: 26 - t.length, y, o: 2 }); } });
         }
