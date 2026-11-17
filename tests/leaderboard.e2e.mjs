@@ -121,7 +121,7 @@ try {
   check(await ev(() => !document.getElementById("mute").classList.contains("muted")), "and M again unmutes");
   // and its games stay off the leaderboards (a score that would place: no name entry, a toast)
   await ev(() => { const c = window.__core; c.g.score = 999990; c.mode.setMode("gameover"); });
-  check(await until("g.scene.name === 'attract'", 8000) && await g("g.toast && g.toast.text === 'test mode: score not posted'"), "test mode: a game over posts nothing (no name entry)");
+  check(await until("g.scene.name === 'attract'", 8000) && await g("!g.toast"), "test mode: a game over posts nothing, silently (no name entry, no toast)");
   await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
   // test mode also skips the opening jingle: straight from the blank pregame to READY
   await ev(() => { const c = window.__core; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });

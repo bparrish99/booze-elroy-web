@@ -762,10 +762,7 @@
     // ---------------------------------------------------------------- hooks for core
     function afterGameOver(score, testMode) {
       // test mode (xyzzy) shows what the ghosts are up to: its games stay off the boards and arenas (the author, 2026-11-16)
-      if (testMode) {
-        if (score > 0) g.toast = { text: "test mode: score not posted", until: performance.now() + 2500 };
-        return !ownConfig ? null : playingBoard ? borrowHome : "arena";
-      }
+      if (testMode) return !ownConfig ? null : playingBoard ? borrowHome : "arena"; // (silently: the author)
       if (ownConfig && !playingBoard) return afterArenaGame(score);
       // a game borrowed from the Leaderboards page ends back on that board
       return afterBoardGame(score) || (playingBoard ? borrowHome : null);
