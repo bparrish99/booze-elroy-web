@@ -1056,10 +1056,10 @@
     // web edition, test mode (xyzzy): each ghost's target (a crosshair; off the maze: a ring at the edge) and the path it
     // will take there by its own rules (core.projectGhost), in the ghost's colour (read off its sprite). Drawn on the
     // game picture, so it goes through the look like everything else
-    // Blindfold: Lantern (afterDark 6; the author, 2026-11-16): dark but for a circle of light round Pac-Man, 6 tiles across
+    // Blindfold: Lantern (afterDark 6; the author, 2026-11-16): dark but for a circle of light round Pac-Man, 8 tiles across
     // each way, its edge fading; energizers and the fruit always show, and blue ghosts while they're blue. The lights come
     // up at game over and when a board is cleared. Render only (the core never looks at 6)
-    const LANTERN = 6, LANTERN_R = 6 * TILE, LANTERN_SOFT = 2 * TILE, LANTERN_BG = 0.4, LANTERN_TEXT = 0.45; // (faded to these, unlit)
+    const LANTERN = 6, LANTERN_R = 8 * TILE, LANTERN_SOFT = 2 * TILE, LANTERN_BG = 0.4, LANTERN_TEXT = 0.45; // (faded to these, unlit)
     const dark = document.createElement("canvas"); dark.width = GW; dark.height = GH;
     const dctx = dark.getContext("2d");
     const lanternOn = () => g.config.afterDark === LANTERN && !g.state.hideMaze && g.mode !== "gameover" && g.mode !== "levelAnimation"
