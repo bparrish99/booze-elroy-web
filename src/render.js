@@ -417,14 +417,19 @@
     }
 
     // "new" (the author, 2026-11-16): ARENAS on the title while there's an arena this browser hasn't seen, and those arenas'
-    // names in the list, pulse between white and green (the font has no green: white, tinted); a highlighted one stays red
-    function newPulse() { const k = 0.5 + 0.5 * Math.sin(performance.now() / 220); setColor(1 - 0.78 * k, 1, 1 - 0.7 * k); }
+    // names in the list, pulse between white and green, or red and green while highlighted (the font has no green: drawn
+    // white and tinted)
+    function newPulse(selected) {
+      // (the highlighted one pulses opposite the rest: red while they're green, so it always stands out)
+      const k = 0.5 + 0.5 * Math.sin(performance.now() / 220 + (selected ? Math.PI : 0)), from = selected ? [1, 0.12, 0.12] : [1, 1, 1], to = [0.22, 1, 0.3];
+      setColor(from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k, from[2] + (to[2] - from[2]) * k);
+    }
     function drawMenu(menu, x, y, spacing) {
       menu.forEach((item, i0) => {
         const i = i0 + 1;
-        const color = menu.selectedItem === i ? 1 : 0;
-        const fresh = color === 0 && (item.fresh || (menu === core.attractMenu && item.text === "Arenas" && g.newArena));
-        if (fresh) newPulse();
+        let color = menu.selectedItem === i ? 1 : 0;
+        const fresh = !!(item.fresh || (menu === core.attractMenu && item.text === "Arenas" && g.newArena));
+        if (fresh) { newPulse(color === 1); color = 0; }
         if (item.text) print(item.text, item.x !== undefined ? item.x : x, item.y !== undefined ? item.y : (y + i * spacing), color);
         if (fresh) setColor(1, 1, 1);
         else if (item.options) {
