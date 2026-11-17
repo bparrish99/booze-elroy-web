@@ -393,7 +393,7 @@
           rows.push({ h: 2, item: it, draw: (y) => { const t = timeLeft(a.endsAt - now); decor.push({ text: t, x: 26 - t.length, y, o: 2 }); } });
         }
         if (arenaList.status === "ok" && !open.length) rows.push({ h: 2, draw: (y) => decor.push({ text: "no running arenas", x: 14 - 8.5, y, o: 2 }) });
-        if (done.length) rows.push({ h: 3, draw: (y) => decor.push({ text: "finished", x: 2, y: y + 1, o: 3 }) }); // (a blank line above it: the author, 2026-11-16)
+        if (done.length) rows.push({ h: 3, draw: (y) => decor.push({ text: "finished", x: 14 - 4, y: y + 1, o: 3 }) }); // (a blank line above it, centred: the author, 2026-11-16)
         for (const a of done) {
           const it = { id: a.id, text: a.name, x: 2, action: pick(a) };
           items.push(it);
