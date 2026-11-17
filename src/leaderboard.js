@@ -30,7 +30,7 @@
   const SPECIAL_COL = [1, 5, 8]; // grid column each special sits under
   const ENTRY_FRAMES = 60 * 60; // a minute to enter a name, like a cabinet
   const HOUR = 3600 * 1000;
-  const LIST_TOP = 6, LIST_BOTTOM = 29; // arena list rows
+  const LIST_TOP = 5, LIST_BOTTOM = 29; // arena list rows (one blank row under the title: the author, 2026-11-16; it was two)
   /** "23h", or "45m" in the last hour */
   const timeLeft = (ms) => (ms >= HOUR ? Math.ceil(ms / HOUR) + "h" : Math.max(1, Math.ceil(ms / 60000)) + "m");
 
