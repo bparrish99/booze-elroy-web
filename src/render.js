@@ -137,6 +137,9 @@
     // ---- DARKSTAR (the author's secret rave, 2026-11-17; src/rave.js has the music and the beat clock). Pictures only:
     // the game underneath is untouched. Kept under 3 flashes a second (photosensitivity), and never over Mina's film
     let rave = null;
+    // darkstar: the fruit dances too, on the offbeat (the author, 2026-11-17); one hop for every place it's drawn (Lantern's
+    // faded copy in the dark stood still at first)
+    const fruitHop = () => (raveOn() ? -Math.round(2.5 * Math.exp(-((rave.beat() + 0.5) % 1) * 4)) : 0);
     const BOKEH = Array.from({ length: 40 }, (_, i) => ({ // (fixed, so the same circles every time: hashed from i; 22 at first, "add more")
       x: (i * 89) % GW, y: (i * 137) % GH, r: 4 + ((i * 53) % 36), h: (i * 47) % 360, a: 0.1 + ((i * 31) % 10) / 70, /* (0.07-0.16 at first; boosted, the author) */
       ax: 20 + ((i * 17) % 40), ay: 20 + ((i * 29) % 40), fx: 0.5 + ((i * 7) % 10) / 10, fy: 0.4 + ((i * 11) % 10) / 10, p: i * 1.7 }));
@@ -678,9 +681,7 @@
         const fl = cm.fruitLoc;
         let f = g.level.fruit;
         if (g.config.plusMode) f = core.levels.plusModeFruitMap(f);
-        // darkstar: the fruit dances too, on the offbeat (the author, 2026-11-17)
-        const hop = raveOn() ? -Math.round(2.5 * Math.exp(-((rave.beat() + 0.5) % 1) * 4)) : 0;
-        drawSprite(f.sheet, f.quad, fl.x - 8, fl.y + 24 - 8 + hop, true);
+        drawSprite(f.sheet, f.quad, fl.x - 8, fl.y + 24 - 8 + fruitHop(), true);
       }
       if (T(g.fruitScoreTimer)) {
         const fl = cm.fruitLoc;
@@ -1153,7 +1154,7 @@
       if (T(g.fruitTimer)) {
         const fl = cm.fruitLoc; let f = g.level.fruit;
         if (g.config.plusMode) f = core.levels.plusModeFruitMap(f);
-        setColor(1, 1, 1, LANTERN_TEXT); drawSprite(f.sheet, f.quad, fl.x - 8, fl.y + 24 - 8, true); setColor(1, 1, 1);
+        setColor(1, 1, 1, LANTERN_TEXT); drawSprite(f.sheet, f.quad, fl.x - 8, fl.y + 24 - 8 + fruitHop(), true); setColor(1, 1, 1);
       }
       if (g.state.showGhosts) for (const name of core.charKeys()) {
         const c = g.chars[name];
