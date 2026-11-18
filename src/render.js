@@ -216,12 +216,14 @@
     function drawScenery(o, x, y, fade) {
       const a = o.animator();
       o.frame = o.frame || 1;
-      if (fade) setColor(1, 1, 1, g.fadeTimer / g.fadeLength());
-      const rv = !fade && raveOn();
+      const fadeA = fade ? g.fadeTimer / g.fadeLength() : 1;
+      if (fade) setColor(1, 1, 1, fadeA);
+      const rv = raveOn();
       if (rv) { // darkstar: the dots change colour in waves rolling across the maze; the energizers pulse with the beat
+        // (fading ones, Haunted / Blackout, keep their colour as they fade: the author, 2026-11-17)
         const rb = raveBeat(), big = g.powers && g.powers.includes(o);
         const t = big ? hueTint((rb.bar * 60 + rb.b * 40) % 360, 0.55 + 0.25 * rb.kick) : hueTint((((x + y) * 18 - rb.b * 90) % 360 + 360) % 360, 0.62);
-        setColor(t[0], t[1], t[2]);
+        setColor(t[0], t[1], t[2], fadeA);
       }
       // (and the energizers dance, on the offbeat like the fruit: the author, 2026-11-17)
       const hop = rv && g.powers && g.powers.includes(o) ? fruitHop() : 0;
