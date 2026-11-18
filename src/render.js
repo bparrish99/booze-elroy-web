@@ -137,8 +137,19 @@
     // ---- DARKSTAR (the author's secret rave, 2026-11-17; src/rave.js has the music and the beat clock). Pictures only:
     // the game underneath is untouched. Kept under 3 flashes a second (photosensitivity), and never over Mina's film
     let rave = null;
-    const BOKEH = Array.from({ length: 22 }, (_, i) => ({ // (fixed, so the same circles every time: hashed from i)
-      x: (i * 89) % GW, y: (i * 137) % GH, r: 6 + ((i * 53) % 30), h: (i * 47) % 360, a: 0.07 + ((i * 31) % 10) / 100,
+    // the lean (the author, 2026-11-17: "the entire playing field sort of leaning left and right, dancing"): about 1.5 degrees
+    // each way, easing over four beats (gentle on purpose: a spinning rainbow made the author queasy), round the maze's
+    // middle; the text mask leans with it so the vector look's letters stay put on the picture
+    const LEAN = 0.026;
+    function leanOn() {
+      if (!raveOn() || g.mode === "intermission1" || g.mode === "intermission2") return false;
+      const a = LEAN * Math.sin(rave.beat() * Math.PI / 4), cx = GW / 2, cy = 24 + 124;
+      for (const c of [ctx, mctx]) { c.save(); c.translate(cx, cy); c.rotate(a); c.translate(-cx, -cy); }
+      return true;
+    }
+    function leanOff() { ctx.restore(); mctx.restore(); }
+    const BOKEH = Array.from({ length: 40 }, (_, i) => ({ // (fixed, so the same circles every time: hashed from i; 22 at first, "add more")
+      x: (i * 89) % GW, y: (i * 137) % GH, r: 4 + ((i * 53) % 36), h: (i * 47) % 360, a: 0.07 + ((i * 31) % 10) / 100,
       ax: 20 + ((i * 17) % 40), ay: 20 + ((i * 29) % 40), fx: 0.5 + ((i * 7) % 10) / 10, fy: 0.4 + ((i * 11) % 10) / 10, p: i * 1.7 }));
     const raveOn = () => !!(rave && rave.on()) && g.scene.name !== "mina" && g.mode !== "intermission3";
     const raveBeat = () => { const b = rave.beat(), ph = b % 1; return { b, ph, kick: Math.exp(-ph * 5), bar: Math.floor(b / 4) }; };
@@ -642,6 +653,7 @@
         print("over", cm.w / 2 + 1, cm.ready, 1, true);
       }
 
+      const lean = leanOn(); // darkstar: the playing field sways with the music (undone below, before the intermissions)
       if (!g.state.hideMaze) {
         clip(0, 24, 224, 248);
         if (g.mode === "levelAnimation" && g.modeTimer % 20 > 10) drawMaze(cm, core.maze.maxColors);
@@ -714,6 +726,7 @@
         } else if (g.modeTimer > 70) drawSprite("spr16", 84, px, py, true);
       }
 
+      if (lean) leanOff();
       if (g.mode === "intermission1") drawIntermission1();
       else if (g.mode === "intermission2") drawIntermission2();
       else if (g.mode === "intermission3") drawIntermission3();
