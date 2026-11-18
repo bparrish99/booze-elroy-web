@@ -1246,11 +1246,28 @@
     }
     // darkstar's lights, over everything: spotlights sweeping from the top, lasers fanning up from the bottom corners every
     // other phrase, and confetti when something good happens (the bokeh is in drawBackground, behind the maze)
-    let confetti = [], lastMode = null, lastFright = 0;
-    function burst(x, y, n) {
+    let confetti = [], blasts = [], lastMode = null, lastFright = 0;
+    function burst(x, y, n, power) { // power: an energizer's, the big one (faster, longer, bigger bits)
       for (let i = 0; i < n; i++) {
-        const a = Math.random() * Math.PI * 2, v = 0.6 + Math.random() * 2.2;
-        confetti.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1.6, c: HUES[i % HUES.length], life: 60 + Math.random() * 50 });
+        const a = Math.random() * Math.PI * 2, v = power ? 1 + Math.random() * 4.6 : 0.6 + Math.random() * 2.2;
+        confetti.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (power ? 1 : 1.6), c: HUES[i % HUES.length],
+          life: (power ? 80 : 60) + Math.random() * 50, big: power && Math.random() < 0.3 });
+      }
+    }
+    // the energizer's blast: a white flash on Pac-Man and two rainbow shockwaves racing out (the author: "more explosive")
+    function drawBlasts() {
+      blasts = blasts.filter((b) => (b.t += 1) < 34);
+      for (const b of blasts) {
+        if (b.t < 12) { // the flash
+          const f = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 46);
+          f.addColorStop(0, `rgba(255,255,255,${0.85 * (1 - b.t / 12)})`); f.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = f; ctx.fillRect(b.x - 46, b.y - 46, 92, 92);
+        }
+        for (const [delay, hue] of [[0, b.hue], [5, (b.hue + 140) % 360]]) { // the rings
+          const k = (b.t - delay) / 28; if (k <= 0 || k >= 1) continue;
+          ctx.strokeStyle = `hsla(${hue},100%,62%,${(1 - k) * 0.9})`; ctx.lineWidth = 4 * (1 - k) + 1;
+          ctx.beginPath(); ctx.arc(b.x, b.y, 6 + k * 150, 0, Math.PI * 2); ctx.stroke();
+        }
       }
     }
     function drawRave() {
@@ -1277,16 +1294,18 @@
       if (g.scene.name === "game" && g.chars && g.chars.pac) {
         const pac = g.chars.pac, px = camX() + pac.x, py = camY() + pac.y + 24;
         if (g.mode === "ateGhost" && lastMode !== "ateGhost") burst(px, py, 40);
-        if (typeof g.frightened === "number" && g.frightened > lastFright + 30) burst(px, py, 60);
+        if (typeof g.frightened === "number" && g.frightened > lastFright + 30) { burst(px, py, 150, true); blasts.push({ x: px, y: py, t: 0, hue: HUES[rb.bar % HUES.length] }); }
         if (g.mode === "levelAnimation" && lastMode !== "levelAnimation") for (let i = 0; i < 6; i++) burst(20 + i * 37, 40, 40);
         lastFright = typeof g.frightened === "number" ? g.frightened : 0;
       }
       lastMode = g.mode;
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; drawBlasts(); ctx.restore();
       confetti = confetti.filter((c) => (c.life -= 1) > 0);
       for (const c of confetti) {
         c.vy += 0.06; c.vx *= 0.99; c.x += c.vx; c.y += c.vy;
         ctx.fillStyle = `hsl(${c.c},100%,${55 + 20 * Math.sin(c.life * 0.5)}%)`;
-        ctx.fillRect(Math.round(c.x), Math.round(c.y), Math.sin(c.life * 0.4) > 0 ? 2 : 1, 1);
+        const w = c.big ? 3 : Math.sin(c.life * 0.4) > 0 ? 2 : 1;
+        ctx.fillRect(Math.round(c.x), Math.round(c.y), w, c.big ? 2 : 1);
       }
     }
     // web edition: short popup message (g.toast = {text, until}), e.g. "link copied to clipboard"; "\n" starts a
