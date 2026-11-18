@@ -140,9 +140,9 @@
     // the lean (the author, 2026-11-17: "the entire playing field sort of leaning left and right, dancing"): about 1.5 degrees
     // each way, easing over four beats (gentle on purpose: a spinning rainbow made the author queasy), round the maze's
     // middle; the text mask leans with it so the vector look's letters stay put on the picture
-    const LEAN = 0.026, FIELD_Y = 24, FIELD_H = 248;
+    const LEAN = 0.026, FIELD_Y = 24, FIELD_H = 248, LEAN_FIT = 0.965; // (shrunk so the whole maze stays in view at full tilt)
     // (drawn upright, then copied back rotated in one smoothed pass: rotating each tile as it's drawn looked chunky and
-    // left seams; the author asked for anti-aliasing. The copy is scaled up a little so the corners never show)
+    // left seams; the author asked for anti-aliasing. Shrunk a little so the maze's edges never tip off the screen)
     const fieldCopy = document.createElement("canvas"); fieldCopy.width = GW; fieldCopy.height = FIELD_H;
     const fctx = fieldCopy.getContext("2d"), maskCopy = document.createElement("canvas"); maskCopy.width = GW; maskCopy.height = FIELD_H;
     const leanOn = () => raveOn() && g.mode !== "intermission1" && g.mode !== "intermission2";
@@ -154,8 +154,9 @@
         cc.clearRect(0, 0, GW, FIELD_H); cc.drawImage(src, 0, FIELD_Y, GW, FIELD_H, 0, 0, GW, FIELD_H);
         c.save(); c.beginPath(); c.rect(0, FIELD_Y, GW, FIELD_H); c.clip();
         if (c === mctx) c.clearRect(0, FIELD_Y, GW, FIELD_H);
+        else { clearScreen(); drawBackground(); } // (the margin the smaller field leaves: the plain background, clipped to the field)
         c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high";
-        c.translate(GW / 2, FIELD_Y + FIELD_H / 2); c.rotate(a); c.scale(1.035, 1.035);
+        c.translate(GW / 2, FIELD_Y + FIELD_H / 2); c.rotate(a); c.scale(LEAN_FIT, LEAN_FIT);
         c.drawImage(copy, -GW / 2, -FIELD_H / 2);
         c.restore(); c.imageSmoothingEnabled = false;
       }
