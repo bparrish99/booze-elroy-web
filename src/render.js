@@ -137,6 +137,9 @@
     // ---- DARKSTAR (the author's secret rave, 2026-11-17; src/rave.js has the music and the beat clock). Pictures only:
     // the game underneath is untouched. Kept under 3 flashes a second (photosensitivity), and never over Mina's film
     let rave = null;
+    const BOKEH = Array.from({ length: 22 }, (_, i) => ({ // (fixed, so the same circles every time: hashed from i)
+      x: (i * 89) % GW, y: (i * 137) % GH, r: 6 + ((i * 53) % 30), h: (i * 47) % 360, a: 0.07 + ((i * 31) % 10) / 100,
+      ax: 20 + ((i * 17) % 40), ay: 20 + ((i * 29) % 40), fx: 0.5 + ((i * 7) % 10) / 10, fy: 0.4 + ((i * 11) % 10) / 10, p: i * 1.7 }));
     const raveOn = () => !!(rave && rave.on()) && g.scene.name !== "mina" && g.mode !== "intermission3";
     const raveBeat = () => { const b = rave.beat(), ph = b % 1; return { b, ph, kick: Math.exp(-ph * 5), bar: Math.floor(b / 4) }; };
     const HUES = [300, 190, 55, 130, 20, 260];                         // magenta, cyan, yellow, green, orange, violet
@@ -339,7 +342,17 @@
         const rb = raveBeat(), hue = HUES[rb.bar % HUES.length];
         const w = ctx.createRadialGradient(GW / 2, GH / 2, 10, GW / 2, GH / 2, 200);
         w.addColorStop(0, `hsla(${hue},100%,50%,${0.08 + 0.22 * rb.kick})`); w.addColorStop(1, "hsla(0,0%,0%,0)");
-        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = w; ctx.fillRect(0, 0, GW, GH); ctx.restore();
+        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = w; ctx.fillRect(0, 0, GW, GH);
+        // bokeh: soft coloured circles of all sizes floating about behind the maze, each on its own slow, wandering path,
+        // swelling a little on the beat (the author, 2026-11-17: they replaced specks drifting left to right)
+        for (const o of BOKEH) {
+          const t = rb.b * 0.12, x = o.x + Math.sin(t * o.fx + o.p) * o.ax, y = o.y + Math.cos(t * o.fy + o.p * 1.3) * o.ay;
+          const r = o.r * (1 + 0.12 * rb.kick), hue = (o.h + rb.b * 4) % 360;
+          const gr = ctx.createRadialGradient(x, y, r * 0.55, x, y, r);
+          gr.addColorStop(0, `hsla(${hue},90%,60%,${o.a})`); gr.addColorStop(1, `hsla(${hue},90%,60%,0)`);
+          ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
       }
     }
 
@@ -1232,8 +1245,7 @@
       drawToast();
     }
     // darkstar's lights, over everything: spotlights sweeping from the top, lasers fanning up from the bottom corners every
-    // other phrase, disco-ball specks drifting across, and confetti when something good happens
-    const specks = Array.from({ length: 40 }, (_, i) => ({ x: (i * 97) % 260, y: 8 + ((i * 53) % 270), sp: 9 + (i % 5) * 4, tw: i * 1.3 }));
+    // other phrase, and confetti when something good happens (the bokeh is in drawBackground, behind the maze)
     let confetti = [], lastMode = null, lastFright = 0;
     function burst(x, y, n) {
       for (let i = 0; i < n; i++) {
@@ -1259,10 +1271,6 @@
           ctx.strokeStyle = `hsla(${hue},100%,60%,${0.35 + 0.3 * rb.kick})`;
           ctx.beginPath(); ctx.moveTo(ox, GH); ctx.lineTo(ox + Math.cos(a) * 420, GH + Math.sin(a) * 420); ctx.stroke();
         }
-      }
-      for (const p of specks) { // the disco ball's reflections, sweeping across
-        const x = ((p.x + t * p.sp) % 260) - 18, tw = 0.35 + 0.65 * Math.max(0, Math.sin(t * 1.7 + p.tw));
-        ctx.fillStyle = `rgba(255,255,255,${0.5 * tw})`; ctx.fillRect(Math.round(x), p.y, 2, 2);
       }
       ctx.restore();
       // confetti: a ghost eaten, an energizer, a board cleared
