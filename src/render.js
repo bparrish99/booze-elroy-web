@@ -223,7 +223,9 @@
         const t = big ? hueTint((rb.bar * 60 + rb.b * 40) % 360, 0.55 + 0.25 * rb.kick) : hueTint((((x + y) * 18 - rb.b * 90) % 360 + 360) % 360, 0.62);
         setColor(t[0], t[1], t[2]);
       }
-      drawSpriteAtTile(a.spr, a.frames[o.frame - 1], x, y + 3, true);
+      // (and the energizers dance, on the offbeat like the fruit: the author, 2026-11-17)
+      const hop = rv && g.powers && g.powers.includes(o) ? fruitHop() : 0;
+      drawSprite(a.spr, a.frames[o.frame - 1], x * TILE, (y + 3) * TILE + hop, true);
       if (fade || rv) setColor(1, 1, 1);
     }
 
