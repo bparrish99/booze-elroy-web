@@ -143,7 +143,8 @@
     const BOKEH = Array.from({ length: 40 }, (_, i) => ({ // (fixed, so the same circles every time: hashed from i; 22 at first, "add more")
       x: (i * 89) % GW, y: (i * 137) % GH, r: 4 + ((i * 53) % 36), h: (i * 47) % 360, a: 0.1 + ((i * 31) % 10) / 70, /* (0.07-0.16 at first; boosted, the author) */
       ax: 20 + ((i * 17) % 40), ay: 20 + ((i * 29) % 40), fx: 0.5 + ((i * 7) % 10) / 10, fy: 0.4 + ((i * 11) % 10) / 10, p: i * 1.7 }));
-    const raveOn = () => !!(rave && rave.on()) && g.scene.name !== "mina" && g.mode !== "intermission3";
+    // (off for every intermission, not just Mina's film: the author, 2026-11-17)
+    const raveOn = () => !!(rave && rave.on()) && g.scene.name !== "mina" && !/intermission/i.test(g.mode || "");
     const raveBeat = () => { const b = rave.beat(), ph = b % 1; return { b, ph, kick: Math.exp(-ph * 5), bar: Math.floor(b / 4) }; };
     const HUES = [300, 190, 55, 130, 20, 260];                         // magenta, cyan, yellow, green, orange, violet
     // a colour on the rainbow (h degrees) as a tint (0-1 rgb), for the dots, energizers and letters that pulse
@@ -1295,7 +1296,6 @@
         const pac = g.chars.pac, px = camX() + pac.x, py = camY() + pac.y + 24;
         if (g.mode === "ateGhost" && lastMode !== "ateGhost") burst(px, py, 40);
         if (typeof g.frightened === "number" && g.frightened > lastFright + 30) { burst(px, py, 60); shake = SHAKE; }
-        if (g.mode === "levelAnimation" && lastMode !== "levelAnimation") for (let i = 0; i < 6; i++) burst(20 + i * 37, 40, 40);
         lastFright = typeof g.frightened === "number" ? g.frightened : 0;
       }
       lastMode = g.mode;

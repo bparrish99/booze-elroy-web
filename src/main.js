@@ -750,7 +750,7 @@
         // and from the top the moment READY goes and Pac-Man sets off (a new life, a new board)
         if (real && g.mode === "normal" && (raveLastMode === "ready" || raveLastMode === "playerUp")) rave.restart();
         raveLastMode = g.mode;
-        rave.duck(g.scene.name === "mina" || g.mode === "intermission3" || poppedOut || (real && !live), real);
+        rave.duck(g.scene.name === "mina" || /intermission/i.test(g.mode || "") || poppedOut || (real && !live), real);
       }
       R.draw(); P.present();
       if (fpsOn) {
