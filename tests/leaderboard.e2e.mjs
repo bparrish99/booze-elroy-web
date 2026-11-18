@@ -166,6 +166,9 @@ try {
   await ev(() => { const c = window.__core; c.g.config.proMode = false; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });
   check(await until("g.mode === 'playerUp' || g.mode === 'ready'", 3000) && await ev(() => window.__rave.ducked), "the music is quiet over the opening jingle / READY");
   check(await until("g.mode === 'normal'", 12000) && await p.waitForTimeout(150).then(() => ev(() => !window.__rave.ducked && window.__rave.beat() < 1)), "and plays once play starts, from the top (" + await ev(() => window.__rave.beat().toFixed(2)) + " beats in)");
+  await ev(() => window.__core.mode.setMode("levelAnimation")); await p.waitForTimeout(150);
+  check(await ev(() => window.__rave.ducked), "and goes quiet for the board-complete animation");
+  await ev(() => window.__core.mode.setMode("normal")); await p.waitForTimeout(150);
   await ev(() => window.__core.mode.setMode("dying")); await p.waitForTimeout(150);
   check(await ev(() => window.__rave.ducked), "and goes quiet when Pac-Man dies");
   await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'"); await p.waitForTimeout(150);
