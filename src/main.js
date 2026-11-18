@@ -214,6 +214,7 @@
     // purpose in Options, it's on, everywhere; Random never picks it (the author: "you specifically have to go in there")
     const rave = BoozeRave.create(audio);
     const raveWanted = () => core.g.config && core.g.config.mazeColor === 100;
+    let raveLastMode = null;
     let typed = "";
     function cheatKey(e) {
       const sc = core.g.scene.name;
@@ -742,7 +743,15 @@
       LB.tick();
       if (wantsFullBezel() !== fullBezel || (core.g.config && core.g.config.crtEffect) !== fitLook) fit();
       if (raveWanted() !== rave.on()) { if (raveWanted()) rave.start(); else rave.stop(); } // maze style 27 picked or left
-      rave.duck(core.g.scene.name === "mina" || core.g.mode === "intermission3" || poppedOut); // darkstar: quiet for Mina's film
+      { // darkstar's music: quiet for Mina's film and the pop-out; in a real game, only while Pac-Man is alive and playing (the
+        // author, 2026-11-17: not over the opening jingle, READY, a death, ...; the eat-a-ghost / Suck / Blow stops keep it going)
+        const g = core.g, real = g.scene.name === "game" && !g.attract && !g.autoplay;
+        const live = (g.mode === "normal" || g.mode === "ateGhost" || g.mode === "vacuum" || g.mode === "push") && !g.paused;
+        // and from the top the moment READY goes and Pac-Man sets off (a new life, a new board)
+        if (real && g.mode === "normal" && (raveLastMode === "ready" || raveLastMode === "playerUp")) rave.restart();
+        raveLastMode = g.mode;
+        rave.duck(g.scene.name === "mina" || g.mode === "intermission3" || poppedOut || (real && !live), real);
+      }
       R.draw(); P.present();
       if (fpsOn) {
         fpsFrames += 1;

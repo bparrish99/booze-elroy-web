@@ -151,6 +151,14 @@ try {
   check(await ev(() => window.__rave.on()), "maze style 27 starts the rave");
   { const b0 = await ev(() => window.__rave.beat()); await p.waitForTimeout(700); const b1 = await ev(() => window.__rave.beat());
     check(b1 > b0, "its beat clock runs (" + b0.toFixed(2) + " -> " + b1.toFixed(2) + ")"); }
+  // in a real game it plays only while Pac-Man is alive and playing: not over the jingle / READY, not while he dies
+  await ev(() => { const c = window.__core; c.g.config.proMode = false; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });
+  check(await until("g.mode === 'playerUp' || g.mode === 'ready'", 3000) && await ev(() => window.__rave.ducked), "the music is quiet over the opening jingle / READY");
+  check(await until("g.mode === 'normal'", 12000) && await p.waitForTimeout(150).then(() => ev(() => !window.__rave.ducked && window.__rave.beat() < 1)), "and plays once play starts, from the top (" + await ev(() => window.__rave.beat().toFixed(2)) + " beats in)");
+  await ev(() => window.__core.mode.setMode("dying")); await p.waitForTimeout(150);
+  check(await ev(() => window.__rave.ducked), "and goes quiet when Pac-Man dies");
+  await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'"); await p.waitForTimeout(150);
+  check(await ev(() => !window.__rave.ducked), "back on the title it plays again");
   await ev(() => { window.__core.g.config.mazeColor = 99; }); await p.waitForTimeout(400);
   check(await ev(() => !window.__rave.on()), "another maze style stops it");
   check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Reset Classic Pac-Man,Add Favorite,Create Arena,Back", "Options: Reset Classic Pac-Man, Add Favorite (where Share Config was), Create Arena, Back (Credits moved to the title)");

@@ -91,21 +91,33 @@
       on: () => on,
       start() {
         if (!ctx || on) return;
-        on = true; nodes(); audio.unlock();
+        on = true; this.ducked = false; nodes(); audio.unlock();
         t0 = ctx.currentTime + 0.1; nextStep = 0;
         out.gain.cancelScheduledValues(ctx.currentTime); out.gain.setValueAtTime(0, ctx.currentTime); out.gain.linearRampToValueAtTime(LEVEL, ctx.currentTime + 0.3);
         timer = setInterval(schedule, 25); schedule();
+      },
+      /** from the top, now (READY gone, Pac-Man off: the author): the old take is cut off (its output dropped, so notes
+       *  already scheduled from it go silent) and the song starts again at bar 0, coin drop and all */
+      restart() {
+        if (!on || !ctx) return;
+        const old = out, t = ctx.currentTime;
+        old.gain.cancelScheduledValues(t); old.gain.setValueAtTime(old.gain.value, t); old.gain.linearRampToValueAtTime(0, t + 0.02);
+        setTimeout(() => old.disconnect(), 300);
+        out = null; nodes(); out.gain.value = LEVEL; this.ducked = false;
+        t0 = t + 0.02; nextStep = 0; schedule();
       },
       stop() {
         if (!on) return;
         on = false; clearInterval(timer);
         if (out) { const t = ctx.currentTime; out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(0, t + 0.4); }
       },
-      /** fade the music out while true (Mina's film: it plays its own sound, and it's not a party) and back in after */
-      duck(d) {
+      /** fade the music out while true (Mina's film: it plays its own sound, and it's not a party; a game's jingle, READY,
+       *  deaths) and back in after */
+      // quick: a game's stops and starts (a fifth of a second), not the slow fade for the film
+      duck(d, quick) {
         if (!on || !out || d === this.ducked) return;
         this.ducked = d; const t = ctx.currentTime;
-        out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(d ? 0 : LEVEL, t + 0.6);
+        out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(d ? 0 : LEVEL, t + (quick ? 0.2 : 0.6));
       },
       ducked: false,
       /** beats since the music started (a float: the fraction is where in the beat we are); a steady clock without audio */
