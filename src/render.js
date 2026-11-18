@@ -140,14 +140,26 @@
     // the lean (the author, 2026-11-17: "the entire playing field sort of leaning left and right, dancing"): about 1.5 degrees
     // each way, easing over four beats (gentle on purpose: a spinning rainbow made the author queasy), round the maze's
     // middle; the text mask leans with it so the vector look's letters stay put on the picture
-    const LEAN = 0.026;
-    function leanOn() {
-      if (!raveOn() || g.mode === "intermission1" || g.mode === "intermission2") return false;
-      const a = LEAN * Math.sin(rave.beat() * Math.PI / 4), cx = GW / 2, cy = 24 + 124;
-      for (const c of [ctx, mctx]) { c.save(); c.translate(cx, cy); c.rotate(a); c.translate(-cx, -cy); }
-      return true;
+    const LEAN = 0.026, FIELD_Y = 24, FIELD_H = 248;
+    // (drawn upright, then copied back rotated in one smoothed pass: rotating each tile as it's drawn looked chunky and
+    // left seams; the author asked for anti-aliasing. The copy is scaled up a little so the corners never show)
+    const fieldCopy = document.createElement("canvas"); fieldCopy.width = GW; fieldCopy.height = FIELD_H;
+    const fctx = fieldCopy.getContext("2d"), maskCopy = document.createElement("canvas"); maskCopy.width = GW; maskCopy.height = FIELD_H;
+    const leanOn = () => raveOn() && g.mode !== "intermission1" && g.mode !== "intermission2";
+    function leanOff() {
+      const a = LEAN * Math.sin(rave.beat() * Math.PI / 2); // a full sway every 4 beats
+      for (const [c, src, copy] of [[ctx, screen, fieldCopy], [masking ? mctx : null, textMask, maskCopy]]) {
+        if (!c) continue;
+        const cc = copy === fieldCopy ? fctx : copy.getContext("2d");
+        cc.clearRect(0, 0, GW, FIELD_H); cc.drawImage(src, 0, FIELD_Y, GW, FIELD_H, 0, 0, GW, FIELD_H);
+        c.save(); c.beginPath(); c.rect(0, FIELD_Y, GW, FIELD_H); c.clip();
+        if (c === mctx) c.clearRect(0, FIELD_Y, GW, FIELD_H);
+        c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high";
+        c.translate(GW / 2, FIELD_Y + FIELD_H / 2); c.rotate(a); c.scale(1.035, 1.035);
+        c.drawImage(copy, -GW / 2, -FIELD_H / 2);
+        c.restore(); c.imageSmoothingEnabled = false;
+      }
     }
-    function leanOff() { ctx.restore(); mctx.restore(); }
     const BOKEH = Array.from({ length: 40 }, (_, i) => ({ // (fixed, so the same circles every time: hashed from i; 22 at first, "add more")
       x: (i * 89) % GW, y: (i * 137) % GH, r: 4 + ((i * 53) % 36), h: (i * 47) % 360, a: 0.07 + ((i * 31) % 10) / 100,
       ax: 20 + ((i * 17) % 40), ay: 20 + ((i * 29) % 40), fx: 0.5 + ((i * 7) % 10) / 10, fy: 0.4 + ((i * 11) % 10) / 10, p: i * 1.7 }));
@@ -653,7 +665,7 @@
         print("over", cm.w / 2 + 1, cm.ready, 1, true);
       }
 
-      const lean = leanOn(); // darkstar: the playing field sways with the music (undone below, before the intermissions)
+      const lean = leanOn(); // darkstar: the playing field sways with the music (applied below by leanOff, before the intermissions)
       if (!g.state.hideMaze) {
         clip(0, 24, 224, 248);
         if (g.mode === "levelAnimation" && g.modeTimer % 20 > 10) drawMaze(cm, core.maze.maxColors);
