@@ -5,6 +5,7 @@
 (function (root) {
   "use strict";
   const BPM = 128, STEP = 60 / BPM / 4; // a 16th note, s
+  const LEVEL = 0.65; // the music against the game's own sounds (0.5 at first; the author: "up the relative volume slightly")
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
   // A minor, vi-IV-I-V: Am F C G, a bar each
   const ROOTS = [45, 41, 48, 43];                                    // bass (A2 F2 C3 G2)
@@ -92,7 +93,7 @@
         if (!ctx || on) return;
         on = true; nodes(); audio.unlock();
         t0 = ctx.currentTime + 0.1; nextStep = 0;
-        out.gain.cancelScheduledValues(ctx.currentTime); out.gain.setValueAtTime(0, ctx.currentTime); out.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.3);
+        out.gain.cancelScheduledValues(ctx.currentTime); out.gain.setValueAtTime(0, ctx.currentTime); out.gain.linearRampToValueAtTime(LEVEL, ctx.currentTime + 0.3);
         timer = setInterval(schedule, 25); schedule();
       },
       stop() {
@@ -104,7 +105,7 @@
       duck(d) {
         if (!on || !out || d === this.ducked) return;
         this.ducked = d; const t = ctx.currentTime;
-        out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(d ? 0 : 0.5, t + 0.6);
+        out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(d ? 0 : LEVEL, t + 0.6);
       },
       ducked: false,
       /** beats since the music started (a float: the fraction is where in the beat we are); a steady clock without audio */
