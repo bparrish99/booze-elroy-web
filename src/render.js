@@ -678,7 +678,9 @@
         const fl = cm.fruitLoc;
         let f = g.level.fruit;
         if (g.config.plusMode) f = core.levels.plusModeFruitMap(f);
-        drawSprite(f.sheet, f.quad, fl.x - 8, fl.y + 24 - 8, true);
+        // darkstar: the fruit dances too, on the offbeat (the author, 2026-11-17)
+        const hop = raveOn() ? -Math.round(2.5 * Math.exp(-((rave.beat() + 0.5) % 1) * 4)) : 0;
+        drawSprite(f.sheet, f.quad, fl.x - 8, fl.y + 24 - 8 + hop, true);
       }
       if (T(g.fruitScoreTimer)) {
         const fl = cm.fruitLoc;
