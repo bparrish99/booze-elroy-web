@@ -1009,9 +1009,9 @@
       sc.summaryParts(28).slice(0, maxLines).forEach((line, i) => {
         const text = line.map(([l, v]) => (l ? l + " " : "") + v).join("  ");
         let x = 14 - text.length / 2;
-        for (const [l, v] of line) {
+        for (const [l, v, c] of line) {
           if (l) { print(l, x, top + i, 0); x += l.length + 1; }
-          print(v, x, top + i, l ? 6 : 0); x += v.length + 2; // ("classic Pac-Man", with no name, stays white)
+          print(v, x, top + i, c !== undefined ? c : l ? 6 : 0); x += v.length + 2; // ("classic Pac-Man", with no name, stays white; a pick's name: yellow)
         }
       });
     }

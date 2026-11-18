@@ -353,6 +353,13 @@ try {
     check(await p.evaluate(() => fetch("/api/account/achievements", { headers: window.__acc.auth() }).then((r) => r.json()).then((d) => !!d.achievements.trust)), "trust me");
     await p.keyboard.press("Escape"); await p.waitForTimeout(400);
     check(await p.evaluate(() => window.__core.g.scene.name === "picks" && window.__core.g.config.ghostCount === 4 && window.__core.g.config.mazepack === "pac"), "quitting comes back to the picks, the player's own settings back");
+    // a leaderboard of a pick's settings shows the pick's name, not the settings (Classic Pac-Man stays "classic Pac-Man")
+    await p.evaluate(() => { const c = window.__core; c.setScene("leaderboard"); c.g.scene.key = c.g.scene.menu ? window.BoozeScoreKey.keyFor({ ...c.g.defaultConfig, ghostCount: 6, mazepack: "mspac" }) : null; });
+    await p.waitForTimeout(800);
+    check(await p.evaluate(() => JSON.stringify(window.__core.g.scene.summaryParts(28))) === JSON.stringify([[["", "pinback's pick"]], [["", "SIX OF THEM", 6]]]), "a pick's leaderboard: \"pinback's pick\" and its name");
+    await p.evaluate(() => { const c = window.__core; c.g.scene.key = window.BoozeScoreKey.keyFor(c.g.defaultConfig); });
+    check(await p.evaluate(() => JSON.stringify(window.__core.g.scene.summaryParts(28))) === JSON.stringify([[["", "classic Pac-Man"]]]), "the Classic board stays \"classic Pac-Man\"");
+    await p.evaluate(() => window.__core.setScene("attract"));
     check(await p.evaluate(() => { const s = window.__core.g.scene, it = s.menu[s.menu.selectedItem - 1]; return it && it.text === "SIX OF THEM"; }), "with the pick just played highlighted (Enter plays it again)");
     await p.evaluate(() => { const c = window.__core; c.setScene("favorites"); });
     await p.waitForFunction(() => window.__core.g.scene.menu.some((i) => i.text === "SIX OF THEM"), null, { timeout: 5000 });

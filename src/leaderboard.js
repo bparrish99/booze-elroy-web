@@ -295,6 +295,7 @@
         lbMenu.selectedItem = 1;
         if (!o.fresh) load(this.key, true);
         loadBoardList();
+        if (opts.picks && picksGet().status !== "ok") opts.picks.load(); // (to name the boards that are picks)
         const lx = (x, n) => ({ x0: x * 8 - 6, y0: 3 * 8, x1: (x + n) * 8 + 6, y1: 6 * 8 }); // roomy: the CRT curve bends the corners
         this.links = [{ ...lx(4, 4), action: () => this.flip(-1) }, { ...lx(20, 4), action: () => this.flip(1) }];
       },
@@ -322,7 +323,13 @@
       },
       board() { return boardFor(this.key); },
       summary(width) { return summary(width, SK.configFor(this.key)); },
-      summaryParts(width) { return summaryParts(width, SK.configFor(this.key)); },
+      // a board that's one of Pinback's Picks shows the pick's name instead of its settings (the author, 2026-11-18), but
+      // not Classic Pac-Man, which stays "classic Pac-Man" whatever the pick is called
+      summaryParts(width) {
+        const pick = this.key !== SK.keyFor(g.defaultConfig) && picksGet().list.find((f) => f.board === this.key);
+        if (pick) return [[["", "pinback's pick"]], [["", pick.name, 6]]];
+        return summaryParts(width, SK.configFor(this.key));
+      },
       keypressed(key) {
         if (key === "return" || key === "space") { const it = lbMenu[lbMenu.selectedItem - 1]; if (it.text !== "Play 1P") wakka(); it.action(); }
         else if (key === "left") this.flip(-1);
