@@ -241,7 +241,9 @@
     // where quitting a game (Esc / the X button) goes: back to the arena or leaderboard it was started from, else the title
     const quitGameTo = () => (!ownConfig ? null : playingBoard ? borrowHome : "arena");
     // straight into a game (the title's "play" step only runs on the title scene, which would give the settings back)
-    function startGame() { sfx("coindrop"); g.autoplay = false; g.attract = false; core.setScene("game"); }
+    // (the coin drop after the switch: starting the game scene silences every sound, so played first it was cut off at once
+    // on these pages; the title's Play 1P waits a moment before switching, so it kept its coin: the author noticed)
+    function startGame() { g.autoplay = false; g.attract = false; core.setScene("game"); sfx("coindrop"); }
     function arenaHeader() {
       const b = arena && arenaBoards.get(arena.id), leader = b && b.entries[0];
       g.highScore = leader ? leader.score : false;
@@ -342,7 +344,7 @@
     const menuMove = (menu, d) => { wakka(); menu.selectedItem = ((menu.selectedItem - 1 + d + menu.length) % menu.length) + 1; };
     const menuKeys = (sc, key) => {
       const m = sc.menu;
-      if (key === "return" || key === "space") { wakka(); m[m.selectedItem - 1].action(); }
+      if (key === "return" || key === "space") { const it = m[m.selectedItem - 1]; if (!it.coin) wakka(); it.action(); } // (a game starting has its coin drop instead)
       else if (key === "up" || key === "left") menuMove(m, -1);
       else if (key === "down" || key === "right") menuMove(m, 1);
     };
@@ -453,7 +455,7 @@
       },
       build() {
         const items = [];
-        if (arenaOpen(arena) && api) items.push({ text: "Play 1P", x: 10.5, y: 30, action: () => this.play() });
+        if (arenaOpen(arena) && api) items.push({ text: "Play 1P", coin: true, x: 10.5, y: 30, action: () => this.play() });
         if (opts.addFavorite) items.push({ text: "Add Favorite", x: 8, y: 31.5, action: () => opts.addFavorite(arena.board) });
         if (opts.shareArena) items.push({ text: "Share Arena", share: true, x: 8.5, y: 33, action: () => opts.shareArena(arena.id) });
         items.push({ text: "Back", x: 12, y: 34.5, action: () => this.back() });
@@ -545,7 +547,7 @@
         }
         this.fc = 0; this.highlight = null; this.message = null;
         load(this.fav.board, true);
-        const items = [{ text: "Play 1P", x: 10.5, y: 30, action: () => this.play() }];
+        const items = [{ text: "Play 1P", coin: true, x: 10.5, y: 30, action: () => this.play() }];
         // (it had Share, copying a ?cfg= link; the author, 2026-11-16: nobody shares settings, they make an arena for their friends)
         items.push({ text: "Create Arena", x: 8, y: 31.5, action: () => createArena("favorite", this.fav.board) });
         items.push({ text: "Remove", x: 11, y: 33, action: () => this.remove() });
@@ -602,7 +604,7 @@
       headerKey() { const it = this.menu[this.menu.selectedItem - 1]; return it && it.fav ? it.fav.board : null; },
       build() {
         const f = picksGet(), decor = [];
-        const items = f.list.map((fav, i) => ({ id: "p:" + fav.name, text: fav.name, x: 2, y: FAV_TOP + i, fav, action: () => playPick(fav) }));
+        const items = f.list.map((fav, i) => ({ id: "p:" + fav.name, text: fav.name, x: 2, y: FAV_TOP + i, fav, coin: true, action: () => playPick(fav) }));
         items.push({ text: "Back", x: 12, y: 31, action() { core.setScene("attract", true); } });
         rebuildMenu(this, items);
         if (!this.hadList && f.list.length) { // the list just arrived: the pick last played, else the first (not Back)

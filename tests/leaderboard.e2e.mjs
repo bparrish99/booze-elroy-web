@@ -40,6 +40,17 @@ try {
   check(await until("g.highScore === 5000 && g.highScoreName === 'PINBACK'"), "(board restored)");
   await ev(() => { performance.now = window.__realNow; });
   check(await ev(() => window.__core.attractMenu.map((i) => i.text).join(",")) === "Play 1P,Arenas,Favorites,Options,Leaderboards", "main menu: Play 1P, Arenas, Favorites, Options, Leaderboards");
+  // Play 1P drops a coin (it lost the sound when "Play" became "Play 1P"; the author noticed, 2026-11-17)
+  await ev(() => { const c = window.__core, snd = c.g.sounds.coindrop, play = snd.play.bind(snd); window.__coins = 0; snd.play = () => { window.__coins += 1; window.__coinScene = c.g.scene.name; return play(); };
+    c.attractMenu.selectedItem = c.attractMenu.findIndex((i) => i.text === "Play 1P") + 1; });
+  await p.keyboard.press("Enter"); await p.waitForTimeout(150);
+  check(await ev(() => window.__coins) >= 1, "Play 1P plays the coin drop");
+  // and Play 1P on a leaderboard page too, still sounding once the game has started (the switch silences every sound)
+  await until("g.scene.name === 'game'", 5000); await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
+  await ev(() => { window.__coins = 0; window.__core.setScene("leaderboard"); }); await p.waitForTimeout(300);
+  await p.keyboard.press("Enter"); await p.waitForTimeout(250);
+  check(await ev(() => window.__coins >= 1 && window.__coinScene === "game"), "a leaderboard's Play 1P: the coin drop, played once the game has started (so the switch doesn't cut it off)");
+  await until("g.scene.name === 'game'", 5000); await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
   // the attract demo: Enter starts a real game (the author, 2026-11-15), like Play 1P; the demo's mute is undone
   await ev(() => { const c = window.__core; c.g.attract = true; c.g.originalVolume = c.g.config.volume; c.g.config.volume = 0; c.setScene("game"); });
   await p.waitForTimeout(300);

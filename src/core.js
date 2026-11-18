@@ -1345,7 +1345,7 @@
     if (env.scenes) for (const it of menus.main) it.y -= 1;
     const menuConfirm = (menu) => {
       const item = menu[menu.selectedItem - 1];
-      if (item.text && item.text === "Play") { g.sounds.coindrop.stop(); g.sounds.coindrop.play(); }
+      if (item.text && (item.text === "Play" || item.text === "Play 1P")) { g.sounds.coindrop.stop(); g.sounds.coindrop.play(); } // (web edition: the item became "Play 1P" and lost its coin drop for a while: the author noticed, 2026-11-17)
       else if (item.sound) { g.sounds[item.sound].stop(); g.sounds[item.sound].play(); } else wakka();
       if (item.options) { menu.selectedItem += 1; clampMenu(menu); }
       else { item.action(); if (menu.autosave) menu.autosave(); }
