@@ -1259,9 +1259,10 @@
     const SHAKE = 15; let shake = 0; // frames of screen shake left (an energizer: the author)
     function burst(x, y, n, power) { // power: an energizer's, the big one (faster, longer, bigger bits)
       for (let i = 0; i < n; i++) {
-        const a = Math.random() * Math.PI * 2, v = power ? 1 + Math.random() * 4.6 : 0.6 + Math.random() * 2.2;
-        confetti.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (power ? 1 : 1.6), c: HUES[i % HUES.length],
-          life: (power ? 80 : 60) + Math.random() * 50, big: power && Math.random() < 0.3 });
+        // (kept tight and bright, so it reads as a burst, not more of the rainbow dots: the author)
+        const a = Math.random() * Math.PI * 2, v = power ? 0.8 + Math.random() * 2.6 : 0.5 + Math.random() * 1.6;
+        confetti.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (power ? 0.6 : 1), c: HUES[i % HUES.length],
+          life: (power ? 45 : 40) + Math.random() * 30, big: power && Math.random() < 0.3 });
       }
     }
     // the energizer's blast: a white flash on Pac-Man (the author: "more explosive"; two rainbow shockwaves racing out came
@@ -1307,12 +1308,14 @@
       lastMode = g.mode;
       ctx.save(); ctx.globalCompositeOperation = "lighter"; drawBlasts(); ctx.restore();
       confetti = confetti.filter((c) => (c.life -= 1) > 0);
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; // (glowing: brighter than the dots underneath)
       for (const c of confetti) {
-        c.vy += 0.06; c.vx *= 0.99; c.x += c.vx; c.y += c.vy;
-        ctx.fillStyle = `hsl(${c.c},100%,${55 + 20 * Math.sin(c.life * 0.5)}%)`;
+        c.vy += 0.05; c.vx *= 0.94; c.vy *= 0.96; c.x += c.vx; c.y += c.vy;
+        ctx.fillStyle = `hsl(${c.c},100%,${78 + 14 * Math.sin(c.life * 0.5)}%)`;
         const w = c.big ? 3 : Math.sin(c.life * 0.4) > 0 ? 2 : 1;
         ctx.fillRect(Math.round(c.x), Math.round(c.y), w, c.big ? 2 : 1);
       }
+      ctx.restore();
     }
     // web edition: short popup message (g.toast = {text, until}), e.g. "link copied to clipboard"; "\n" starts a
     // second line (each line centred)
