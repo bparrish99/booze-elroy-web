@@ -160,7 +160,6 @@
       reset: { scenes: CHEAT_SCENES, run() { openReset(); } }, // admin: reset high scores (asks for the password)
       delete: { scenes: ["arena"], run() { openReset("arena"); } }, // admin: delete the arena on screen (asks for the password)
       xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // test mode: frame rate, tiles, ghost targets and paths; Pro Mode always
-      darkstar: { scenes: CHEAT_SCENES, run() { toggleRave(); } }, // the author's secret rave (src/rave.js, render.js): pictures and music only
     };
     // the frame-rate readout: off by default, remembered; counted in the frame loop, shown twice a second
     // test mode's training readout (the author, 2026-11-16; a new player wanted to learn the ghosts): the scatter / chase
@@ -211,16 +210,10 @@
       R.setDebug(fpsOn);
     }
     fpsEl.classList.toggle("on", fpsOn);
-    // DARKSTAR (the author, 2026-11-17): a rave in Pac-Man's honour, on and off with the cheat, remembered in this browser
+    // DARKSTAR (the author, 2026-11-17): a rave in Pac-Man's honour. It's maze style 27 (config.mazeColor 100): picked on
+    // purpose in Options, it's on, everywhere; Random never picks it (the author: "you specifically have to go in there")
     const rave = BoozeRave.create(audio);
-    let raveWanted = false;
-    try { raveWanted = localStorage.getItem("booze-elroy-darkstar") === "1"; } catch { /* ignore */ }
-    function toggleRave() {
-      raveWanted = !raveWanted;
-      try { localStorage.setItem("booze-elroy-darkstar", raveWanted ? "1" : "0"); } catch { /* ignore */ }
-      if (raveWanted) rave.start(); else rave.stop();
-      toast(raveWanted ? "darkstar" : "darkstar off");
-    }
+    const raveWanted = () => core.g.config && core.g.config.mazeColor === 100;
     let typed = "";
     function cheatKey(e) {
       const sc = core.g.scene.name;
@@ -298,7 +291,7 @@
 
     const R = BoozeRender.createRenderer(core, { sprites: { spr16, spr8, text8 }, banner, backgrounds, video: videoEl });
     R.setDebug(fpsOn); // test mode: ghost targets and paths
-    R.setRave(rave); if (raveWanted) rave.start(); // (its sound starts with the page's first click / key, like everything else)
+    R.setRave(rave); // (on and off in the frame loop; its sound starts with the page's first click / key, like everything else)
     window.__R = R;
     window.__rave = rave; // tests: darkstar's music clock
     const canvas = document.getElementById("screen");
@@ -748,6 +741,7 @@
       while (acc >= step) { if (!rwd.update()) core.update(); rwd.record(); acc -= step; } // a rewind playing back takes the frame
       LB.tick();
       if (wantsFullBezel() !== fullBezel || (core.g.config && core.g.config.crtEffect) !== fitLook) fit();
+      if (raveWanted() !== rave.on()) { if (raveWanted()) rave.start(); else rave.stop(); } // maze style 27 picked or left
       rave.duck(core.g.scene.name === "mina" || core.g.mode === "intermission3" || poppedOut); // darkstar: quiet for Mina's film
       R.draw(); P.present();
       if (fpsOn) {

@@ -144,13 +144,15 @@ try {
   await p.keyboard.press("Escape"); await until("g.scene.name === 'attract'");
   await p.keyboard.type("xyzzy"); await p.waitForTimeout(400);
   check(await ev(() => !document.getElementById("fps").classList.contains("on") && localStorage.getItem("booze-elroy-fps") === "0"), "typing it again hides it");
-  // darkstar (the author's secret rave): on with the cheat, remembered, its music clock running; off again the same way
-  await p.keyboard.type("darkstar"); await p.waitForTimeout(600);
-  check(await ev(() => window.__rave.on() && localStorage.getItem("booze-elroy-darkstar") === "1" && window.__core.g.toast && window.__core.g.toast.text === "darkstar"), "typing darkstar starts the rave");
+  // darkstar (the author's rave): it's maze style 27, picked on purpose (Random never picks it); the old cheat does nothing
+  await p.keyboard.type("darkstar"); await p.waitForTimeout(300);
+  check(await ev(() => !window.__rave.on()), "typing darkstar does nothing now");
+  await ev(() => { window.__core.g.config.mazeColor = 100; }); await p.waitForTimeout(400);
+  check(await ev(() => window.__rave.on()), "maze style 27 starts the rave");
   { const b0 = await ev(() => window.__rave.beat()); await p.waitForTimeout(700); const b1 = await ev(() => window.__rave.beat());
     check(b1 > b0, "its beat clock runs (" + b0.toFixed(2) + " -> " + b1.toFixed(2) + ")"); }
-  await p.keyboard.type("darkstar"); await p.waitForTimeout(300);
-  check(await ev(() => !window.__rave.on() && localStorage.getItem("booze-elroy-darkstar") === "0"), "and typing it again stops it");
+  await ev(() => { window.__core.g.config.mazeColor = 99; }); await p.waitForTimeout(400);
+  check(await ev(() => !window.__rave.on()), "another maze style stops it");
   check(await ev(() => window.__core.optMenu.filter((i) => i.text).map((i) => i.text).join(",")) === "Reset Classic Pac-Man,Add Favorite,Create Arena,Back", "Options: Reset Classic Pac-Man, Add Favorite (where Share Config was), Create Arena, Back (Credits moved to the title)");
   await ev(() => { const c = window.__core; c.setScene("options"); c.g.config.ghostCount = 2; c.optMenu.selectedItem = c.optMenu.findIndex((i) => i.text === "Create Arena") + 1; });
   await p.keyboard.press("Enter"); await p.waitForTimeout(100);

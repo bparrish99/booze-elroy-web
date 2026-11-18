@@ -270,10 +270,7 @@
         }
         const defaultColor = (g.config.plusMode && g.currentMaze === "pac") ? 5 : getCurrentMaze().defaultColor;
         if (g.config.mazeColor === 99) g.currentMazeColor = defaultColor;
-        else if (g.config.mazeColor === 0) { // Random: 1-26 or the rainbow (web edition; still one RNG draw, so play is unchanged)
-          const pick = rand(1, maze.maxColors);
-          g.currentMazeColor = pick === maze.maxColors ? 100 : pick;
-        }
+        else if (g.config.mazeColor === 0) g.currentMazeColor = rand(1, maze.maxColors - 1); // Random: 1-26 (never 27, darkstar: the author)
         else g.currentMazeColor = g.config.mazeColor;
         g.currentBackground = g.config.background === "random" ? BACKGROUND_OPTIONS[rand(2, BACKGROUND_OPTIONS.length) - 1] : g.config.background;
         g.startX = (getCurrentMaze().w * 8 / 2) - 224 / 2;
@@ -2028,8 +2025,8 @@
       : p + "-" + (MAZE_PACKS[p].list.length + (p === "booze" || p === "normal" ? extraBooze(DATA).length : 0)));
     const saveConfig = () => { if (env.saveConfig) env.saveConfig(g.config); };
     const AV_KEYS = ["background", "mazeColor", "crtEffect", "volume", "musicVolume", "proMode"]; // the Audio/Video section
-    // web edition: 100 = style "27", the rainbow (the author, 2026-11-15; drawn by render.js, style 1's walls in a moving
-    // rainbow; 27 itself is the white flash at a board's end). Random picks it too
+    // web edition: 100 = style "27": DARKSTAR, the author's rave (2026-11-17; src/rave.js, render.js; the living rainbow
+    // maze, music and lights); 27 itself is the white flash at a board's end. Random never picks it
     const MAZE_COLORS = [99].concat(range(1, 26), [100, 0]);
     const optMenu = Object.assign([
       Object.assign(opt("mazepack", PACKS, PACK_TEXTS, (v) => { g.currentMaze = setCurrentMaze(v); }), { y: 4 }),
