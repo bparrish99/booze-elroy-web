@@ -130,13 +130,16 @@ test("share codes: links shared before Rewind existed still mean the same settin
 test("achievements: the list the server checks ids against", () => {
   const ACH = require("../src/achievements.js");
   const MODES = ["haunted", "terror", "afterdark", "rocketman", "coke", "booze", "seven", "yolo", "spelunker", "photo"];
-  assert.deepEqual(ACH.LIST.map((a) => a.id), ["quarter", "respects", "stylish", "park", "kind", "trust", "dedication", "martini", "streak", "scratch", "scratch2", "scratch3", "fever", "hoover", "space", "now", "clyde", "inky", "pinky", "blinky", "rj", "master", "legend", "god",
+  assert.deepEqual(ACH.LIST.map((a) => a.id), ["quarter", "respects", "stylish", "park", "kind", "trust", "dedication", "martini", "streak", "scratch", "scratch2", "scratch3", "fever", "hoover", "space", "now", "clyde", "inky", "pinky", "blinky", "rj", "master", "legend", "god", "purist", "purist2", "purist3", "patternless", "patternless2", "patternless3",
     ...MODES.flatMap((m) => [m, m + "2", m + "3"]), "elephant", "arena", "planner", "dinner", "trailblazer", "billy", "pug", "beagle", "boxer", "hound", "wake", "neil"]);
   assert.equal(ACH.byId("yolo2").name, "yolo 2");
   assert.equal(ACH.byId("seven2").desc, "Score 20,000 points with 7 ghosts.");
   assert.equal(ACH.byId("photo3").desc, "Score 30,000 points with Blindfold: Blackout, with at least 4 ghosts.");
   assert.equal(ACH.LIST.filter((a) => a.minGhosts === 4).length, 44); // the author's list: 30 points-in-a-mode (spelunker since 2026-11-16), 8 scores, 6 getting far
   assert.deepEqual(ACH.byId("coke").mode, { key: "plusMode", value: true });
+  assert.equal(ACH.byId("purist").board, SK.keyFor(BoozeCore.create(DATA, {}).g.defaultConfig), "purist: the Classic Pac-Man board");
+  assert.equal(ACH.byId("patternless3").board, SK.keyFor({ ...BoozeCore.create(DATA, {}).g.defaultConfig, scatterOption: 1 }), "patternless: Classic with Scatter: Random");
+  assert.equal(ACH.byId("purist2").name, "purist silver");
   assert.equal(new Set(ACH.LIST.map((a) => a.id)).size, ACH.LIST.length);
   const font = "abcdefghijklmnopqrstuvwxyz0123456789!-/ ";
   for (const a of ACH.LIST) assert.ok([...a.name].every((c) => font.includes(c)) && a.name.length <= 24 && a.desc, a.name);
@@ -545,4 +548,17 @@ test("accounts: chicken dinner from the server, whatever name won the arena (and
   clock = b.endsAt + GRACE + 1000;
   assert.ok((await ach(oldie)).achievements.dinner, "an older arena: matched through the activity log");
   clock = t0;
+});
+
+test("accounts: purist / patternless from the boards (Classic Pac-Man, and with Scatter: Random)", async () => {
+  const whoIs = accountOf(blobs.accountStore), nameCheck = nameChecker(blobs.accountStore);
+  const { token, name } = (await acct("POST", "signup", { name: "purist test", password: "pw12" })).data;
+  const post = (board, nm, score) => handle(new Request("http://x/api/scores", { method: "POST", headers: { authorization: "Bearer " + token }, body: JSON.stringify({ board, name: nm, score }) }),
+    blobs.store, { env, nameCheck, accountOf: whoIs }).then((r) => r.json());
+  await post("pac.0.f.f.f.3.1.f.0.4.t.f.f", name, 130000);   // Classic: bronze and silver
+  await post("pac.0.f.f.f.3.1.f.0.4.t.1.f", name, 65000);    // Scatter: Random: bronze
+  await post("pac.0.f.f.f.3.1.f.0.4.t.2.f", name, 999990);   // MSPAC scatter: neither
+  const d = await (await handleAccounts(new Request("http://x/api/account/achievements", { headers: { authorization: "Bearer " + token } }), blobs.accountStore, { failDelay: 0, env, scoresStore: blobs.store })).json();
+  for (const id of ["purist", "purist2", "patternless"]) assert.ok(d.achievements[id], id);
+  for (const id of ["purist3", "patternless2", "patternless3"]) assert.ok(!d.achievements[id], "not " + id);
 });

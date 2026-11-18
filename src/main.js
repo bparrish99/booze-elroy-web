@@ -229,7 +229,8 @@
         const ach = BoozeAchievements.LIST;
         earned(["quarter", ...(LB.inArena() ? ["arena"] : []), ...(styled ? ["stylish"] : []),
           ...ach.filter((a) => a.mode && s >= a.points && c[a.mode.key] === a.mode.value).map((a) => a.id), // points in a mode (house of horrors, ...)
-          ...ach.filter((a) => a.score && s >= a.score).map((a) => a.id)]); // clyde / inky / pinky / blinky: the final score
+          ...ach.filter((a) => a.score && s >= a.score).map((a) => a.id), // clyde / inky / pinky / blinky: the final score
+          ...ach.filter((a) => a.board && s >= a.boardScore && SK.keyFor(c) === a.board).map((a) => a.id)]); // purist / patternless: on those exact settings
         return LB.afterGameOver(s, fpsOn); // (test mode: no leaderboards, the author, 2026-11-16)
       }, rewind: () => {
         if (!rwd) return;

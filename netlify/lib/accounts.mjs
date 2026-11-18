@@ -49,7 +49,7 @@ const favKey = (name) => "f/" + hex(name), retroKey = (name) => "r/" + hex(name)
 // read off the leaderboards (a board's key is its settings: ghost count, the mode; an entry is a name and a score). An
 // account is checked once per RETRO_VERSION: bump it when such achievements are added, and everyone is checked again.
 // (Names were only protected from 2026-11-12: an older score under an account's name might be someone else's)
-export const RETRO_VERSION = 2; // 2: spelunker 1-3 (Blindfold: Lantern), 2026-11-16
+export const RETRO_VERSION = 3; // 2: spelunker 1-3 (Blindfold: Lantern), 2026-11-16; 3: purist / patternless, 2026-11-17
 async function retroAward(store, scoresStore, name) {
   if ((await store.get(retroKey(name))) === String(RETRO_VERSION)) return [];
   // this account's scores: entries under its name, or posted from it ("by", since 2026-11-15) under any name, or (older
@@ -74,7 +74,8 @@ async function retroAward(store, scoresStore, name) {
       if (mine) best.set(b.key, Math.max(best.get(b.key) || 0, e.score));
     }
   }
-  const due = achievements.LIST.filter((a) => (a.score || a.mode) && [...best].some(([key, score]) => {
+  const due = achievements.LIST.filter((a) => (a.score || a.mode || a.board) && [...best].some(([key, score]) => {
+    if (a.board) return key === a.board && score >= a.boardScore; // purist / patternless: that exact board
     const c = configFor(key);
     if (!c || (a.minGhosts && !(c.ghostCount >= a.minGhosts))) return false;
     return a.score ? score >= a.score : score >= a.points && c[a.mode.key] === a.mode.value;

@@ -29,6 +29,8 @@
   // minGhosts: counts only in a game with at least that many ghosts (the author: fewer make it too easy); main.js
   // checks it for every achievement that has it, the description says it
   const G4 = "at least 4 ghosts";
+  // the Classic Pac-Man board (every gameplay setting untouched), and the same with Scatter: Random (purist, patternless)
+  const CLASSIC_KEY = "pac.0.f.f.f.3.1.f.0.4.t.f.f", PATTERNLESS_KEY = "pac.0.f.f.f.3.1.f.0.4.t.1.f";
   const modeTiers = MODES.flatMap(([id, name, how, key, value]) => TIERS.map(([points, suffix]) =>
     ({ id: id + suffix, name: name + " " + (suffix || "1"), desc: "Score " + points.toLocaleString("en-US") + " points " + how + (key === "ghostCount" ? "" : ", with " + G4) + ".", mode: { key, value }, points, minGhosts: 4 })));
 
@@ -64,6 +66,12 @@
     { id: "master", name: "elroy master", desc: "Score 200,000 points in a game with " + G4 + ".", score: 200000, minGhosts: 4 },
     { id: "legend", name: "elroy legend", desc: "Score 500,000 points in a game with " + G4 + ".", score: 500000, minGhosts: 4 },
     { id: "god", name: "elroy god", desc: "Score 1,000,000 points in a game with " + G4 + ".", score: 1000000, minGhosts: 4 },
+    // a score on one exact set of settings (the author, 2026-11-17): board = that board's key (the leaderboard's settings;
+    // starting level and looks don't count), boardScore = the points; checked at game over (main.js) and from the boards
+    // (netlify/lib/accounts.mjs retroAward)
+    ...[["purist", "Classic Pac-Man", CLASSIC_KEY], ["patternless", "Classic Pac-Man with Scatter: Random", PATTERNLESS_KEY]].flatMap(([id, how, board]) =>
+      [[60000, "bronze", ""], [120000, "silver", "2"], [180000, "gold", "3"]].map(([points, metal, suffix]) =>
+        ({ id: id + suffix, name: id + " " + metal, desc: "Score " + points.toLocaleString("en-US") + " points on " + how + ".", board, boardScore: points }))),
 
     ...modeTiers,
     { id: "elephant", name: "elephantine memory", desc: "Complete a large maze with Blindfold: Blackout and " + G4 + ".", minGhosts: 4 }, // the author: right after photographic memory 3
