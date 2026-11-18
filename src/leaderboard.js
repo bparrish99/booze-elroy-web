@@ -295,7 +295,7 @@
         lbMenu.selectedItem = 1;
         if (!o.fresh) load(this.key, true);
         loadBoardList();
-        if (opts.picks && picksGet().status !== "ok") opts.picks.load(); // (to name the boards that are picks)
+        if (opts.picks) opts.picks.load(); // (to name the boards that are picks: fresh every time, so a renamed pick shows at once)
         const lx = (x, n) => ({ x0: x * 8 - 6, y0: 3 * 8, x1: (x + n) * 8 + 6, y1: 6 * 8 }); // roomy: the CRT curve bends the corners
         this.links = [{ ...lx(4, 4), action: () => this.flip(-1) }, { ...lx(20, 4), action: () => this.flip(1) }];
       },
