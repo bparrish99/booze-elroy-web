@@ -151,6 +151,8 @@
       setLooping(l) { this.loop = !!l; if (this.node) this.node.loop = this.loop; }
     }
     return { ctx, ready, makeSound: (name, loop) => new Snd(name, loop), unlock() { if (ctx && ctx.state === "suspended") ctx.resume(); },
+      // (darkstar's music: plays into the master gain, so the page's volume and mute apply; and the game's own samples)
+      master: () => master, buffer: (name) => buffers[name] || null,
       setMaster(v) { if (master) master.gain.value = v; },
       /** the discarded look's dying speaker, on or off */
       setRuin(on) {

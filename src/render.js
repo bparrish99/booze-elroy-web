@@ -133,6 +133,24 @@
       }
     }
 
+    // ---- DARKSTAR (the author's secret rave, 2026-11-17; src/rave.js has the music and the beat clock). Pictures only:
+    // the game underneath is untouched. Kept under 3 flashes a second (photosensitivity), and never over Mina's film
+    let rave = null;
+    const raveOn = () => !!(rave && rave.on()) && g.scene.name !== "mina" && g.mode !== "intermission3";
+    const raveBeat = () => { const b = rave.beat(), ph = b % 1; return { b, ph, kick: Math.exp(-ph * 5), bar: Math.floor(b / 4) }; };
+    const HUES = [300, 190, 55, 130, 20, 260];                         // magenta, cyan, yellow, green, orange, violet
+    function partyHat(sx, sy, idx, kick) {                             // a striped cone with a pompom, on a ghost's head
+      const h = HUES[idx % HUES.length], c1 = `hsl(${h},100%,60%)`, c2 = `hsl(${(h + 150) % 360},100%,${55 + 20 * kick}%)`;
+      ctx.fillStyle = c1;
+      ctx.fillRect(sx - 3, sy - 9, 7, 1); ctx.fillRect(sx - 2, sy - 10, 5, 1); ctx.fillRect(sx - 1, sy - 11, 3, 1); ctx.fillRect(sx, sy - 12, 1, 1);
+      ctx.fillStyle = c2; ctx.fillRect(sx - 2, sy - 10, 1, 1); ctx.fillRect(sx + 1, sy - 9, 1, 1); ctx.fillRect(sx - 1, sy - 13, 3, 1); ctx.fillRect(sx, sy - 14, 1, 1);
+    }
+    function shades(sx, sy, dir) {                                     // Pac-Man's sunglasses, the way he's facing
+      ctx.fillStyle = "#000";
+      if (dir === 0) { ctx.fillRect(sx - 3, sy - 5, 7, 2); ctx.fillStyle = "#fff"; ctx.fillRect(sx + 2, sy - 5, 1, 1); }
+      else if (dir === 2) { ctx.fillRect(sx - 4, sy - 5, 7, 2); ctx.fillStyle = "#fff"; ctx.fillRect(sx - 3, sy - 5, 1, 1); }
+      else { ctx.fillRect(sx - 4, sy - 1, 9, 2); ctx.fillStyle = "#fff"; ctx.fillRect(sx + 2, sy - 1, 1, 1); }
+    }
     function drawChar(o, x, y, phased, maze) {
       const a = o.animator();
       if (!a || !a.frames) return;
@@ -184,7 +202,16 @@
       }
       let angle = 0;
       if (T(o.stunned)) angle = (o.stunned * 6 * (o.spinDirection > 0.5 ? 1 : -1)) * Math.PI / 180;
-      blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0), angle, 8, 8);
+      let hop = 0, idx = 0;
+      const rv = raveOn() && (o.target || (g.chars && o === g.chars.pac) || o === g.attractPac) && !o.dead;
+      if (rv && o.target) { // the ghosts hop to the beat, every other one on the offbeat
+        idx = Math.max(0, ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"].findIndex((n) => (g.chars && g.chars[n] === o) || (g.ghosts && g.ghosts[n] === o)));
+        const ph = (rave.beat() + (idx % 2) * 0.5) % 1; hop = -Math.round(2.5 * Math.exp(-ph * 4));
+      }
+      const sx = (maze ? camX() : 0) + x, sy = (maze ? camY() : 0) + y + (maze ? 24 : 0) + hop;
+      blit(s, frameIndex - 1, sx, sy, angle, 8, 8);
+      if (rv && o.target && !T(o.frightened)) partyHat(sx, sy, idx, raveBeat().kick);
+      if (rv && !o.target) shades(sx, sy, o.facing !== undefined ? o.facing : o.dir);
       if (inGame) setColor(1, 1, 1);
     }
 
@@ -218,13 +245,15 @@
     const rainbowCanvas = document.createElement("canvas"), rctx = rainbowCanvas.getContext("2d");
     function rainbowPaint(c2, w, h, t) {
       t *= 0.8; // everything 20% slower than first tuned (the author)
+      let raveLight = 0;
+      if (raveOn()) { const rb = raveBeat(); t = rb.b * 0.6; raveLight = 22 * rb.kick; } // darkstar: it flows to the beat and flashes on the kick
       c2.globalCompositeOperation = "source-atop";
       // the rainbow flowing across the maze, quicker than at first, its direction wandering (a few slow waves added up:
       // smooth, never repeating, never spinning: a swirl and a twisting spiral were tried and made the author queasy)
       const dir = 0.8 + Math.sin(t * 0.15) * 1.3 + Math.sin(t * 0.085 + 1.7) * 0.9 + Math.sin(t * 0.26 + 4.1) * 0.4;
       const len = Math.hypot(w, h) / 2, dx = Math.cos(dir) * len, dy = Math.sin(dir) * len;
       const grad = c2.createLinearGradient(w / 2 - dx, h / 2 - dy, w / 2 + dx, h / 2 + dy);
-      const shift = (t * 0.3) % 1, light = 57 + Math.sin(t * 3.5) * 13;
+      const shift = (t * 0.3) % 1, light = Math.min(85, 57 + Math.sin(t * 3.5) * 13 + raveLight);
       for (let i = 0; i <= 12; i++) grad.addColorStop(i / 12, "hsl(" + Math.round(((i / 12) * 2 - shift) * 360) + ",100%," + light + "%)");
       c2.fillStyle = grad; c2.fillRect(0, 0, w, h);
       c2.globalCompositeOperation = "source-over";
@@ -264,6 +293,7 @@
       ctx.drawImage(swatch, x, y);
     }
     function drawMaze(cm, color) {
+      if (raveOn() && color !== core.maze.maxColors) color = RAINBOW; // darkstar: the living rainbow, dancing (not the board-end flash)
       const ad = g.config.afterDark;
       const showMaze = !T(ad) || ad === 2 || ad >= 4;
       const fadeOn = (ad === 4 || ad === 5) && g.mode !== "gameover"; // (Haunted / Blackout fade; Lantern, 6, doesn't)
@@ -305,6 +335,12 @@
       // 9's dark grey; there it's handed to the presenter instead as a backdrop behind the glass: R.backdrop)
       if (bg && g.config.crtEffect === "vector") backdrop = bg;
       else if (bg) ctx.drawImage(bg, 0, 0, GW, GH);   // already dimmed to 40% at build time
+      if (raveOn()) { // darkstar: a wash of colour from the middle on every beat
+        const rb = raveBeat(), hue = HUES[rb.bar % HUES.length];
+        const w = ctx.createRadialGradient(GW / 2, GH / 2, 10, GW / 2, GH / 2, 200);
+        w.addColorStop(0, `hsla(${hue},100%,50%,${0.08 + 0.22 * rb.kick})`); w.addColorStop(1, "hsla(0,0%,0%,0)");
+        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = w; ctx.fillRect(0, 0, GW, GH); ctx.restore();
+      }
     }
 
     // Elroy's drunk bubbles (web edition). The core still emits its particles exactly as the Lua does (same RNG use);
@@ -536,8 +572,9 @@
         ctx.save(); ctx.translate(0, -TILE); maskShift = -TILE; // the intro a tile higher too (the vector look's text mask with it)
         clip(0, 0, 224, 190);
         for (const name of ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"]) { const c = g.ghosts[name]; if (c) drawChar(c, c.x, c.y); }
-        if (g.modeTimer > 135) ctx.drawImage(assets.banner, g.ghosts.blinky.x - 100, g.ghosts.blinky.y + 7);
-        else ctx.drawImage(assets.banner, 12, 97);
+        const bump = raveOn() ? 1 + 0.06 * raveBeat().kick : 1, bw = assets.banner.width * bump, bh = assets.banner.height * bump; // darkstar: it bumps on the beat
+        const bx = g.modeTimer > 135 ? g.ghosts.blinky.x - 100 : 12, by = g.modeTimer > 135 ? g.ghosts.blinky.y + 7 : 97;
+        ctx.drawImage(assets.banner, bx - (bw - assets.banner.width) / 2, by - (bh - assets.banner.height) / 2, bw, bh);
         unclip();
         if (g.modeTimer < 560 && g.attractPac) {
           drawParticles();
@@ -1191,7 +1228,58 @@
       else if (scene === "nameEntry") drawNameEntry();
       else if (scene === "profile") drawProfile();
       else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, GW, GH); print(scene, 2, 2, 0); }
+      if (raveOn()) drawRave();
       drawToast();
+    }
+    // darkstar's lights, over everything: spotlights sweeping from the top, lasers fanning up from the bottom corners every
+    // other phrase, disco-ball specks drifting across, and confetti when something good happens
+    const specks = Array.from({ length: 40 }, (_, i) => ({ x: (i * 97) % 260, y: 8 + ((i * 53) % 270), sp: 9 + (i % 5) * 4, tw: i * 1.3 }));
+    let confetti = [], lastMode = null, lastFright = 0;
+    function burst(x, y, n) {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, v = 0.6 + Math.random() * 2.2;
+        confetti.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1.6, c: HUES[i % HUES.length], life: 60 + Math.random() * 50 });
+      }
+    }
+    function drawRave() {
+      const rb = raveBeat(), t = rb.b;
+      ctx.save(); ctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < 4; i++) { // spotlights
+        const ox = 20 + i * 61, a = Math.PI / 2 + 0.55 * Math.sin(t * Math.PI / 8 + i * 1.7), wd = 0.17, L = 340;
+        const hue = HUES[(rb.bar + i) % HUES.length];
+        const gr = ctx.createLinearGradient(ox, 0, ox + Math.cos(a) * L, Math.sin(a) * L);
+        gr.addColorStop(0, `hsla(${hue},100%,60%,${0.16 + 0.1 * rb.kick})`); gr.addColorStop(1, `hsla(${hue},100%,50%,0)`);
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(ox, -4);
+        ctx.lineTo(ox + Math.cos(a - wd) * L, Math.sin(a - wd) * L); ctx.lineTo(ox + Math.cos(a + wd) * L, Math.sin(a + wd) * L); ctx.closePath(); ctx.fill();
+      }
+      if (Math.floor(rb.bar / 2) % 2 === 1) { // lasers, every other two bars
+        ctx.lineWidth = 1;
+        for (const [ox, sgn, hue] of [[0, 1, 120], [GW, -1, 330]]) for (let k = 0; k < 5; k++) {
+          const a = -Math.PI / 2 + sgn * (0.25 + k * 0.14 + 0.3 * Math.sin(t * Math.PI / 2 + k));
+          ctx.strokeStyle = `hsla(${hue},100%,60%,${0.35 + 0.3 * rb.kick})`;
+          ctx.beginPath(); ctx.moveTo(ox, GH); ctx.lineTo(ox + Math.cos(a) * 420, GH + Math.sin(a) * 420); ctx.stroke();
+        }
+      }
+      for (const p of specks) { // the disco ball's reflections, sweeping across
+        const x = ((p.x + t * p.sp) % 260) - 18, tw = 0.35 + 0.65 * Math.max(0, Math.sin(t * 1.7 + p.tw));
+        ctx.fillStyle = `rgba(255,255,255,${0.5 * tw})`; ctx.fillRect(Math.round(x), p.y, 2, 2);
+      }
+      ctx.restore();
+      // confetti: a ghost eaten, an energizer, a board cleared
+      if (g.scene.name === "game" && g.chars && g.chars.pac) {
+        const pac = g.chars.pac, px = camX() + pac.x, py = camY() + pac.y + 24;
+        if (g.mode === "ateGhost" && lastMode !== "ateGhost") burst(px, py, 40);
+        if (typeof g.frightened === "number" && g.frightened > lastFright + 30) burst(px, py, 60);
+        if (g.mode === "levelAnimation" && lastMode !== "levelAnimation") for (let i = 0; i < 6; i++) burst(20 + i * 37, 40, 40);
+        lastFright = typeof g.frightened === "number" ? g.frightened : 0;
+      }
+      lastMode = g.mode;
+      confetti = confetti.filter((c) => (c.life -= 1) > 0);
+      for (const c of confetti) {
+        c.vy += 0.06; c.vx *= 0.99; c.x += c.vx; c.y += c.vy;
+        ctx.fillStyle = `hsl(${c.c},100%,${55 + 20 * Math.sin(c.life * 0.5)}%)`;
+        ctx.fillRect(Math.round(c.x), Math.round(c.y), Math.sin(c.life * 0.4) > 0 ? 2 : 1, 1);
+      }
     }
     // web edition: short popup message (g.toast = {text, until}), e.g. "link copied to clipboard"; "\n" starts a
     // second line (each line centred)
@@ -1209,7 +1297,7 @@
       lines.forEach((l, i) => print(l, 14 - l.length / 2, 15 + i, 0));
     }
 
-    return { screen, textMask, draw, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
+    return { screen, textMask, draw, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, setRave: (r) => { rave = r; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
       // account corner: fn() -> the logged-in name or null (fn.online false: no corner); hot = under the mouse
       setAccount(fn, online) { accountName = fn; accountOnline = !!online; }, accountBox: () => accountBox, setAccountHot(h) { accountHot = !!h; } };
   }
