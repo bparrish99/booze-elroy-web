@@ -1231,6 +1231,14 @@
       if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
       masking = g.config.crtEffect === "vector";
       const scene = g.scene.name;
+      // darkstar: an energizer shakes the whole picture for a moment, a few pixels at first, settling
+      const shaking = shake > 0 && raveOn();
+      if (shaking) {
+        const amp = 4 * shake / SHAKE, dx = Math.round((Math.random() * 2 - 1) * amp), dy = Math.round((Math.random() * 2 - 1) * amp);
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, GW, GH);
+        for (const c of [ctx, mctx]) { c.save(); c.translate(dx, dy); }
+        shake -= 1;
+      } else shake = 0;
       if (scene === "game") drawGame();
       else if (scene === "attract") drawAttract();
       else if (scene === "options") drawOptions();
@@ -1242,11 +1250,13 @@
       else if (scene === "profile") drawProfile();
       else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, GW, GH); print(scene, 2, 2, 0); }
       if (raveOn()) drawRave();
+      if (shaking) { ctx.restore(); mctx.restore(); }
       drawToast();
     }
     // darkstar's lights, over everything: spotlights sweeping from the top, lasers fanning up from the bottom corners every
     // other phrase, and confetti when something good happens (the bokeh is in drawBackground, behind the maze)
     let confetti = [], blasts = [], lastMode = null, lastFright = 0;
+    const SHAKE = 15; let shake = 0; // frames of screen shake left (an energizer: the author)
     function burst(x, y, n, power) { // power: an energizer's, the big one (faster, longer, bigger bits)
       for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2, v = power ? 1 + Math.random() * 4.6 : 0.6 + Math.random() * 2.2;
@@ -1254,19 +1264,15 @@
           life: (power ? 80 : 60) + Math.random() * 50, big: power && Math.random() < 0.3 });
       }
     }
-    // the energizer's blast: a white flash on Pac-Man and two rainbow shockwaves racing out (the author: "more explosive")
+    // the energizer's blast: a white flash on Pac-Man (the author: "more explosive"; two rainbow shockwaves racing out came
+    // with it and went again)
     function drawBlasts() {
-      blasts = blasts.filter((b) => (b.t += 1) < 34);
+      blasts = blasts.filter((b) => (b.t += 1) < 12);
       for (const b of blasts) {
         if (b.t < 12) { // the flash
           const f = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 46);
           f.addColorStop(0, `rgba(255,255,255,${0.85 * (1 - b.t / 12)})`); f.addColorStop(1, "rgba(255,255,255,0)");
           ctx.fillStyle = f; ctx.fillRect(b.x - 46, b.y - 46, 92, 92);
-        }
-        for (const [delay, hue] of [[0, b.hue], [5, (b.hue + 140) % 360]]) { // the rings
-          const k = (b.t - delay) / 28; if (k <= 0 || k >= 1) continue;
-          ctx.strokeStyle = `hsla(${hue},100%,62%,${(1 - k) * 0.9})`; ctx.lineWidth = 4 * (1 - k) + 1;
-          ctx.beginPath(); ctx.arc(b.x, b.y, 6 + k * 150, 0, Math.PI * 2); ctx.stroke();
         }
       }
     }
@@ -1294,7 +1300,7 @@
       if (g.scene.name === "game" && g.chars && g.chars.pac) {
         const pac = g.chars.pac, px = camX() + pac.x, py = camY() + pac.y + 24;
         if (g.mode === "ateGhost" && lastMode !== "ateGhost") burst(px, py, 40);
-        if (typeof g.frightened === "number" && g.frightened > lastFright + 30) { burst(px, py, 150, true); blasts.push({ x: px, y: py, t: 0, hue: HUES[rb.bar % HUES.length] }); }
+        if (typeof g.frightened === "number" && g.frightened > lastFright + 30) { burst(px, py, 110, true); blasts.push({ x: px, y: py, t: 0 }); shake = SHAKE; }
         if (g.mode === "levelAnimation" && lastMode !== "levelAnimation") for (let i = 0; i < 6; i++) burst(20 + i * 37, 40, 40);
         lastFright = typeof g.frightened === "number" ? g.frightened : 0;
       }
