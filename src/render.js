@@ -210,15 +210,19 @@
         const idx = o.target ? Math.max(0, ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"].findIndex((n) => (g.chars && g.chars[n] === o) || (g.ghosts && g.ghosts[n] === o))) : 0;
         const ph = (rave.beat() + (idx % 2) * 0.5) % 1; hop = -Math.round(2.5 * Math.exp(-ph * 4));
       }
-      // the Pause ability's freeze: the frozen ghosts (eyes too) tremble, straining to move, harder as it's about to break
-      // (the author, 2026-11-18; drawing only)
+      // the Pause ability's freeze: every ghost (eyes and the ones in the pen too) shakes like crazy, straining to move, but
+      // never more than a pixel from where it really is: a new offset every frame (the author, 2026-11-18; drawing only)
       let sx = 0, sy = 0;
-      if (inGame && o.target && g.freezeLeft > 0 && !o.housing) {
-        const strain = g.freezeLeft < 30 ? 2 : 1, tick = Math.floor(performance.now() / 50);
-        const r = (k) => { const v = Math.sin(tick * 12.9898 + k * 78.233 + (o.x || 0)) * 43758.5453; return v - Math.floor(v); };
-        sx = Math.round((r(1) * 2 - 1) * strain); sy = r(2) < 0.25 ? Math.round((r(3) * 2 - 1) * (strain - 0.5)) : 0;
+      if (inGame && o.target && g.freezeLeft > 0) {
+        let sh = shakes.get(o);
+        // (half a pixel each way at most: the screen has no half pixels, so the ghost is drawn smoothed half a pixel over and
+        // its edges blend: a fine buzz, not a jump; the author wanted it tighter than a whole pixel)
+        if (!sh || drawCount - sh.at >= SHAKE_EVERY) { sh = { at: drawCount, x: (Math.floor(Math.random() * 3) - 1) * SHAKE_PX, y: (Math.floor(Math.random() * 3) - 1) * SHAKE_PX }; shakes.set(o, sh); }
+        sx = sh.x; sy = sh.y;
       }
+      if (sx % 1 || sy % 1) ctx.imageSmoothingEnabled = true;
       blit(s, frameIndex - 1, (maze ? camX() : 0) + x + sx, (maze ? camY() : 0) + y + (maze ? 24 : 0) + hop + sy, angle, 8, 8);
+      ctx.imageSmoothingEnabled = false;
       if (inGame) setColor(1, 1, 1);
     }
 
@@ -1242,7 +1246,10 @@
       ctx.restore();
     }
 
+    const shakes = new WeakMap(); // (the renderer's own, so nothing visual lands on the game's objects)
+    let drawCount = 0; const SHAKE_EVERY = 2, SHAKE_PX = 0.5; // (a new offset every other frame, half a pixel at most: the author tried 1, 2 and 3 frames and a whole pixel)
     function draw() {
+      drawCount += 1;
       ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; film = false; backdrop = null;
       if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
       masking = g.config.crtEffect === "vector";
