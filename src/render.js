@@ -1255,26 +1255,12 @@
     }
     // darkstar's lights, over everything: spotlights sweeping from the top, lasers fanning up from the bottom corners every
     // other phrase, and confetti when something good happens (the bokeh is in drawBackground, behind the maze)
-    let confetti = [], blasts = [], lastMode = null, lastFright = 0;
+    let confetti = [], lastMode = null, lastFright = 0;
     const SHAKE = 15; let shake = 0; // frames of screen shake left (an energizer: the author)
-    function burst(x, y, n, power) { // power: an energizer's, the big one (faster, longer, bigger bits)
+    function burst(x, y, n) {
       for (let i = 0; i < n; i++) {
-        // (kept tight and bright, so it reads as a burst, not more of the rainbow dots: the author)
-        const a = Math.random() * Math.PI * 2, v = power ? 0.8 + Math.random() * 2.6 : 0.5 + Math.random() * 1.6;
-        confetti.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (power ? 0.6 : 1), c: HUES[i % HUES.length],
-          life: (power ? 45 : 40) + Math.random() * 30, big: power && Math.random() < 0.3 });
-      }
-    }
-    // the energizer's blast: a white flash on Pac-Man (the author: "more explosive"; two rainbow shockwaves racing out came
-    // with it and went again)
-    function drawBlasts() {
-      blasts = blasts.filter((b) => (b.t += 1) < 12);
-      for (const b of blasts) {
-        if (b.t < 12) { // the flash
-          const f = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 46);
-          f.addColorStop(0, `rgba(255,255,255,${0.85 * (1 - b.t / 12)})`); f.addColorStop(1, "rgba(255,255,255,0)");
-          ctx.fillStyle = f; ctx.fillRect(b.x - 46, b.y - 46, 92, 92);
-        }
+        const a = Math.random() * Math.PI * 2, v = 0.6 + Math.random() * 2.2;
+        confetti.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1.6, c: HUES[i % HUES.length], life: 60 + Math.random() * 50 });
       }
     }
     function drawRave() {
@@ -1301,19 +1287,17 @@
       if (g.scene.name === "game" && g.chars && g.chars.pac) {
         const pac = g.chars.pac, px = camX() + pac.x, py = camY() + pac.y + 24;
         if (g.mode === "ateGhost" && lastMode !== "ateGhost") burst(px, py, 40);
-        if (typeof g.frightened === "number" && g.frightened > lastFright + 30) { burst(px, py, 110, true); blasts.push({ x: px, y: py, t: 0 }); shake = SHAKE; }
+        if (typeof g.frightened === "number" && g.frightened > lastFright + 30) { burst(px, py, 60); shake = SHAKE; }
         if (g.mode === "levelAnimation" && lastMode !== "levelAnimation") for (let i = 0; i < 6; i++) burst(20 + i * 37, 40, 40);
         lastFright = typeof g.frightened === "number" ? g.frightened : 0;
       }
       lastMode = g.mode;
-      ctx.save(); ctx.globalCompositeOperation = "lighter"; drawBlasts(); ctx.restore();
       confetti = confetti.filter((c) => (c.life -= 1) > 0);
-      ctx.save(); ctx.globalCompositeOperation = "lighter"; // (glowing: brighter than the dots underneath)
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; // (the colours glow: brighter, more intense, the author)
       for (const c of confetti) {
-        c.vy += 0.05; c.vx *= 0.94; c.vy *= 0.96; c.x += c.vx; c.y += c.vy;
-        ctx.fillStyle = `hsl(${c.c},100%,${78 + 14 * Math.sin(c.life * 0.5)}%)`;
-        const w = c.big ? 3 : Math.sin(c.life * 0.4) > 0 ? 2 : 1;
-        ctx.fillRect(Math.round(c.x), Math.round(c.y), w, c.big ? 2 : 1);
+        c.vy += 0.06; c.vx *= 0.99; c.x += c.vx; c.y += c.vy;
+        ctx.fillStyle = `hsl(${c.c},100%,${62 + 18 * Math.sin(c.life * 0.5)}%)`;
+        ctx.fillRect(Math.round(c.x), Math.round(c.y), Math.sin(c.life * 0.4) > 0 ? 2 : 1, 1);
       }
       ctx.restore();
     }
