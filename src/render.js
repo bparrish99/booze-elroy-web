@@ -116,6 +116,7 @@
       o = o || 0;
       const up = str.toUpperCase();
       for (let i = 0; i < up.length; i++) {
+        if (decoTint && maze) { const t = hueTint((decoTint.base + x * 28) % 360, decoTint.l); setColor(t[0], t[1], t[2], decoTint.a); o = 0; } // (letter by letter, white tinted)
         if (up[i] === "'") { // the font has no apostrophe ('"' isn't in every colour): the top of "!", in any colour
           const px = (maze ? camX() : 0) + x * TILE, py = (maze ? camY() : 0) + y * TILE;
           clip(px, py, TILE, 3); print("!", x, y, o, maze); unclip();
@@ -139,18 +140,12 @@
     const raveOn = () => !!(rave && rave.on()) && g.scene.name !== "mina" && g.mode !== "intermission3";
     const raveBeat = () => { const b = rave.beat(), ph = b % 1; return { b, ph, kick: Math.exp(-ph * 5), bar: Math.floor(b / 4) }; };
     const HUES = [300, 190, 55, 130, 20, 260];                         // magenta, cyan, yellow, green, orange, violet
-    function partyHat(sx, sy, idx, kick) {                             // a striped cone with a pompom, on a ghost's head
-      const h = HUES[idx % HUES.length], c1 = `hsl(${h},100%,60%)`, c2 = `hsl(${(h + 150) % 360},100%,${55 + 20 * kick}%)`;
-      ctx.fillStyle = c1;
-      ctx.fillRect(sx - 3, sy - 9, 7, 1); ctx.fillRect(sx - 2, sy - 10, 5, 1); ctx.fillRect(sx - 1, sy - 11, 3, 1); ctx.fillRect(sx, sy - 12, 1, 1);
-      ctx.fillStyle = c2; ctx.fillRect(sx - 2, sy - 10, 1, 1); ctx.fillRect(sx + 1, sy - 9, 1, 1); ctx.fillRect(sx - 1, sy - 13, 3, 1); ctx.fillRect(sx, sy - 14, 1, 1);
+    // a colour on the rainbow (h degrees) as a tint (0-1 rgb), for the dots, energizers and letters that pulse
+    function hueTint(h, l) {
+      const a = Math.min(l, 1 - l), f = (n) => { const k = (n + h / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+      return [f(0), f(8), f(4)];
     }
-    function shades(sx, sy, dir) {                                     // Pac-Man's sunglasses, the way he's facing
-      ctx.fillStyle = "#000";
-      if (dir === 0) { ctx.fillRect(sx - 3, sy - 5, 7, 2); ctx.fillStyle = "#fff"; ctx.fillRect(sx + 2, sy - 5, 1, 1); }
-      else if (dir === 2) { ctx.fillRect(sx - 4, sy - 5, 7, 2); ctx.fillStyle = "#fff"; ctx.fillRect(sx - 3, sy - 5, 1, 1); }
-      else { ctx.fillRect(sx - 4, sy - 1, 9, 2); ctx.fillStyle = "#fff"; ctx.fillRect(sx + 2, sy - 1, 1, 1); }
-    }
+    let decoTint = null; // set while the maze's lettering is drawn: print tints each letter (BO OZE ELR OY pulsing)
     function drawChar(o, x, y, phased, maze) {
       const a = o.animator();
       if (!a || !a.frames) return;
@@ -202,16 +197,13 @@
       }
       let angle = 0;
       if (T(o.stunned)) angle = (o.stunned * 6 * (o.spinDirection > 0.5 ? 1 : -1)) * Math.PI / 180;
-      let hop = 0, idx = 0;
+      let hop = 0;
       const rv = raveOn() && (o.target || (g.chars && o === g.chars.pac) || o === g.attractPac) && !o.dead;
-      if (rv && o.target) { // the ghosts hop to the beat, every other one on the offbeat
-        idx = Math.max(0, ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"].findIndex((n) => (g.chars && g.chars[n] === o) || (g.ghosts && g.ghosts[n] === o)));
+      if (rv) { // everybody dances: the ghosts hop to the beat, every other one on the offbeat, Pac-Man with the first lot
+        const idx = o.target ? Math.max(0, ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"].findIndex((n) => (g.chars && g.chars[n] === o) || (g.ghosts && g.ghosts[n] === o))) : 0;
         const ph = (rave.beat() + (idx % 2) * 0.5) % 1; hop = -Math.round(2.5 * Math.exp(-ph * 4));
       }
-      const sx = (maze ? camX() : 0) + x, sy = (maze ? camY() : 0) + y + (maze ? 24 : 0) + hop;
-      blit(s, frameIndex - 1, sx, sy, angle, 8, 8);
-      if (rv && o.target && !T(o.frightened)) partyHat(sx, sy, idx, raveBeat().kick);
-      if (rv && !o.target) shades(sx, sy, o.facing !== undefined ? o.facing : o.dir);
+      blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0) + hop, angle, 8, 8);
       if (inGame) setColor(1, 1, 1);
     }
 
@@ -219,8 +211,14 @@
       const a = o.animator();
       o.frame = o.frame || 1;
       if (fade) setColor(1, 1, 1, g.fadeTimer / g.fadeLength());
+      const rv = !fade && raveOn();
+      if (rv) { // darkstar: the dots change colour in waves rolling across the maze; the energizers pulse with the beat
+        const rb = raveBeat(), big = g.powers && g.powers.includes(o);
+        const t = big ? hueTint((rb.bar * 60 + rb.b * 40) % 360, 0.55 + 0.25 * rb.kick) : hueTint((((x + y) * 18 - rb.b * 90) % 360 + 360) % 360, 0.62);
+        setColor(t[0], t[1], t[2]);
+      }
       drawSpriteAtTile(a.spr, a.frames[o.frame - 1], x, y + 3, true);
-      if (fade) setColor(1, 1, 1);
+      if (fade || rv) setColor(1, 1, 1);
     }
 
     // ---- maze
@@ -319,7 +317,9 @@
       const dec = decorations[cm.name];
       if (dec && showMaze) {
         if (ad === 4 || ad === 5) setColor(1, 1, 1, g.fadeTimer / g.fadeLength());
+        if (raveOn()) { const rb = raveBeat(); decoTint = { base: rb.b * 45, l: 0.55 + 0.25 * rb.kick, a: col[3] }; } // darkstar: the lettering pulses
         dec();
+        if (decoTint) { decoTint = null; setColor(1, 1, 1); }
         if (ad === 4 || ad === 5) setColor(1, 1, 1);
       }
     }
