@@ -210,7 +210,15 @@
         const idx = o.target ? Math.max(0, ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"].findIndex((n) => (g.chars && g.chars[n] === o) || (g.ghosts && g.ghosts[n] === o))) : 0;
         const ph = (rave.beat() + (idx % 2) * 0.5) % 1; hop = -Math.round(2.5 * Math.exp(-ph * 4));
       }
-      blit(s, frameIndex - 1, (maze ? camX() : 0) + x, (maze ? camY() : 0) + y + (maze ? 24 : 0) + hop, angle, 8, 8);
+      // the Pause ability's freeze: the frozen ghosts (eyes too) tremble, straining to move, harder as it's about to break
+      // (the author, 2026-11-18; drawing only)
+      let sx = 0, sy = 0;
+      if (inGame && o.target && g.freezeLeft > 0 && !o.housing) {
+        const strain = g.freezeLeft < 30 ? 2 : 1, tick = Math.floor(performance.now() / 50);
+        const r = (k) => { const v = Math.sin(tick * 12.9898 + k * 78.233 + (o.x || 0)) * 43758.5453; return v - Math.floor(v); };
+        sx = Math.round((r(1) * 2 - 1) * strain); sy = r(2) < 0.25 ? Math.round((r(3) * 2 - 1) * (strain - 0.5)) : 0;
+      }
+      blit(s, frameIndex - 1, (maze ? camX() : 0) + x + sx, (maze ? camY() : 0) + y + (maze ? 24 : 0) + hop + sy, angle, 8, 8);
       if (inGame) setColor(1, 1, 1);
     }
 
