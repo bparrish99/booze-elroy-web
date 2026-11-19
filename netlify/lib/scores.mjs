@@ -20,9 +20,11 @@ export const json = (status, body) => new Response(JSON.stringify(body), {
 export const sha = (s) => createHash("sha256").update(String(s)).digest();
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function readBody(req) {
+// max: score posts carry a replay (2026-11-18), so they take up to REPLAY_MAX more; everything else keeps the 2 KB cap
+// (a long game's replay went over it, and the whole post, score and all, came back 400: the author lost a score to it)
+export async function readBody(req, max = MAX_BODY) {
   const text = await req.text();
-  if (text.length > MAX_BODY) return null;
+  if (text.length > max) return null;
   try { const b = JSON.parse(text); return b && typeof b === "object" ? b : null; } catch { return null; }
 }
 export const tidy = (entries) => (Array.isArray(entries) ? entries : []).filter((e) => e && typeof e.score === "number" && typeof e.name === "string");
@@ -132,7 +134,7 @@ export async function handle(req, store, opts = {}) {
   }
 
   if (req.method === "POST") {
-    const body = await readBody(req);
+    const body = await readBody(req, MAX_BODY + REPLAY_MAX);
     if (!body) return json(400, { error: "bad request" });
     const { board, score } = body;
     const name = cleanName(body.name);

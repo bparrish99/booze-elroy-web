@@ -782,7 +782,10 @@
         if (this.arenaId) return this.submitArena(name);
         let res = null;
         const replay = this.keepReplay && opts.replay ? await opts.replay(this.score) : null; // (its replay goes up with it, unless the player said no: kept if it places)
-        try { res = await post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  "), ...(replay ? { replay } : {}) }); } catch { res = null; }
+        const body = { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  ") };
+        try { res = await post("", { ...body, ...(replay ? { replay } : {}) }); } catch { res = null; }
+        // a replay must never cost a score: refused with one, the score goes again without it
+        if (replay && res && (res.status === 400 || res.status === 413)) { try { res = await post("", body); } catch { res = null; } }
         if (taken(res)) return this.taken(name);
         if (res && res.ok && res.data) {
           boards.set(this.key, { status: "ok", entries: res.data.entries || [], at: performance.now() });
@@ -814,9 +817,11 @@
       // a game in an arena: the arena board, and the regular board for these settings too
       async submitArena(name) {
         const replay = this.keepReplay && opts.replay ? await opts.replay(this.score) : null;
+        // (with its replay; refused with one, each goes again without it: a replay must never cost a score)
+        const again = async (send, body) => { let r = await send(replay ? { ...body, replay } : body).catch(() => null); if (replay && r && (r.status === 400 || r.status === 413)) r = await send(body).catch(() => null); return r; };
         const [ar, gr] = await Promise.all([
-          post2(arenaApi + "/score", { id: this.arenaId, name, score: this.score, ...(replay ? { replay } : {}) }).catch(() => null),
-          post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  "), ...(replay ? { replay } : {}) }).catch(() => null),
+          again((b) => post2(arenaApi + "/score", b), { id: this.arenaId, name, score: this.score }),
+          again((b) => post("", b), { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  ") }),
         ]);
         if (taken(ar) || taken(gr)) return this.taken(name);
         if (gr && gr.ok && gr.data) { boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() }); placed(this.key, gr.data.rank, gr.data.entries || [], this.score); }

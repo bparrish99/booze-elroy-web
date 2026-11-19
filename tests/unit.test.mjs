@@ -581,3 +581,16 @@ test("replays: kept only with a score that places, served by id, gone when the s
   assert.equal((await call("GET", "/api/scores/replay?id=" + rid2)).status, 404, "a reset board: its replays go too");
   assert.equal((await call("GET", "/api/scores/replay?id=../etc")).status, 400, "bad ids are refused");
 });
+
+test("replays: a long game's replay (tens of KB) goes up with its score, on a board and in an arena", async () => {
+  const B = "junior.2.f.f.f.1.1.f.0.2.t.f.f", R = blobs.replayStore, big = "gz:" + "A".repeat(60000);
+  const res = await handle(new Request("http://x/api/scores", { method: "POST", body: JSON.stringify({ board: B, name: "long game", score: 4321, replay: big }) }), blobs.store, { env, failDelay: 0, replays: R });
+  assert.equal(res.status, 200, "accepted (the old 2 KB body cap refused it, score and all)");
+  const rid = (await res.json()).entries[0].rid;
+  assert.equal(await R.get("r/" + rid), big, "stored whole");
+  const ar = (req) => handleArenas(req, blobs.arenaStore, { env, failDelay: 0, now: () => clock, replays: R });
+  const a = (await ar(new Request("http://x/api/arenas", { method: "POST", body: JSON.stringify({ name: "long cup", board: B }) })).then((r) => r.json())).arena;
+  const s = await ar(new Request("http://x/api/arenas/score", { method: "POST", body: JSON.stringify({ id: a.id, name: "long game", score: 4321, replay: big }) }));
+  assert.equal(s.status, 200, "and in an arena");
+  assert.ok((await s.json()).entries[0].rid, "with its replay");
+});

@@ -15,7 +15,7 @@
 // running when the clock ran out still post.
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import scorekey from "../../src/scorekey.js";
-import { json, sha, sleep, readBody, tidy, updateJSON, addScore, shown, okReplay, newRid, dropReplays, getReplay } from "./scores.mjs";
+import { json, sha, sleep, readBody, tidy, updateJSON, addScore, shown, okReplay, newRid, dropReplays, getReplay, REPLAY_MAX } from "./scores.mjs";
 
 const { isKey, cleanName, MAX_SCORE } = scorekey;
 export const HOUR = 3600 * 1000;
@@ -53,7 +53,7 @@ export async function handleArenas(req, store, opts = {}) {
     return json(200, { now, arena: show(a), entries: shown(tidy(await store.get(entriesKey(id), { type: "json" }))) });
   }
   if (req.method !== "POST") return json(405, { error: "method not allowed" });
-  const body = await readBody(req);
+  const body = await readBody(req, path.endsWith("/score") ? 2048 + REPLAY_MAX : undefined); // (a score post carries its replay)
   if (!body) return json(400, { error: "bad request" });
 
   if (path.endsWith("/arenas")) { // create
