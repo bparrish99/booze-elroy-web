@@ -68,7 +68,11 @@
     const rng = env.rng || Math.random;
     // web edition: leaderboard replays (src/replay.js) re-run a game from its seed and inputs; bump this whenever gameplay
     // changes (anything the golden replay would catch, or a fix to a mode it doesn't cover), so older replays are marked
-    const REPLAY_VERSION = 1;
+    const REPLAY_VERSION = 2; // 2: style picks off the game's RNG (2026-11-18)
+    // the Random background / maze style picks (looks only): the game's own RNG unless the web edition hands in another
+    // (env.styleRand, 2026-11-18: a viewer's Random styles drew from the game's RNG and threw replays out of step, a
+    // phone's replay of a PC's game went its own way); without it, as in the original
+    const styleRand = (m, n) => (env.styleRand ? env.styleRand(m, n, rand) : rand(m, n));
     const rand = (m, n) => {
       const r = rng();
       if (m === undefined) return r;
@@ -273,9 +277,9 @@
         }
         const defaultColor = (g.config.plusMode && g.currentMaze === "pac") ? 5 : getCurrentMaze().defaultColor;
         if (g.config.mazeColor === 99) g.currentMazeColor = defaultColor;
-        else if (g.config.mazeColor === 0) g.currentMazeColor = rand(1, maze.maxColors - 1); // Random: 1-26 (never 27, darkstar: the author)
+        else if (g.config.mazeColor === 0) g.currentMazeColor = styleRand(1, maze.maxColors - 1); // Random: 1-26 (never 27, darkstar: the author)
         else g.currentMazeColor = g.config.mazeColor;
-        g.currentBackground = g.config.background === "random" ? BACKGROUND_OPTIONS[rand(2, BACKGROUND_OPTIONS.length) - 1] : g.config.background;
+        g.currentBackground = g.config.background === "random" ? BACKGROUND_OPTIONS[styleRand(2, BACKGROUND_OPTIONS.length) - 1] : g.config.background;
         g.startX = (getCurrentMaze().w * 8 / 2) - 224 / 2;
         g.startY = (getCurrentMaze().h * 8 / 2) - 248 / 2;
         g.xDelta = 0;
@@ -2050,7 +2054,7 @@
       Object.assign(ON_OFF("pinkyBug"), { y: 19 }),
       Object.assign(opt("scatterOption", [false, 1, 2, 3], ["Normal", "Random", "mspac", "Never"]), { y: 20 }),
       Object.assign(ON_OFF("freeGhost"), { y: 21 }),
-      Object.assign(opt("background", bgNames, bgNames.map(cap), (v) => { g.currentBackground = v === "random" ? BACKGROUND_OPTIONS[rand(2, BACKGROUND_OPTIONS.length) - 1] : v; }), { y: 24 }),
+      Object.assign(opt("background", bgNames, bgNames.map(cap), (v) => { g.currentBackground = v === "random" ? BACKGROUND_OPTIONS[styleRand(2, BACKGROUND_OPTIONS.length) - 1] : v; }), { y: 24 }),
       Object.assign(opt("mazeColor", MAZE_COLORS, ["Default"].concat(range(1, 26), [27, "Random"])), { y: 25 }),
       Object.assign(ON_OFF("crtEffect"), { y: 26 }),
       Object.assign(opt("volume", range(0, 10), null, () => applyVolume()), { y: 27, x: 18 }),
@@ -2186,7 +2190,7 @@
       const saved = env.loadConfig ? env.loadConfig() : null;
       if (saved && typeof saved === "object") for (const k of Object.keys(saved)) if (g.defaultConfig[k] !== undefined && k !== "fullscreen") g.config[k] = saved[k];
       if (env.fixedVolume != null) g.config.volume = g.defaultConfig.volume = env.fixedVolume; // web edition: a saved volume no longer counts
-      if (g.config.background === "random") g.currentBackground = BACKGROUND_OPTIONS[rand(2, BACKGROUND_OPTIONS.length) - 1];
+      if (g.config.background === "random") g.currentBackground = BACKGROUND_OPTIONS[styleRand(2, BACKGROUND_OPTIONS.length) - 1];
       setCurrentMaze(g.config.mazepack);
       applyVolume(); applyMusicVolume();
       setScene("attract");

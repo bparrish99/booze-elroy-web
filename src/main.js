@@ -237,7 +237,10 @@
     const core = BoozeCore.create(A.data, {
       testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsOnTitle: true, restoreKeepsAV: true, proMode: true, video, rng: () => (replay ? replay.rng() : Math.random()), makeSound: audio.makeSound,
       // (replays, src/replay.js: the held keys a game sees are the replay's while one plays; a real game seeds the RNG as it starts)
-      isDown: (k) => (replay ? replay.isDown(k, (q) => !!down[q]) : !!down[k]), gameStarting: () => { if (replay) replay.gameStarting(); }, playStep: () => { if (replay) replay.playStep((q) => !!down[q]); },
+      isDown: (k) => (replay ? replay.isDown(k, (q) => !!down[q]) : !!down[k]), gameStarting: () => { if (replay) replay.gameStarting(); },
+      // (looks: their own randomness, not the game's, so a viewer's Random styles can't throw a replay out; a version 1
+      // replay was recorded the old way, drawing from the game's, so it's played back that way)
+      styleRand: (m, n, gameRand) => (replay && replay.oldStyleRng() ? gameRand(m, n) : m + Math.floor(Math.random() * (n - m + 1))), playStep: () => { if (replay) replay.playStep((q) => !!down[q]); },
       scenes: { ...LB.scenes, ...ACC.scenes, mina, replayEnd: { name: "replayEnd", start() { replay.finish(); }, update() {}, keypressed() {} } },
       loggedIn: () => !!ACC.name(), addFavorite: () => openFavorite(SK.keyFor(LB.ownSettings())), // (Favorites, Options' Add Favorite)
       afterGameOver: (s) => {

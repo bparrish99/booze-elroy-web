@@ -16,7 +16,7 @@ const check = (ok, msg) => { console.log((ok ? "PASS " : "FAIL ") + msg); if (!o
 const b = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });
 try {
   const errs = [];
-  async function roundTrip(label, cfg, start, pressAt, viewerPro = true, noReplay = false) {
+  async function roundTrip(label, cfg, start, pressAt, viewerPro = true, noReplay = false, viewerStyle = null) {
     const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
     const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
     await p.addInitScript((c) => { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); }, { crtEffect: false, proMode: true, startingLives: 1, ...cfg });
@@ -51,6 +51,7 @@ try {
     const i = await p.evaluate((n) => window.__core.g.scene.board().entries.findIndex((e) => e.name === n && e.rid), label);
     check(i >= 0, label + ": its score went up with a replay");
     await p.evaluate((pro) => { window.__core.g.config.proMode = pro; }, viewerPro); // (the viewer's own Pro Mode: a replay doesn't carry it)
+    if (viewerStyle) await p.evaluate((st) => Object.assign(window.__core.g.config, st), viewerStyle); // (and the viewer's own looks)
     await p.keyboard.press(String(i + 1 === 10 ? 0 : i + 1)); // (its rank's number watches it)
     check(await p.waitForFunction(() => window.__replay.playing(), null, { timeout: 10000 }).then(() => true, () => false), label + ": the replay plays");
     check(await p.evaluate(() => !!window.__replay.info()), label + ": with its REPLAY label (and the EXPERIMENTAL sticker)");
@@ -92,6 +93,9 @@ try {
   }, (t) => t === 12);
   // played with Pro Mode, three lives (deaths, READYs), watched without: the waits in between differ, the game mustn't
   await roundTrip("PRO TO NON PRO", { ghostCount: 4, ability: 1, startingLives: 3 }, async (p) => { await p.keyboard.press("Enter"); }, (t) => t % 7 === 3, false);
+  // played with Random background and maze style, watched with plain ones (a phone's replay of a PC's game went its own
+  // way: the Random picks drew from the game's RNG; 2026-11-18)
+  await roundTrip("RANDOM LOOKS", { ghostCount: 4, ability: 2, background: "random", mazeColor: 0 }, async (p) => { await p.keyboard.press("Enter"); }, (t) => t % 6 === 1, true, false, { background: "none", mazeColor: 99 });
   await roundTrip("NO THANKS", { ghostCount: 2, difficulty: 2 }, async (p) => { await p.keyboard.press("Enter"); }, () => false, true, true);
   // the author's secret: the olive in the title's martini (once the logo has settled) plays every replay, round and round
   {

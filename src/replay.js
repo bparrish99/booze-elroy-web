@@ -113,6 +113,8 @@
         else if (k === "p") play.paused = !play.paused;
       },
       speed: () => (play ? (play.paused ? 0 : play.speed) : 1),
+      /** a version 1 replay: its style picks drew from the game's RNG (version 2 doesn't), so they must again */
+      oldStyleRng: () => !!(play && play.data.v < 2),
     };
     return api;
   }
