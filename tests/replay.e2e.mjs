@@ -58,6 +58,23 @@ try {
   }, (t) => t === 12);
   // played with Pro Mode, three lives (deaths, READYs), watched without: the waits in between differ, the game mustn't
   await roundTrip("PRO TO NON PRO", { ghostCount: 4, ability: 1, startingLives: 3 }, async (p) => { await p.keyboard.press("Enter"); }, (t) => t % 7 === 3, false);
+  // the author's secret: the olive in the title's martini (once the logo has settled) plays every replay, round and round
+  {
+    const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
+    const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
+    await p.addInitScript(() => { localStorage.setItem("booze-elroy-options", JSON.stringify({ crtEffect: false, proMode: true })); });
+    await p.goto(dev.url + "/");
+    check(await p.waitForFunction(() => window.__R.creditsLinks().some((l) => l.quiet), null, { timeout: 20000 }).then(() => true, () => false), "the olive: a quiet link once the logo has settled");
+    await p.evaluate(() => window.__R.creditsLinks().find((l) => l.quiet).action());
+    check(await p.waitForFunction(() => window.__replay.playing(), null, { timeout: 15000 }).then(() => true, () => false), "clicking it plays a replay");
+    await p.keyboard.press("Space"); await p.keyboard.press("Space");
+    await p.evaluate(() => { window.__lastGameEnd = null; });
+    await p.waitForFunction(() => window.__lastGameEnd, null, { timeout: 240000 });
+    check(await p.waitForFunction(() => window.__replay.playing() && window.__core.g.scene.name === "game", null, { timeout: 15000 }).then(() => true, () => false), "and when it ends, the next one plays");
+    await p.keyboard.press("Escape"); await p.waitForTimeout(400);
+    check(await p.evaluate(() => !window.__replay.playing() && window.__core.g.scene.name === "attract"), "Esc ends the loop, back on the title");
+    await ctx.close();
+  }
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join(" | ") : ""));
 } finally {
   await b.close(); await dev.stop(); rmSync(blobsDir, { recursive: true, force: true });

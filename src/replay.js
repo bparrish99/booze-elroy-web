@@ -98,17 +98,17 @@
         core.setScene("game"); // (env.gameStarting seeds it)
       },
       /** done (its game over, Esc, or out of step): the viewer's own settings back, and back to where it was started */
-      finish() {
+      finish(reason) { // reason: "esc" (the viewer left) or "end" (its game over, or out of step)
         if (!play) return;
         const p = play; play = null; rand = Math.random;
         Object.assign(core.g.config, p.own);
         for (const k of Object.keys(core.g.sounds)) if (core.g.sounds[k].isPlaying()) core.g.sounds[k].stop();
-        if (p.back) p.back();
+        if (p.back) p.back(reason || "end");
       },
       /** the viewer's keys while a replay plays: Esc leaves, Space / Enter changes speed (1x, 2x, 4x), P pauses */
       viewerKey(k) {
         if (!play) return;
-        if (k === "escape" || k === "backspace") api.finish();
+        if (k === "escape" || k === "backspace") api.finish("esc");
         else if (k === "space" || k === "return") play.speed = play.speed >= 4 ? 1 : play.speed * 2;
         else if (k === "p") play.paused = !play.paused;
       },

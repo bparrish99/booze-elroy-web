@@ -910,7 +910,23 @@
       if (opts.playerName && !opts.playerName()) { g.toast = { text: "log in to create an arena", until: performance.now() + 2500 }; return; }
       core.setScene("nameEntry", { mode: "createArena", from, ...(key ? { key } : {}) });
     };
-    return { summaryParts, attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene, favorites: favoritesScene, favorite: favoriteScene, picks: picksScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
+    // every replay there is, on every board and arena (the olive's endless loop, main.js): [{ rid, name, url }]
+    async function allReplays() {
+      const out = [];
+      if (api) {
+        await loadBoardList();
+        for (const b of boardList.boards) { const bd = await load(b.board, true); for (const e of (bd && bd.entries) || []) if (e.rid) out.push({ rid: e.rid, name: e.name, url: api }); }
+      }
+      if (arenaApi) {
+        await loadArenas(true);
+        for (const a of arenaList.arenas) { await loadArena(a.id); const bd = arenaBoards.get(a.id); for (const e of (bd && bd.entries) || []) if (e.rid) out.push({ rid: e.rid, name: e.name, url: arenaApi }); }
+      }
+      return out;
+    }
+    async function fetchReplay(it) {
+      try { const r = await fetchFn(it.url + "/replay?id=" + encodeURIComponent(it.rid), { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)); return r && r.replay; } catch { return null; }
+    }
+    return { allReplays, fetchReplay, summaryParts, attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene, favorites: favoritesScene, favorite: favoriteScene, picks: picksScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
   }
 
   root.BoozeLeaderboard = { create };

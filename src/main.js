@@ -314,6 +314,25 @@
     const R = BoozeRender.createRenderer(core, { sprites: { spr16, spr8, text8 }, banner, backgrounds, video: videoEl });
     R.setDebug(fpsOn); // test mode: ghost targets and paths
     R.setReplay(() => replay.info()); // (replays: its label and the EXPERIMENTAL sticker)
+    // the author's secret (2026-11-18): the olive in the title's martini, once the logo has settled, plays every replay
+    // there is, one after another, round and round, until Esc (the next one fetched while one plays: no gap)
+    async function replayLoop() {
+      toast("loading replays");
+      const list = await LB.allReplays();
+      core.g.toast = null;
+      if (!list.length) { toast("no replays yet"); return; }
+      audio.unlock();
+      let i = 0, ahead = LB.fetchReplay(list[0]);
+      const next = async () => {
+        const it = list[i % list.length], packed = await ahead;
+        i += 1; ahead = LB.fetchReplay(list[i % list.length]);
+        const data = packed && await replay.unpack(packed);
+        if (!data) { if (i > list.length * 2) { core.setScene("attract", true); return; } next(); return; } // (all gone: give up)
+        replay.start(data, it.name, (why) => { if (why === "esc") core.setScene("attract", true); else next(); });
+      };
+      next();
+    }
+    R.setOlive(replayLoop);
     R.setRave(rave); // (on and off in the frame loop; its sound starts with the page's first click / key, like everything else)
     window.__R = R;
     window.__rave = rave; // tests: darkstar's music clock
@@ -512,7 +531,7 @@
       const acc = accountAt(e); R.setAccountHot(!!acc); accTip = acc ? (acc.name ? "Your profile" : "Log in or create an account") : "";
       const L = linkAt(e);
       if (L && L.tip) showTip(L.tip, e); else if (e.pointerType === "mouse") hideTip(); // touch: a tapped tip stays until the next tap
-      if (acc || L) { canvas.style.cursor = L && L.tip ? "help" : "pointer"; return; }
+      if (acc || (L && !L.quiet)) { canvas.style.cursor = L && L.tip ? "help" : "pointer"; return; } // (a quiet link is a secret: no pointer)
       canvas.style.cursor = row ? "pointer" : "default";
       if (row && row.menu.selectedItem !== row.index) { row.menu.selectedItem = row.index; LB.wakka(); }
     });

@@ -607,6 +607,9 @@
         for (const name of ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"]) { const c = g.ghosts[name]; if (c) drawChar(c, c.x, c.y); }
         const bump = raveOn() ? 1 + 0.06 * raveBeat().kick : 1, bw = assets.banner.width * bump, bh = assets.banner.height * bump; // darkstar: it bumps on the beat
         const bx = g.modeTimer > 135 ? g.ghosts.blinky.x - 100 : 12, by = g.modeTimer > 135 ? g.ghosts.blinky.y + 7 : 97;
+        // the olive (the author's secret: every replay, round and round), clickable once the logo has come to rest: it sits
+        // at 183-187, 8-12 in the banner, a few pixels' slack round it (the intro is drawn a tile higher: -8)
+        if (oliveAction && Math.abs(bx - 12) < 0.5 && Math.abs(by - 97) < 0.5) oliveBox = { x0: 12 + 180, y0: 97 - 8 + 5, x1: 12 + 191, y1: 97 - 8 + 16, action: oliveAction, quiet: true }; // (quiet: no pointer cursor to give it away)
         ctx.drawImage(assets.banner, bx - (bw - assets.banner.width) / 2, by - (bh - assets.banner.height) / 2, bw, bh);
         unclip();
         if (g.modeTimer < 560 && g.attractPac) {
@@ -939,7 +942,8 @@
     // web edition: "credits" on the title opens the credits; "pinback's picks" (the sign right of the menu) opens the picks
     const TITLE_LINKS = [{ x0: 76, y0: 276, x1: 148, y1: 288, scene: "credits" }];
     const creditsLinks = () => (g.scene.name === "credits" ? LINKS : g.scene.name === "attract" && g.state && g.state.showHelperText
-      ? (picksBox ? [...TITLE_LINKS, picksBox] : TITLE_LINKS) : g.scene.links || []);
+      ? [...TITLE_LINKS, ...(picksBox ? [picksBox] : []), ...(oliveBox ? [oliveBox] : [])] : g.scene.links || []);
+    let oliveBox = null, oliveAction = null; // (the olive in the title's martini: see drawAttract)
 
     // "PINBACK'S PICKS" (the author, 2026-11-15; the one place the font leaves the grid): the game font, smaller, on a
     // jaunty angle right of the main menu, level with FAVORITES, rocking gently, a colour a line with a white shine
@@ -1283,7 +1287,7 @@
     let drawCount = 0; const SHAKE_EVERY = 2, SHAKE_PX = 0.5; // (a new offset every other frame, half a pixel at most: the author tried 1, 2 and 3 frames and a whole pixel)
     function draw() {
       drawCount += 1;
-      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; film = false; backdrop = null;
+      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; oliveBox = null; film = false; backdrop = null;
       if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
       masking = g.config.crtEffect === "vector";
       const scene = g.scene.name;
@@ -1372,7 +1376,7 @@
       lines.forEach((l, i) => print(l, 14 - l.length / 2, 15 + i, 0));
     }
 
-    return { screen, textMask, draw, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, setRave: (r) => { rave = r; }, setReplay: (f) => { replayInfo = f; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
+    return { screen, textMask, draw, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, setRave: (r) => { rave = r; }, setReplay: (f) => { replayInfo = f; }, setOlive: (f) => { oliveAction = f; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
       // account corner: fn() -> the logged-in name or null (fn.online false: no corner); hot = under the mouse
       setAccount(fn, online) { accountName = fn; accountOnline = !!online; }, accountBox: () => accountBox, setAccountHot(h) { accountHot = !!h; } };
   }
