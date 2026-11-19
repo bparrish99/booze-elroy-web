@@ -352,7 +352,10 @@ try {
     await p.waitForTimeout(500);
     check(await p.evaluate(() => fetch("/api/account/achievements", { headers: window.__acc.auth() }).then((r) => r.json()).then((d) => !!d.achievements.trust)), "trust me");
     await p.keyboard.press("Escape"); await p.waitForTimeout(400);
-    check(await p.evaluate(() => window.__core.g.scene.name === "picks" && window.__core.g.config.ghostCount === 4 && window.__core.g.config.mazepack === "pac"), "quitting comes back to the picks, the player's own settings back");
+    // (quitting lands on the pick's leaderboard, settings still borrowed; Back from there: the picks, own settings back)
+    check(await p.evaluate(() => { const g = window.__core.g; return g.scene.name === "leaderboard" && g.config.ghostCount === 6 && JSON.stringify(g.scene.summaryParts(28)) === JSON.stringify([[["", "pinback's pick"]], [["", "SIX OF THEM", 6]]]); }), "quitting a pick's game lands on its leaderboard (top 10 or not)");
+    await p.keyboard.press("Escape"); await p.waitForTimeout(300);
+    check(await p.evaluate(() => window.__core.g.scene.name === "picks" && window.__core.g.config.ghostCount === 4 && window.__core.g.config.mazepack === "pac"), "Back from it goes to the picks, the player's own settings back");
     check(await p.evaluate(() => { const s = window.__core.g.scene, it = s.menu[s.menu.selectedItem - 1]; return it && it.text === "SIX OF THEM"; }), "with the pick just played highlighted (Enter plays it again)");
     // a leaderboard of a pick's settings shows the pick's name, not the settings (Classic Pac-Man stays "classic Pac-Man")
     await p.evaluate(() => { const c = window.__core; c.setScene("leaderboard"); c.g.scene.key = c.g.scene.menu ? window.BoozeScoreKey.keyFor({ ...c.g.defaultConfig, ghostCount: 6, mazepack: "mspac" }) : null; });

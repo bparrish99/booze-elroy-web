@@ -220,7 +220,8 @@
     let arena = null; // the arena being viewed / played
     let ownConfig = null; // the player's own settings while an arena's (or a leaderboard's) are applied
     let playingBoard = null; // the board key while its settings are borrowed from the Leaderboards page (PLAY 1P)
-    let borrowHome = null; // the page a borrowed board's games come back to: "leaderboard" or "picks" (Pinback's Picks)
+    let borrowHome = null; // the page a borrowed board's games come back to ("leaderboard" now for picks too)
+    let fromPick = false; // the borrowed board is one of Pinback's Picks: its leaderboard's Back goes to the picks
     const arenaOpen = (a) => !!a && serverNow() < a.endsAt;
     function applyArena(a) {
       if (!ownConfig) ownConfig = { ...g.config };
@@ -234,7 +235,7 @@
     function leaveArena() {
       // the player's own settings come back, except CRT: the C key may have toggled it meanwhile (main.js saves it)
       if (ownConfig) { const crt = g.config.crtEffect; Object.assign(g.config, ownConfig, { crtEffect: crt }); ownConfig = null; }
-      arena = null; playingBoard = null; borrowHome = null;
+      arena = null; playingBoard = null; borrowHome = null; fromPick = false;
     }
     const borrowed = () => !!ownConfig; // someone else's settings are applied: never save them as the player's
     const ownSettings = () => ownConfig || g.config; // the player's own settings, borrowed or not
@@ -299,7 +300,7 @@
     const lbMenu = Object.assign([
       { text: "Play 1P", x: 10.5, y: 31, action() { applyBoard(leaderboard.key); startGame(); } },
       ...(opts.addFavorite ? [{ text: "Add Favorite", x: 8, y: 33, action() { opts.addFavorite(leaderboard.key); } }] : []),
-      { text: "Back", x: 12, y: 35, action() { core.setScene("attract", true); } },
+      { text: "Back", x: 12, y: 35, action() { core.setScene(fromPick ? "picks" : "attract", true); } }, // (a pick's board: back to the picks)
     ], { selectedItem: 1 });
     const lbMove = (d) => { wakka(); lbMenu.selectedItem = ((lbMenu.selectedItem - 1 + d + lbMenu.length) % lbMenu.length) + 1; };
     const lbBack = () => lbMenu[lbMenu.length - 1].action();
@@ -359,6 +360,7 @@
         if (pick) return [[["", "pinback's pick"]], [["", pick.name, 6]]];
         return summaryParts(width, SK.configFor(this.key));
       },
+      escape() { lbBack(); }, // (Esc does what Back does: the picks after a pick's game, else the title)
       keypressed(key) {
         const bk = this.key;
         if (watchKey(this, key, api, () => core.setScene("leaderboard", { key: bk }))) return;
@@ -631,7 +633,9 @@
     // back. Playing one earns "trust me" (opts.pickPlayed). opts.picks: { get() -> { status, list: [{ name, board }] }, load() }
     const picksGet = () => (opts.picks ? opts.picks.get() : { status: "error", list: [] });
     let lastPick = null; // the pick just played: highlighted again back on the list, so Enter plays it again (the author)
-    function playPick(fav) { lastPick = fav.name; applyBoard(fav.board, "picks"); if (opts.pickPlayed) opts.pickPlayed(); startGame(); }
+    // (its game over, or Esc, lands on that pick's leaderboard, top 10 or not, its settings still borrowed; Back from
+    // there returns to the picks: the author, 2026-11-18. It used to come straight back to the picks)
+    function playPick(fav) { lastPick = fav.name; applyBoard(fav.board, "leaderboard"); fromPick = true; if (opts.pickPlayed) opts.pickPlayed(); startGame(); }
     const picksScene = {
       name: "picks",
       menu: Object.assign([], { selectedItem: 1 }),

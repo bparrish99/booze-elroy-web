@@ -2161,6 +2161,7 @@
           if (to) { for (const k of Object.keys(g.sounds)) g.sounds[k].stop(); setScene(to); } else setScene("attract");
         }
         else if (g.scene === credits) leaveCredits();
+        else if (g.scene.escape) g.scene.escape(); // web edition: a page that says where Esc goes (a pick's leaderboard: the picks)
         else setScene("attract", true);
         return;
       }
