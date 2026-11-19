@@ -14,4 +14,4 @@ const replays = () => getStore({ name: "replays", consistency: "strong" });
 
 export default (req) => handle(req, getStore({ name: "leaderboard", consistency: "strong" }), { nameCheck, logAnon, accountOf: (req) => accountOf(accounts())(req), replays: replays() });
 
-export const config = { path: ["/api/scores", "/api/scores/boards", "/api/scores/reset", "/api/scores/replay", "/api/scores/replays"] };
+export const config = { path: ["/api/scores", "/api/scores/boards", "/api/scores/reset", "/api/scores/replay", "/api/scores/replays", "/api/scores/unreplay"] };

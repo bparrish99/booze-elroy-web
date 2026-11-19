@@ -609,3 +609,20 @@ test("replays: every board's and every arena's in one request each (the olive's 
   const ar2 = await (await ar(new Request("http://x/api/arenas/replays"))).json();
   assert.ok(ar2.replays.some((e) => e.name === "ARENA ONE" && e.rid), "and the arenas'");
 });
+
+test("replays: only the author's account can take one off a score (the score stays)", async () => {
+  const B = "junior.2.f.f.f.3.3.f.0.3.t.f.f", R = blobs.replayStore, whoIs = accountOf(blobs.accountStore);
+  const call = (path, body, tok) => handle(new Request("http://x" + path, { method: "POST", headers: tok ? { authorization: "Bearer " + tok } : {}, body: JSON.stringify(body) }), blobs.store, { env, failDelay: 0, replays: R, accountOf: whoIs }).then(async (r) => ({ status: r.status, data: await r.json() }));
+  const posted = await call("/api/scores", { board: B, name: "keeper", score: 777, replay: "js:{}" });
+  const rid = posted.data.entries[0].rid;
+  const stranger = (await acct("POST", "signup", { name: "stranger", password: "pw12" })).data.token;
+  assert.equal((await call("/api/scores/unreplay", { board: B, rid }, stranger)).status, 403, "someone else: refused");
+  assert.equal((await call("/api/scores/unreplay", { board: B, rid })).status, 403, "logged out: refused");
+  let owner = (await acct("POST", "signup", { name: "pinback", password: "pw12" })).data.token;
+  if (!owner) owner = (await acct("POST", "login", { name: "pinback", password: "pw12" })).data.token;
+  const done = await call("/api/scores/unreplay", { board: B, rid }, owner);
+  assert.equal(done.status, 200, "the author's account: done");
+  const e = done.data.entries.find((x) => x.name === "KEEPER");
+  assert.ok(e && e.score === 777 && !e.rid, "the score stays, without its replay");
+  assert.equal(await R.get("r/" + rid), null, "the replay itself is gone");
+});

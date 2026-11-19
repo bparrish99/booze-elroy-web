@@ -76,6 +76,22 @@ export async function dropReplays(replays, rids) {
   if (!replays || !rids || !rids.length) return;
   await Promise.all(rids.map((rid) => replays.delete("r/" + rid).catch(() => {})));
 }
+// whose account may take a replay off a score (the author's: the same as Pinback's Picks' owner)
+export const REPLAY_OWNER = "PINBACK";
+export async function unreplay(req, store, key, rid, opts) {
+  const who = opts.accountOf ? await opts.accountOf(req) : null;
+  if (who !== REPLAY_OWNER) { await sleep(opts.failDelay === undefined ? 1000 : opts.failDelay); return json(403, { error: "not yours to delete" }); }
+  if (typeof rid !== "string" || !/^[A-Za-z0-9_-]{6,20}$/.test(rid)) return json(400, { error: "bad id" });
+  const r = await updateJSON(store, key, (data) => {
+    const entries = tidy(data);
+    if (!entries.some((e) => e.rid === rid)) return { result: { entries, found: false } };
+    const next = entries.map((e) => { if (e.rid !== rid) return e; const rest = { ...e }; delete rest.rid; return rest; });
+    return { value: next, result: { entries: next, found: true } };
+  });
+  if (!r) return json(409, { error: "busy, try again" });
+  if (r.found) await dropReplays(opts.replays, [rid]);
+  return r.found ? json(200, { entries: shown(r.entries) }) : json(404, { error: "no such replay" });
+}
 export async function getReplay(req, replays) {
   if (req.method !== "GET") return json(405, { error: "method not allowed" });
   const id = new URL(req.url).searchParams.get("id");
@@ -111,6 +127,14 @@ export async function handle(req, store, opts = {}) {
   }
 
   if (path.endsWith("/replay")) return getReplay(req, opts.replays);
+  // the author's delete (2026-11-19): POST /api/scores/unreplay { board, rid } takes a replay off its score (the score stays),
+  // only from the owner's account (REPLAY_OWNER, by its login)
+  if (path.endsWith("/unreplay")) {
+    const body = await readBody(req);
+    if (req.method !== "POST" || !body) return json(400, { error: "bad request" });
+    if (!isKey(body.board)) return json(400, { error: "bad board" });
+    return unreplay(req, store, body.board, body.rid, opts);
+  }
   // every replay on every board in one go: [{ rid, name }] (only the olive's endless loop asks: one request, not one a
   // board; 2026-11-18)
   if (path.endsWith("/replays")) {

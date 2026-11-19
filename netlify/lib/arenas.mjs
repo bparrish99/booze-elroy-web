@@ -15,7 +15,7 @@
 // running when the clock ran out still post.
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import scorekey from "../../src/scorekey.js";
-import { json, sha, sleep, readBody, tidy, updateJSON, addScore, shown, okReplay, newRid, dropReplays, getReplay, REPLAY_MAX } from "./scores.mjs";
+import { json, sha, sleep, readBody, tidy, updateJSON, addScore, shown, okReplay, newRid, dropReplays, getReplay, REPLAY_MAX, unreplay } from "./scores.mjs";
 
 const { isKey, cleanName, MAX_SCORE } = scorekey;
 export const HOUR = 3600 * 1000;
@@ -39,6 +39,11 @@ export async function handleArenas(req, store, opts = {}) {
   const now = nowFn();
   const dropRids = async (id) => dropReplays(opts.replays, tidy(await store.get(entriesKey(id), { type: "json" }).catch(() => null)).map((e) => e.rid).filter(Boolean));
   if (path.endsWith("/replay")) return getReplay(req, opts.replays);
+  if (path.endsWith("/unreplay")) { // the author's delete of an arena score's replay (the score stays)
+    const body = await readBody(req);
+    if (req.method !== "POST" || !body || !isId(body.id)) return json(400, { error: "bad request" });
+    return unreplay(req, store, entriesKey(body.id), body.rid, opts);
+  }
   if (path.endsWith("/replays") && req.method === "GET") { // every arena's replays in one go (the olive's loop)
     const all = live(listOf(await store.get(INDEX, { type: "json" })), now), replays = [];
     const part = await Promise.all(all.map(async (a) => tidy(await store.get(entriesKey(a.id), { type: "json" }).catch(() => null)).filter((e) => e.rid).map((e) => ({ rid: e.rid, name: e.name }))));

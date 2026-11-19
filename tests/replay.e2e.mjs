@@ -88,6 +88,23 @@ try {
     check(JSON.stringify(await p.evaluate(() => window.__lastGameEnd)) === JSON.stringify(first.played), "(and it played out the same)");
     await ctx.close();
   }
+  // the author's delete (2026-11-19): logged in as PINBACK, an X by a replay's share icon takes the replay off its score
+  {
+    const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
+    const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
+    await p.addInitScript(() => { localStorage.setItem("booze-elroy-options", JSON.stringify({ crtEffect: false, proMode: true })); window.confirm = () => true; });
+    await p.goto(dev.url + "/"); await p.waitForTimeout(1000);
+    await p.evaluate((k) => window.__core.setScene("leaderboard", { key: k }), first.key); await p.waitForTimeout(800);
+    check(await p.evaluate(() => !window.__core.g.scene.canDelete), "logged out: no delete X");
+    await p.evaluate(() => window.__acc.signup("pinback", "pass").then((r) => r.ok || window.__acc.login("pinback", "pass")));
+    await p.waitForTimeout(300);
+    check(await p.evaluate(() => window.__core.g.scene.canDelete), "logged in as PINBACK: the X shows");
+    const n = await p.evaluate(() => window.__core.g.scene.board().entries.filter((e) => e.rid).length);
+    await p.evaluate(() => window.__core.g.scene.links.find((l) => l.del).action());
+    check(await p.waitForFunction((n0) => window.__core.g.scene.board().entries.filter((e) => e.rid).length === n0 - 1, n, { timeout: 5000 }).then(() => true, () => false), "using it takes the replay off");
+    check(await p.evaluate((sc) => window.__core.g.scene.board().entries.some((e) => e.score === sc), first.played.score), "and the score stays");
+    await ctx.close();
+  }
   await roundTrip("REWOUND", { ghostCount: 3, difficulty: 1, ability: 4 }, async (p) => {
     await p.evaluate(() => window.__core.setScene("leaderboard")); await p.waitForTimeout(400); await p.keyboard.press("Enter");
   }, (t) => t === 12);

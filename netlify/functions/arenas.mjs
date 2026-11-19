@@ -15,4 +15,4 @@ const whoIs = (req) => accountOf(accounts())(req);
 const replays = () => getStore({ name: "replays", consistency: "strong" });
 export default (req) => handleArenas(req, getStore({ name: "arenas", consistency: "strong" }), { nameCheck, logAnon, accountOf: whoIs, replays: replays() });
 
-export const config = { path: ["/api/arenas", "/api/arenas/board", "/api/arenas/score", "/api/arenas/delete", "/api/arenas/replay", "/api/arenas/replays"] };
+export const config = { path: ["/api/arenas", "/api/arenas/board", "/api/arenas/score", "/api/arenas/delete", "/api/arenas/replay", "/api/arenas/replays", "/api/arenas/unreplay"] };

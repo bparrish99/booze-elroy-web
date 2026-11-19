@@ -274,7 +274,7 @@
     // PLAY 1P plays the board on show (its settings borrowed for the game); Share Config only when the page can copy
     // links (opts.share; it shares the board on show)
     // (Add Favorite: the author, 2026-11-15; sharing settings is a favorite's job now, so no Share Config here)
-    const SHARE_X = 216; // (where render.js draws a replay's share icon, game px)
+    const SHARE_X = 216, DEL_X = 206; // (where render.js draws a replay's share icon, and the author's delete X, game px)
     // replays (EXPERIMENTAL, 2026-11-18): a score that has one (rid) plays it when clicked / tapped, or by its rank's number
     // key (1-9, 0 for 10); back: how to come back to the page afterwards
     async function watch(e, url, back) {
@@ -289,10 +289,23 @@
     // a page's score rows as links (render.js notes where it drew them, sc.rowRects) for the ones with a replay
     // (and its share icon at the row's right end, which copies a ?replay= link: the author, 2026-11-18; listed first, so a
     // click on the icon shares rather than watches)
-    function rowLinks(sc, url, back) {
+    // (and, for the author's account only, an X left of the share icon that deletes the replay, the score staying:
+    // 2026-11-19; del: how to on this page, posting { board } or { id } with the rid; the server checks the login too)
+    function rowLinks(sc, url, back, del) {
       const b = sc.board(), rows = (sc.rowRects || []).filter((rr) => b.entries[rr.i] && b.entries[rr.i].rid);
+      sc.canDelete = !!del && isOwner();
       const share = opts.shareReplay ? rows.map((rr) => ({ x0: SHARE_X - 3, y0: rr.y * 8 - 1, x1: 224, y1: rr.y * 8 + 9, share: true, action: () => opts.shareReplay(b.entries[rr.i].rid) })) : [];
-      return [...share, ...rows.map((rr) => ({ x0: 0, y0: rr.y * 8, x1: opts.shareReplay ? SHARE_X - 3 : 224, y1: rr.y * 8 + 8, action: () => watch(b.entries[rr.i], url, back) }))];
+      const dels = sc.canDelete ? rows.map((rr) => ({ x0: DEL_X - 2, y0: rr.y * 8 - 1, x1: SHARE_X - 3, y1: rr.y * 8 + 9, del: true, action: () => del(b.entries[rr.i]) })) : [];
+      const end = sc.canDelete ? DEL_X - 2 : opts.shareReplay ? SHARE_X - 3 : 224;
+      return [...share, ...dels, ...rows.map((rr) => ({ x0: 0, y0: rr.y * 8, x1: end, y1: rr.y * 8 + 8, action: () => watch(b.entries[rr.i], url, back) }))];
+    }
+    const isOwner = () => !!(opts.playerName && opts.playerName() === "PINBACK");
+    async function unreplay(e, url, body, done) {
+      if (!e || !e.rid || (typeof confirm === "function" && !confirm("Delete this replay? (The score stays.)"))) return;
+      let r = null;
+      try { r = await post2(url + "/unreplay", { ...body, rid: e.rid }); } catch { r = null; }
+      if (r && r.ok && r.data) { done(r.data.entries || []); g.toast = { text: "replay deleted", until: performance.now() + 2000 }; }
+      else g.toast = { text: "could not delete it" + (r ? " (" + r.status + ")" : ""), until: performance.now() + 2500 };
     }
     const watchKey = (sc, key, url, back) => {
       const n = key === "0" ? 10 : /^[1-9]$/.test(key) ? Number(key) : 0;
@@ -331,7 +344,8 @@
       update() {
         this.fc += 1;
         const key = this.key; // (and the scores with a replay, clickable)
-        this.links = [...this.navLinks, ...rowLinks(this, api, () => core.setScene("leaderboard", { key }))];
+        this.links = [...this.navLinks, ...rowLinks(this, api, () => core.setScene("leaderboard", { key }),
+          (e) => unreplay(e, api, { board: key }, (entries) => boards.set(key, { status: "ok", entries, at: performance.now() })))];
       },
       keys() {
         const cur = currentKey();
@@ -495,7 +509,8 @@
         this.fc += 1;
         if (this.fc % 1800 === 0) loadArena(arena.id); // every 30 s
         this.build();
-        const a = arena; this.links = rowLinks(this, arenaApi, () => core.setScene("arena", { arena: a })); // (scores with a replay)
+        const a = arena; this.links = rowLinks(this, arenaApi, () => core.setScene("arena", { arena: a }), // (scores with a replay)
+          (e) => unreplay(e, arenaApi, { id: a.id }, (entries) => arenaBoards.set(a.id, { status: "ok", entries, at: performance.now() })));
       },
       links: [],
       build() {
@@ -601,7 +616,10 @@
         items.push({ text: "Back", x: 12, y: 34.5, action: () => core.setScene("favorites") });
         this.menu = Object.assign(items, { selectedItem: 1 });
       },
-      update() { this.fc += 1; this.links = rowLinks(this, api, () => core.setScene("favorite")); }, // (scores with a replay)
+      update() { // (scores with a replay)
+        this.fc += 1; const key = this.fav.board;
+        this.links = rowLinks(this, api, () => core.setScene("favorite"), (e) => unreplay(e, api, { board: key }, (entries) => boards.set(key, { status: "ok", entries, at: performance.now() })));
+      },
       links: [],
       play() {
         leaveArena();

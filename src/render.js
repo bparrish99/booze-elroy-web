@@ -1051,6 +1051,10 @@
       ctx.fillStyle = "#ffb8ff";
       SHARE_ICON.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === "#") ctx.fillRect(px + i, ty * TILE + 1 + j, 1, 1); });
     }
+    function deleteMark(px, ty) { // the author's: a little red X (it deletes the replay, not the score)
+      ctx.fillStyle = "#ff4040";
+      for (let k = 0; k < 5; k++) { ctx.fillRect(px + k, ty * TILE + 2 + k, 1, 1); ctx.fillRect(px + 4 - k, ty * TILE + 2 + k, 1, 1); }
+    }
     function playMark(px, ty) { ctx.fillStyle = "#ffb8ff"; for (let k = 0; k < 5; k++) ctx.fillRect(px, ty * TILE + 1 + k, k < 3 ? k + 1 : 5 - k, 1); }
     function drawLeaderboard() {
       const sc = g.scene;
@@ -1075,7 +1079,7 @@
         print(core.formatScore(e.score), 4, y, o);
         print(e.name, 12, y, hi ? o : 4);
         sc.rowRects.push({ i, y });
-        if (e.rid) { playMark(2, y); shareMark(216, y); } // a replay to watch: a little play mark, and a share icon at the end
+        if (e.rid) { playMark(2, y); shareMark(216, y); if (sc.canDelete) deleteMark(206, y); } // a replay: a play mark, a share icon at the end (and for the author, a delete X)
       });
       if (sc.message) center(sc.message, lay.messageRow, 2);
       else if (b.entries.some((e) => e.rid)) { // a key to the marks: the little play mark, "replay available" (the author's wording)
