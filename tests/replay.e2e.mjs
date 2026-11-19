@@ -16,7 +16,7 @@ const check = (ok, msg) => { console.log((ok ? "PASS " : "FAIL ") + msg); if (!o
 const b = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });
 try {
   const errs = [];
-  async function roundTrip(label, cfg, start, pressAt, viewerPro = true) {
+  async function roundTrip(label, cfg, start, pressAt, viewerPro = true, noReplay = false) {
     const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
     const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
     await p.addInitScript((c) => { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); }, { crtEffect: false, proMode: true, startingLives: 1, ...cfg });
@@ -35,9 +35,19 @@ try {
     if (held) await p.keyboard.up(held);
     await p.waitForFunction(() => window.__core.g.scene.name === "nameEntry", null, { timeout: 20000 });
     const played = await p.evaluate(() => window.__lastGameEnd);
+    check(await p.evaluate(() => window.__core.g.scene.menu.some((i) => i.text === "save replay yes")), label + ": name entry offers \"save replay yes\"");
+    if (noReplay) { // the player says no: Enter on the toggle
+      await p.evaluate(() => { const m = window.__core.g.scene.menu; m.selectedItem = m.findIndex((i) => i.text === "save replay yes") + 1; });
+      await p.keyboard.press("Enter");
+      check(await p.evaluate(() => window.__core.g.scene.menu.some((i) => i.text === "save replay no")), label + ": toggled to no");
+    }
     await p.evaluate((n) => { const s = window.__core.g.scene; s.entry = n; s.submit(); }, label);
     await p.waitForFunction(() => window.__core.g.scene.name === "leaderboard", null, { timeout: 15000 });
     await p.waitForTimeout(600);
+    if (noReplay) {
+      check(await p.evaluate((n) => { const e = window.__core.g.scene.board().entries.find((x) => x.name === n); return !!e && !e.rid; }, label), label + ": its score went up without one");
+      await ctx.close(); return;
+    }
     const i = await p.evaluate((n) => window.__core.g.scene.board().entries.findIndex((e) => e.name === n && e.rid), label);
     check(i >= 0, label + ": its score went up with a replay");
     await p.evaluate((pro) => { window.__core.g.config.proMode = pro; }, viewerPro); // (the viewer's own Pro Mode: a replay doesn't carry it)
@@ -58,6 +68,7 @@ try {
   }, (t) => t === 12);
   // played with Pro Mode, three lives (deaths, READYs), watched without: the waits in between differ, the game mustn't
   await roundTrip("PRO TO NON PRO", { ghostCount: 4, ability: 1, startingLives: 3 }, async (p) => { await p.keyboard.press("Enter"); }, (t) => t % 7 === 3, false);
+  await roundTrip("NO THANKS", { ghostCount: 2, difficulty: 2 }, async (p) => { await p.keyboard.press("Enter"); }, () => false, true, true);
   // the author's secret: the olive in the title's martini (once the logo has settled) plays every replay, round and round
   {
     const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });

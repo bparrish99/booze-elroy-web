@@ -1132,10 +1132,17 @@
           else drawSpriteAtTile("spr8", 1, x, 13);
         }
       }
-      sc.menu.forEach((it, i0) => print(it.text, it.x, it.y, sc.menu.selectedItem === i0 + 1 ? 1 : 0));
+      sc.menu.forEach((it, i0) => {
+        const on = sc.menu.selectedItem === i0 + 1, m = /^save replay (yes|no)$/.exec(it.text);
+        if (!m) { print(it.text, it.x, it.y, on ? 1 : 0); return; }
+        // save replay: YES in green, NO in red, so it reads as a switch (the author); the label shows the selection
+        print("save replay", it.x, it.y, on ? 1 : 0);
+        if (m[1] === "yes") { setColor(0.3, 1, 0.35); print("yes", it.x + 12, it.y, 0); setColor(1, 1, 1); } // (white, tinted green: the font has no green)
+        else print("no", it.x + 12, it.y, 1);
+      });
       if (sc.sending) center("saving", 30, 2);
       else if (sc.mode === "createArena") { if (sc.message) center(sc.message, 30, 1); center("esc to cancel", 32, 2); }
-      else { if (sc.message) center(sc.message, 28, 1); center("time " + Math.ceil(sc.timer / 60), 30, 0); center("esc to skip", 32, 2); }
+      else { if (sc.message) center(sc.message, 29, 1); center("time " + Math.ceil(sc.timer / 60), 30, 0); center("esc to skip", 32, 2); } // (28: save replay yes / no)
     }
 
     // clickable rows of the current menu, in game pixels (mirrors drawMenu's placement)

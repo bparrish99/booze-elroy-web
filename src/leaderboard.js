@@ -25,8 +25,9 @@
   const SPECIALS = [{ text: "space", x: 5 }, { text: "del", x: 13 }, { text: "end", x: 20 }];
   const GRID_X = 5, GRID_Y = 17, SPECIAL_Y = 26;
   const ROW_START = [], ROW_LEN = [];
-  { let n = 0; for (const row of GRID) { ROW_START.push(n); ROW_LEN.push(row.length); n += row.length; } ROW_START.push(n); ROW_LEN.push(SPECIALS.length); }
-  const NCHARS = ROW_START[GRID.length], END = NCHARS + 2, SPECIAL_ROW = GRID.length, NROWS = GRID.length + 1;
+  // (and under them, "save replay yes / no": a score's replay goes up with it unless the player says no; the author, 2026-11-18)
+  { let n = 0; for (const row of GRID) { ROW_START.push(n); ROW_LEN.push(row.length); n += row.length; } ROW_START.push(n); ROW_LEN.push(SPECIALS.length); ROW_START.push(n + SPECIALS.length); ROW_LEN.push(1); ROW_START.push(n + SPECIALS.length + 1); }
+  const NCHARS = ROW_START[GRID.length], END = NCHARS + 2, KEEP = NCHARS + 3, SPECIAL_ROW = GRID.length, KEEP_ROW = GRID.length + 1, NROWS = GRID.length + 2, KEEP_Y = 28;
   const SPECIAL_COL = [1, 5, 8]; // grid column each special sits under
   const ENTRY_FRAMES = 60 * 60; // a minute to enter a name, like a cabinet
   const HOUR = 3600 * 1000;
@@ -689,6 +690,7 @@
     const neMenu = [];
     GRID.forEach((row, r) => { for (let c = 0; c < row.length; c++) neMenu.push({ text: row[c], char: row[c], x: GRID_X + c * 2, y: GRID_Y + r * 2 }); });
     for (const s of SPECIALS) neMenu.push({ text: s.text, x: s.x, y: SPECIAL_Y });
+    neMenu.push({ text: "", x: 6.5, y: KEEP_Y }); // save replay yes / no (blank when naming an arena)
     neMenu.selectedItem = 1;
     const nameEntry = {
       name: "nameEntry",
@@ -704,6 +706,7 @@
         this.entry = this.mode === "score" ? store.get(NAME, "") || "" : "";
         if (typeof this.entry !== "string" || !SK.cleanName(this.entry)) this.entry = "";
         this.timer = ENTRY_FRAMES; this.sending = false; this.fc = 0;
+        this.keepReplay = true; this.keepCol = 4; this.keepText();
         neMenu.selectedItem = (this.entry ? END : 0) + 1; // a remembered name is one press from done
         // logged in (opts.playerName): the account's name is filled in, one press from done, and can still be changed
         // (an actual player missed putting funny names up, so the author made it a pre-fill, not an auto-save)
@@ -735,16 +738,19 @@
         if (i < NCHARS) this.add(neMenu[i].char);
         else if (i === NCHARS) this.add(" ");
         else if (i === NCHARS + 1) this.del();
+        else if (i === KEEP) { if (this.mode === "score") { this.keepReplay = !this.keepReplay; this.keepText(); wakka(); } }
         else if (this.entry.trim()) this.submit();
       },
+      keepText() { neMenu[KEEP].text = this.mode === "score" ? "save replay " + (this.keepReplay ? "yes" : "no") : ""; },
       move(dr, dc) {
-        const i = neMenu.selectedItem - 1;
-        let r = 0; while (r < SPECIAL_ROW && i >= ROW_START[r + 1]) r++;
+        const i = neMenu.selectedItem - 1, rows = this.mode === "score" ? NROWS : NROWS - 1; // (no replay row naming an arena)
+        let r = 0; while (r < rows - 1 && i >= ROW_START[r + 1]) r++;
         let c = i - ROW_START[r];
         if (dr) {
-          const col = r === SPECIAL_ROW ? SPECIAL_COL[c] : c; // keep roughly the same column
-          r = (r + dr + NROWS) % NROWS;
-          c = r === SPECIAL_ROW ? (col < 3 ? 0 : col < 7 ? 1 : 2) : Math.min(col, ROW_LEN[r] - 1);
+          const col = r === SPECIAL_ROW ? SPECIAL_COL[c] : r === KEEP_ROW ? this.keepCol : c; // keep roughly the same column
+          r = (r + dr + rows) % rows;
+          if (r === KEEP_ROW) this.keepCol = col; // (the one-item replay row remembers the column it was entered from)
+          c = r === SPECIAL_ROW ? (col < 3 ? 0 : col < 7 ? 1 : 2) : r === KEEP_ROW ? 0 : Math.min(col, ROW_LEN[r] - 1);
         } else c = (c + dc + ROW_LEN[r]) % ROW_LEN[r];
         neMenu.selectedItem = ROW_START[r] + c + 1;
         wakka();
@@ -775,7 +781,7 @@
         store.set(nameKey(), name); // remembered for next time (logged in: for this account)
         if (this.arenaId) return this.submitArena(name);
         let res = null;
-        const replay = opts.replay ? await opts.replay(this.score) : null; // (its replay goes up with it: kept if it places)
+        const replay = this.keepReplay && opts.replay ? await opts.replay(this.score) : null; // (its replay goes up with it, unless the player said no: kept if it places)
         try { res = await post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  "), ...(replay ? { replay } : {}) }); } catch { res = null; }
         if (taken(res)) return this.taken(name);
         if (res && res.ok && res.data) {
@@ -807,7 +813,7 @@
       },
       // a game in an arena: the arena board, and the regular board for these settings too
       async submitArena(name) {
-        const replay = opts.replay ? await opts.replay(this.score) : null;
+        const replay = this.keepReplay && opts.replay ? await opts.replay(this.score) : null;
         const [ar, gr] = await Promise.all([
           post2(arenaApi + "/score", { id: this.arenaId, name, score: this.score, ...(replay ? { replay } : {}) }).catch(() => null),
           post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  "), ...(replay ? { replay } : {}) }).catch(() => null),

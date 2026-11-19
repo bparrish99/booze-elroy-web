@@ -286,8 +286,9 @@ try {
   check(await sel() === "/", "left from 4 wraps to / (short row)");
   await p.keyboard.press("ArrowUp"); check(await sel() === "2", "up from / (column 8) lands on 2");
   await p.keyboard.press("ArrowDown"); await p.keyboard.press("ArrowDown"); check(await sel() === "end", "down from / lands on END");
-  await p.keyboard.press("ArrowDown"); check(await sel() === "I", "down from END (column 8) wraps to I");
-  await p.keyboard.press("ArrowUp");
+  await p.keyboard.press("ArrowDown"); check(await sel() === "save replay yes", "down from END: save replay (yes to start)");
+  await p.keyboard.press("ArrowDown"); check(await sel() === "I", "down again (from column 8) wraps to I");
+  await p.keyboard.press("ArrowUp"); await p.keyboard.press("ArrowUp");
   // navigate the grid to END and confirm
   check(await sel() === "end", "on END");
   await p.keyboard.press("Enter");
