@@ -93,7 +93,7 @@ export async function handleArenas(req, store, opts = {}) {
     const by = opts.accountOf ? await opts.accountOf(req) : null; // the logged-in account, if any (kept, never shown)
     const rid = opts.replays && okReplay(body.replay) ? newRid() : null; // its replay, kept only if it places
     const r = await addScore(store, entriesKey(id), name, score, true, by, rid); // one entry per name
-    if (r && r.rank && rid) await opts.replays.set("r/" + rid, body.replay);
+    if (r && r.rank && rid) await opts.replays.set("r/" + rid, body.replay, { metadata: { name } }); // (its player's name: a shared link shows it)
     if (r) { await dropReplays(opts.replays, r.dropped); delete r.dropped; }
     if (!r) return json(409, { error: "busy, try again" });
     if (r.rank && opts.logAnon) await opts.logAnon(req, "anonarenascore", name, JSON.stringify([r.rank, score, a.name])); // logged out: on the activity page

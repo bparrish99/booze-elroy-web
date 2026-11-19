@@ -80,8 +80,8 @@ export async function getReplay(req, replays) {
   if (req.method !== "GET") return json(405, { error: "method not allowed" });
   const id = new URL(req.url).searchParams.get("id");
   if (!replays || typeof id !== "string" || !/^[A-Za-z0-9_-]{6,20}$/.test(id)) return json(400, { error: "bad id" });
-  const r = await replays.get("r/" + id);
-  return r ? json(200, { replay: r }) : json(404, { error: "no such replay" });
+  const r = await replays.getWithMetadata("r/" + id);
+  return r && r.data ? json(200, { replay: r.data, name: (r.metadata && r.metadata.name) || "" }) : json(404, { error: "no such replay" });
 }
 
 export async function handle(req, store, opts = {}) {
@@ -156,7 +156,7 @@ export async function handle(req, store, opts = {}) {
     const by = opts.accountOf ? await opts.accountOf(req) : null; // the logged-in account, if any (kept, never shown)
     const rid = opts.replays && okReplay(body.replay) ? newRid() : null; // its replay, kept only if it places
     const r = await addScore(store, board, name, score, false, by, rid);
-    if (r && r.rank && rid) await opts.replays.set("r/" + rid, body.replay);
+    if (r && r.rank && rid) await opts.replays.set("r/" + rid, body.replay, { metadata: { name } }); // (its player's name: a shared link shows it)
     if (r) { await dropReplays(opts.replays, r.dropped); delete r.dropped; }
     if (r && r.rank && opts.logAnon) { // a logged-out score that placed: on the activity page (settings: the client's summary)
       const settings = typeof body.settings === "string" ? body.settings.replace(/[^\x20-\x7e]/g, "").slice(0, 160) : "";

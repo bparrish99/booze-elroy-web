@@ -274,6 +274,7 @@
     // PLAY 1P plays the board on show (its settings borrowed for the game); Share Config only when the page can copy
     // links (opts.share; it shares the board on show)
     // (Add Favorite: the author, 2026-11-15; sharing settings is a favorite's job now, so no Share Config here)
+    const SHARE_X = 216; // (where render.js draws a replay's share icon, game px)
     // replays (EXPERIMENTAL, 2026-11-18): a score that has one (rid) plays it when clicked / tapped, or by its rank's number
     // key (1-9, 0 for 10); back: how to come back to the page afterwards
     async function watch(e, url, back) {
@@ -286,10 +287,12 @@
       opts.watch(r.replay, e.name, back);
     }
     // a page's score rows as links (render.js notes where it drew them, sc.rowRects) for the ones with a replay
+    // (and its share icon at the row's right end, which copies a ?replay= link: the author, 2026-11-18; listed first, so a
+    // click on the icon shares rather than watches)
     function rowLinks(sc, url, back) {
-      const b = sc.board();
-      return (sc.rowRects || []).filter((rr) => b.entries[rr.i] && b.entries[rr.i].rid)
-        .map((rr) => ({ x0: 0, y0: rr.y * 8, x1: 224, y1: rr.y * 8 + 8, action: () => watch(b.entries[rr.i], url, back) }));
+      const b = sc.board(), rows = (sc.rowRects || []).filter((rr) => b.entries[rr.i] && b.entries[rr.i].rid);
+      const share = opts.shareReplay ? rows.map((rr) => ({ x0: SHARE_X - 3, y0: rr.y * 8 - 1, x1: 224, y1: rr.y * 8 + 9, share: true, action: () => opts.shareReplay(b.entries[rr.i].rid) })) : [];
+      return [...share, ...rows.map((rr) => ({ x0: 0, y0: rr.y * 8, x1: opts.shareReplay ? SHARE_X - 3 : 224, y1: rr.y * 8 + 8, action: () => watch(b.entries[rr.i], url, back) }))];
     }
     const watchKey = (sc, key, url, back) => {
       const n = key === "0" ? 10 : /^[1-9]$/.test(key) ? Number(key) : 0;

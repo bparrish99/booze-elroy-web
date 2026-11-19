@@ -1044,6 +1044,13 @@
       ctx.save(); ctx.imageSmoothingEnabled = true; ctx.translate(GW / 2, 280); ctx.rotate(-0.05); ctx.scale(0.75, 0.75);
       ctx.drawImage(sticker, -sticker.width / 2, -sticker.height / 2); ctx.restore(); ctx.imageSmoothingEnabled = false;
     }
+    // the share icon: the usual curved arrow, up from the bottom left and off to the right (the author's pick; three
+    // joined dots came first), no backing: it sits on whatever background there is
+    const SHARE_ICON = ["....#..", "....##.", ".######", "#...##.", "#...#..", "#......"];
+    function shareMark(px, ty) {
+      ctx.fillStyle = "#ffb8ff";
+      SHARE_ICON.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] === "#") ctx.fillRect(px + i, ty * TILE + 1 + j, 1, 1); });
+    }
     function playMark(px, ty) { ctx.fillStyle = "#ffb8ff"; for (let k = 0; k < 5; k++) ctx.fillRect(px, ty * TILE + 1 + k, k < 3 ? k + 1 : 5 - k, 1); }
     function drawLeaderboard() {
       const sc = g.scene;
@@ -1068,7 +1075,7 @@
         print(core.formatScore(e.score), 4, y, o);
         print(e.name, 12, y, hi ? o : 4);
         sc.rowRects.push({ i, y });
-        if (e.rid) playMark(2, y); // a replay to watch: a little play mark
+        if (e.rid) { playMark(2, y); shareMark(216, y); } // a replay to watch: a little play mark, and a share icon at the end
       });
       if (sc.message) center(sc.message, lay.messageRow, 2);
       else if (b.entries.some((e) => e.rid)) { // a key to the marks: the little play mark, "replay available" (the author's wording)

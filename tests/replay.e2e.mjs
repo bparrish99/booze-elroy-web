@@ -60,9 +60,33 @@ try {
     const watched = await p.evaluate(() => window.__lastGameEnd);
     check(JSON.stringify(watched) === JSON.stringify(played), label + ": the replay ends exactly as the game did " + JSON.stringify(played) + (JSON.stringify(watched) === JSON.stringify(played) ? "" : " vs " + JSON.stringify(watched)));
     check(await p.evaluate(() => window.__core.g.scene.name === "leaderboard"), label + ": and comes back to the leaderboard");
+    const rid = await p.evaluate((n) => window.__core.g.scene.board().entries.find((e) => e.name === n).rid, label);
+    const key = await p.evaluate(() => window.__core.g.scene.key);
+    await ctx.close();
+    return { rid, key, played };
+  }
+  const first = await roundTrip("FROM THE TITLE", { ghostCount: 3, difficulty: 1, ability: 3 }, async (p) => { await p.keyboard.press("Enter"); }, (t) => t % 5 === 2);
+  // sharing (the author, 2026-11-18): the share icon on a score with a replay copies a ?replay= link; opening that link
+  // plays it (with its player's name), then lands on its game's leaderboard
+  {
+    const ctx = await b.newContext({ viewport: { width: 672, height: 864 }, permissions: ["clipboard-read", "clipboard-write"] });
+    const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
+    await p.addInitScript(() => { localStorage.setItem("booze-elroy-options", JSON.stringify({ crtEffect: false, proMode: true })); });
+    await p.goto(dev.url + "/"); await p.waitForTimeout(1000);
+    await p.evaluate((k) => window.__core.setScene("leaderboard", { key: k }), first.key); await p.waitForTimeout(800);
+    await p.evaluate(() => window.__core.g.scene.links.find((l) => l.share).action());
+    await p.waitForTimeout(300);
+    const link = await p.evaluate(() => navigator.clipboard.readText());
+    check(link === new URL(dev.url).origin + "/?replay=" + first.rid, "the share icon copies the replay's link: " + link);
+    await p.goto(link);
+    check(await p.waitForFunction(() => window.__replay && window.__replay.playing(), null, { timeout: 15000 }).then(() => true, () => false), "opening the link plays the replay");
+    check(await p.evaluate(() => window.__replay.info().name) === "FROM THE TITLE", "with its player's name");
+    await p.keyboard.press("Space"); await p.keyboard.press("Space");
+    await p.waitForFunction(() => !window.__replay.playing(), null, { timeout: 120000 });
+    check(await p.evaluate((k) => window.__core.g.scene.name === "leaderboard" && window.__core.g.scene.key === k, first.key), "then its game's leaderboard, ready to try and beat it");
+    check(JSON.stringify(await p.evaluate(() => window.__lastGameEnd)) === JSON.stringify(first.played), "(and it played out the same)");
     await ctx.close();
   }
-  await roundTrip("FROM THE TITLE", { ghostCount: 3, difficulty: 1, ability: 3 }, async (p) => { await p.keyboard.press("Enter"); }, (t) => t % 5 === 2);
   await roundTrip("REWOUND", { ghostCount: 3, difficulty: 1, ability: 4 }, async (p) => {
     await p.evaluate(() => window.__core.setScene("leaderboard")); await p.waitForTimeout(400); await p.keyboard.press("Enter");
   }, (t) => t === 12);

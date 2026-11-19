@@ -41,6 +41,7 @@
       shareArena: (id) => shareConfig("?arena=" + id), // link straight to an arena's page
       // replays (EXPERIMENTAL): the finished game's, packed, for its score post; and watching one fetched from a board
       replay: (score) => (replay ? replay.packed(score) : null),
+      shareReplay: (rid) => shareConfig("?replay=" + rid), // (the share icon on a score with a replay)
       watch: async (packed, name, back) => {
         const data = await replay.unpack(packed);
         if (!data) { toast("replay not available"); return; }
@@ -377,6 +378,22 @@
         if (/^[a-z0-9]{10}$/.test(arenaId)) LB.openArena(arenaId);
       }
     }
+    // ?replay=<id>: a shared replay plays at once (an EXPERIMENTAL sticker and all), then its game's leaderboard, ready to
+    // try and beat it (the author, 2026-11-18); a gone one: a toast
+    {
+      const rid = new URLSearchParams(location.search).get("replay");
+      if (rid) {
+        try { history.replaceState(null, "", location.pathname + location.hash); } catch { /* ignore */ }
+        if (/^[A-Za-z0-9_-]{6,20}$/.test(rid)) (async () => {
+          let r = null;
+          try { r = await fetch("/api/scores/replay?id=" + encodeURIComponent(rid), { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)); } catch { r = null; }
+          const data = r && r.replay && await replay.unpack(r.replay);
+          if (!data) { toast("that replay is gone"); return; }
+          const key = SK.keyFor(data.cfg);
+          replay.start(data, r.name || "", () => core.setScene("leaderboard", key ? { key } : undefined));
+        })();
+      }
+    }
     if (sharedCfg) {
       // keep the shared settings as the player's own, and drop ?cfg so a reload doesn't undo later changes
       try { localStorage.setItem("booze-elroy-options", JSON.stringify(core.g.config)); } catch { /* ignore */ }
@@ -547,6 +564,7 @@
       if (gestureStart(e)) return;
       { const L = linkAt(e); if (L && L.tip) { e.preventDefault(); showTip(L.tip, e); return; } hideTip();
         if (L && L.secret) earned([L.secret]); // the credits' "what is seeing this?": time to wake up
+        if (L && L.share && e.pointerType !== "mouse") { e.preventDefault(); pendingShareLink = { id: e.pointerId, L }; return; } // (copying needs the finger to lift, on touch)
         if (L) { e.preventDefault(); if (L.action) L.action(); else if (L.scene) { LB.wakka(); core.setScene(L.scene); } else openUrl(L.url); return; } }
       const row = rowAt(e);
       if (!row) return;
@@ -563,14 +581,15 @@
       if (!sc.scrollBy || !e.deltaY) return;
       e.preventDefault(); sc.scrollBy(e.deltaY > 0 ? 2 : -2);
     }, { passive: false });
-    let pendingShareTap = null;
+    let pendingShareTap = null, pendingShareLink = null;
     canvas.addEventListener("pointerup", (e) => {
+      if (pendingShareLink && pendingShareLink.id === e.pointerId) { const L = pendingShareLink.L; pendingShareLink = null; L.action(); return; }
       if (pendingShareTap !== e.pointerId) return;
       pendingShareTap = null;
       const row = rowAt(e);
       if (row && row.menu[row.index - 1].share) core.keypressed("return");
     });
-    canvas.addEventListener("pointercancel", () => { pendingShareTap = null; });
+    canvas.addEventListener("pointercancel", () => { pendingShareTap = null; pendingShareLink = null; });
     canvas.addEventListener("pointerleave", (e) => { R.setAccountHot(false); accTip = ""; if (e.pointerType === "mouse") hideTip(); });
     // description popup (the profile's achievement names, link.tip): plain HTML text by the pointer, styled like the dialogs
     const tipEl = document.getElementById("tip");
