@@ -925,18 +925,12 @@
       if (opts.playerName && !opts.playerName()) { g.toast = { text: "log in to create an arena", until: performance.now() + 2500 }; return; }
       core.setScene("nameEntry", { mode: "createArena", from, ...(key ? { key } : {}) });
     };
-    // every replay there is, on every board and arena (the olive's endless loop, main.js): [{ rid, name, url }]
+    // every replay there is, on every board and arena (the olive's endless loop, main.js): [{ rid, name, url }]; one
+    // request for the boards and one for the arenas (it used to fetch every board in turn: slow, the author noticed)
     async function allReplays() {
-      const out = [];
-      if (api) {
-        await loadBoardList();
-        for (const b of boardList.boards) { const bd = await load(b.board, true); for (const e of (bd && bd.entries) || []) if (e.rid) out.push({ rid: e.rid, name: e.name, url: api }); }
-      }
-      if (arenaApi) {
-        await loadArenas(true);
-        for (const a of arenaList.arenas) { await loadArena(a.id); const bd = arenaBoards.get(a.id); for (const e of (bd && bd.entries) || []) if (e.rid) out.push({ rid: e.rid, name: e.name, url: arenaApi }); }
-      }
-      return out;
+      const get = async (base) => { if (!base) return []; try { const r = await fetchFn(base + "/replays", { cache: "no-store" }); const d = r.ok ? await r.json() : null; return (d && d.replays || []).map((e) => ({ ...e, url: base })); } catch { return []; } };
+      const [b, a] = await Promise.all([get(api), get(arenaApi)]);
+      return [...b, ...a];
     }
     async function fetchReplay(it) {
       try { const r = await fetchFn(it.url + "/replay?id=" + encodeURIComponent(it.rid), { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)); return r && r.replay; } catch { return null; }

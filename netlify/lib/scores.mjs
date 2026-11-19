@@ -111,6 +111,17 @@ export async function handle(req, store, opts = {}) {
   }
 
   if (path.endsWith("/replay")) return getReplay(req, opts.replays);
+  // every replay on every board in one go: [{ rid, name }] (only the olive's endless loop asks: one request, not one a
+  // board; 2026-11-18)
+  if (path.endsWith("/replays")) {
+    if (req.method !== "GET") return json(405, { error: "method not allowed" });
+    const { blobs } = await store.list(), keys = blobs.map((b) => b.key).filter(isKey), replays = [];
+    for (let i = 0; i < keys.length; i += 25) {
+      const part = await Promise.all(keys.slice(i, i + 25).map(async (k) => tidy(await store.get(k, { type: "json" })).filter((e) => e.rid).map((e) => ({ rid: e.rid, name: e.name }))));
+      for (const p of part) replays.push(...p);
+    }
+    return json(200, { replays });
+  }
 
   if (path.endsWith("/boards")) {
     if (req.method !== "GET") return json(405, { error: "method not allowed" });

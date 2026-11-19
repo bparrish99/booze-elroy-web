@@ -594,3 +594,18 @@ test("replays: a long game's replay (tens of KB) goes up with its score, on a bo
   assert.equal(s.status, 200, "and in an arena");
   assert.ok((await s.json()).entries[0].rid, "with its replay");
 });
+
+test("replays: every board's and every arena's in one request each (the olive's loop)", async () => {
+  const B1 = "junior.2.f.f.f.3.2.f.0.2.t.f.f", B2 = "junior.2.f.f.f.3.3.f.0.2.t.f.f", R = blobs.replayStore;
+  const post = (board, name, score, replay) => handle(new Request("http://x/api/scores", { method: "POST", body: JSON.stringify({ board, name, score, ...(replay ? { replay } : {}) }) }), blobs.store, { env, failDelay: 0, replays: R });
+  await post(B1, "one", 100, "js:{}"); await post(B2, "two", 200, "js:{}"); await post(B2, "none", 300);
+  const all = await (await handle(new Request("http://x/api/scores/replays"), blobs.store, { env, replays: R })).json();
+  const names = all.replays.map((e) => e.name);
+  assert.ok(names.includes("ONE") && names.includes("TWO") && !names.includes("NONE"), "the boards' replays, and only scores with one: " + names);
+  assert.ok(all.replays.every((e) => e.rid && !("by" in e)), "ids and names only");
+  const ar = (req) => handleArenas(req, blobs.arenaStore, { env, failDelay: 0, now: () => clock, replays: R });
+  const a = (await ar(new Request("http://x/api/arenas", { method: "POST", body: JSON.stringify({ name: "olive cup", board: B1 }) })).then((r) => r.json())).arena;
+  await ar(new Request("http://x/api/arenas/score", { method: "POST", body: JSON.stringify({ id: a.id, name: "arena one", score: 50, replay: "js:{}" }) }));
+  const ar2 = await (await ar(new Request("http://x/api/arenas/replays"))).json();
+  assert.ok(ar2.replays.some((e) => e.name === "ARENA ONE" && e.rid), "and the arenas'");
+});

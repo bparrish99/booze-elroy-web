@@ -39,6 +39,12 @@ export async function handleArenas(req, store, opts = {}) {
   const now = nowFn();
   const dropRids = async (id) => dropReplays(opts.replays, tidy(await store.get(entriesKey(id), { type: "json" }).catch(() => null)).map((e) => e.rid).filter(Boolean));
   if (path.endsWith("/replay")) return getReplay(req, opts.replays);
+  if (path.endsWith("/replays") && req.method === "GET") { // every arena's replays in one go (the olive's loop)
+    const all = live(listOf(await store.get(INDEX, { type: "json" })), now), replays = [];
+    const part = await Promise.all(all.map(async (a) => tidy(await store.get(entriesKey(a.id), { type: "json" }).catch(() => null)).filter((e) => e.rid).map((e) => ({ rid: e.rid, name: e.name }))));
+    for (const p of part) replays.push(...p);
+    return json(200, { replays });
+  }
   const find = async (id) => listOf(await store.get(INDEX, { type: "json" })).find((a) => a.id === id) || null;
 
   if (req.method === "GET" && path.endsWith("/arenas")) {
