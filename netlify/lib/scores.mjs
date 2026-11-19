@@ -9,7 +9,7 @@
 //
 // Trust-the-client: scores aren't verified, only checked for shape. Each board is one JSON blob; writes are
 // conditional on the blob's ETag so two simultaneous submissions to the same board can't drop each other.
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual, randomBytes } from "node:crypto";
 import scorekey from "../../src/scorekey.js";
 
 const { isKey, cleanName, placeOf, MAX_SCORE, BOARD_SIZE } = scorekey;
@@ -28,7 +28,8 @@ export async function readBody(req) {
 export const tidy = (entries) => (Array.isArray(entries) ? entries : []).filter((e) => e && typeof e.score === "number" && typeof e.name === "string");
 // what a board shows: name, score, date. An entry posted while logged in also keeps the account that posted it ("by":
 // achievements earned before they existed, even under another name; 2026-11-15), never sent out
-export const shown = (entries) => entries.map(({ name, score, at }) => ({ name, score, at }));
+// (rid: the entry's replay, if it has one: the client fetches it from GET /api/scores/replay?id=<rid>)
+export const shown = (entries) => entries.map(({ name, score, at, rid }) => ({ name, score, at, ...(rid ? { rid } : {}) }));
 
 /** read-modify-write of one JSON blob, conditional on what was read (retried if someone else wrote first).
  *  change(current | null) returns { value, result } to write, or { result } alone to leave the blob as it is. */
@@ -48,7 +49,7 @@ export async function updateJSON(store, key, change) {
 /** put a score into a top-10 blob -> { entries, rank } (rank null: didn't place), or null if the store stayed busy.
  *  unique: one entry per name (arena boards): a better score replaces that name's old one; a worse one doesn't place
  *  ({ rank: null, best: <their score on the board> }). */
-export function addScore(store, key, name, score, unique, by) {
+export function addScore(store, key, name, score, unique, by, rid) {
   return updateJSON(store, key, (data) => {
     const entries = tidy(data);
     const mine = unique ? entries.find((e) => e.name === name) : null;
@@ -57,10 +58,28 @@ export function addScore(store, key, name, score, unique, by) {
     const i = placeOf(others, score);
     if (i < 0) return { result: { entries, rank: null } };
     const next = others.slice();
-    next.splice(i, 0, { name, score, at: new Date().toISOString(), ...(by ? { by } : {}) });
+    next.splice(i, 0, { name, score, at: new Date().toISOString(), ...(by ? { by } : {}), ...(rid ? { rid } : {}) });
     next.length = Math.min(next.length, BOARD_SIZE);
-    return { value: next, result: { entries: next, rank: i + 1 } };
+    // dropped: the replays of the entries that left the board (pushed off the end, or replaced by the same name's better)
+    const dropped = entries.filter((e) => e.rid && !next.includes(e)).map((e) => e.rid);
+    return { value: next, result: { entries: next, rank: i + 1, dropped } };
   });
+}
+
+// replays (2026-11-18): kept in their own store, one per top-10 entry that has one ("rid"), gone when the entry goes
+export const REPLAY_MAX = 400000; // characters (a long game packs to a few tens of KB)
+export const newRid = () => randomBytes(9).toString("base64url");
+export const okReplay = (r) => typeof r === "string" && r.length <= REPLAY_MAX && /^(gz|js):/.test(r);
+export async function dropReplays(replays, rids) {
+  if (!replays || !rids || !rids.length) return;
+  await Promise.all(rids.map((rid) => replays.delete("r/" + rid).catch(() => {})));
+}
+export async function getReplay(req, replays) {
+  if (req.method !== "GET") return json(405, { error: "method not allowed" });
+  const id = new URL(req.url).searchParams.get("id");
+  if (!replays || typeof id !== "string" || !/^[A-Za-z0-9_-]{6,20}$/.test(id)) return json(400, { error: "bad id" });
+  const r = await replays.get("r/" + id);
+  return r ? json(200, { replay: r }) : json(404, { error: "no such replay" });
 }
 
 export async function handle(req, store, opts = {}) {
@@ -77,14 +96,19 @@ export async function handle(req, store, opts = {}) {
       await sleep(failDelay); // slows down guessing
       return json(403, { error: "wrong password" });
     }
+    const ridsOf = async (key) => tidy(await store.get(key, { type: "json" })).map((e) => e.rid).filter(Boolean);
     if (body.board !== undefined) {
       if (!isKey(body.board)) return json(400, { error: "bad board" });
+      await dropReplays(opts.replays, await ridsOf(body.board));
       await store.delete(body.board);
       return json(200, { reset: body.board });
     }
+    if (opts.replays) { const { blobs } = await store.list(); for (const b of blobs) if (isKey(b.key)) await dropReplays(opts.replays, await ridsOf(b.key)); }
     await store.deleteAll();
     return json(200, { reset: "all" });
   }
+
+  if (path.endsWith("/replay")) return getReplay(req, opts.replays);
 
   if (path.endsWith("/boards")) {
     if (req.method !== "GET") return json(405, { error: "method not allowed" });
@@ -117,7 +141,10 @@ export async function handle(req, store, opts = {}) {
     if (!Number.isInteger(score) || score < 1 || score > MAX_SCORE) return json(400, { error: "bad score" });
     if (opts.nameCheck && !(await opts.nameCheck(req, name))) return json(403, { error: "name taken" });
     const by = opts.accountOf ? await opts.accountOf(req) : null; // the logged-in account, if any (kept, never shown)
-    const r = await addScore(store, board, name, score, false, by);
+    const rid = opts.replays && okReplay(body.replay) ? newRid() : null; // its replay, kept only if it places
+    const r = await addScore(store, board, name, score, false, by, rid);
+    if (r && r.rank && rid) await opts.replays.set("r/" + rid, body.replay);
+    if (r) { await dropReplays(opts.replays, r.dropped); delete r.dropped; }
     if (r && r.rank && opts.logAnon) { // a logged-out score that placed: on the activity page (settings: the client's summary)
       const settings = typeof body.settings === "string" ? body.settings.replace(/[^\x20-\x7e]/g, "").slice(0, 160) : "";
       await opts.logAnon(req, "anonscore", name, JSON.stringify([r.rank, score, settings || board]));

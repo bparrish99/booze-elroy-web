@@ -39,6 +39,13 @@
       fetch: (...a) => fetch(...a),
       share: (cfg) => shareConfig(cfg ? "?cfg=" + SK.shareCode(cfg) : null), // the board on show on the Leaderboards page
       shareArena: (id) => shareConfig("?arena=" + id), // link straight to an arena's page
+      // replays (EXPERIMENTAL): the finished game's, packed, for its score post; and watching one fetched from a board
+      replay: (score) => (replay ? replay.packed(score) : null),
+      watch: async (packed, name, back) => {
+        const data = await replay.unpack(packed);
+        if (!data) { toast("replay not available"); return; }
+        audio.unlock(); replay.start(data, name, back);
+      },
       arenaCreated: () => earned(["planner"]),
       arenaWon: () => earned(["dinner"]),
       arenaPlaced: (p) => ACC.arenaPlaced(p.arena, p.rank, p.score),
@@ -225,11 +232,17 @@
     }
 
     let rwd = null; // the Rewind ability (rewind.js), made once the core exists
+    let replay = null; // (src/replay.js, created just below the core: the core's env reaches it lazily)
     const core = BoozeCore.create(A.data, {
-      testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsOnTitle: true, restoreKeepsAV: true, proMode: true, video, rng: Math.random, isDown: (k) => !!down[k], makeSound: audio.makeSound,
-      scenes: { ...LB.scenes, ...ACC.scenes, mina },
+      testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsOnTitle: true, restoreKeepsAV: true, proMode: true, video, rng: () => (replay ? replay.rng() : Math.random()), makeSound: audio.makeSound,
+      // (replays, src/replay.js: the held keys a game sees are the replay's while one plays; a real game seeds the RNG as it starts)
+      isDown: (k) => (replay ? replay.isDown(k, (q) => !!down[q]) : !!down[k]), gameStarting: () => { if (replay) replay.gameStarting(); }, playStep: () => { if (replay) replay.playStep((q) => !!down[q]); },
+      scenes: { ...LB.scenes, ...ACC.scenes, mina, replayEnd: { name: "replayEnd", start() { replay.finish(); }, update() {}, keypressed() {} } },
       loggedIn: () => !!ACC.name(), addFavorite: () => openFavorite(SK.keyFor(LB.ownSettings())), // (Favorites, Options' Add Favorite)
       afterGameOver: (s) => {
+        { const g = core.g, pc = g.chars && g.chars.pac; window.__lastGameEnd = { score: s, level: g.levelNumber, dots: g.dots && g.dots.length, pac: pc && [pc.x, pc.y] }; } // (tests: a replay ends as its game did)
+        if (replay && replay.playing()) return "replayEnd"; // a replay ran to its game over: back where it was started (and nothing counted)
+        if (replay) replay.gameOver(s); // (its replay goes up with the score, if it places)
         const c = core.g.config, d = core.g.defaultConfig, styled = c.background !== d.background || c.mazeColor !== d.mazeColor;
         const ach = BoozeAchievements.LIST;
         earned(["quarter", ...(LB.inArena() ? ["arena"] : []), ...(styled ? ["stylish"] : []),
@@ -240,17 +253,25 @@
       }, rewind: () => {
         if (!rwd) return;
         const was = rwd.active(); rwd.trigger();
-        if (!was && rwd.active() && !core.g.attract && !core.g.autoplay) earned(["kind"]); // be kind (rewind)
+        if (!was && rwd.active() && !core.g.attract && !core.g.autoplay && !(replay && replay.playing())) earned(["kind"]); // be kind (rewind)
       },
-      feat: (id) => { if (!core.g.attract && !core.g.autoplay) earned([id]); }, // a single use of an ability (hoover deluxe, personal space, the power of now)
-      testMode: () => fpsOn /* test mode (xyzzy): Pro Mode always */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
-      saveHighScore: (s) => LB.saveBest(s),
-      saveConfig: (c) => { if (LB.borrowed()) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
+      feat: (id) => { if (!core.g.attract && !core.g.autoplay && !(replay && replay.playing())) earned([id]); }, // a single use of an ability (hoover deluxe, personal space, the power of now)
+      testMode: () => fpsOn && !(replay && replay.playing()) /* test mode (xyzzy): Pro Mode always; never in a replay (it changes the timing) */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      saveHighScore: (s) => { if (!(replay && replay.playing())) LB.saveBest(s); }, // (someone else's replayed score isn't the viewer's best)
+      saveConfig: (c) => { if (LB.borrowed() || (replay && replay.playing())) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
       shareConfig,
       setFullscreen: (on) => { try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ } },
     });
     core.T = BoozeCore.T;
+    { // replays: every key / button reaching the core is noted while a game records; while a replay plays, the viewer's
+      // own keys are its controls instead (Esc, speed, pause) and the replay's own presses are fed in step by step
+      const kp = core.keypressed, gp = core.gamepadpressed;
+      replay = BoozeReplay.create(core, { keypressed: kp, gamepadpressed: gp });
+      core.keypressed = (k) => { if (replay.playing()) { replay.viewerKey(k); return; } replay.note("k", k); kp(k); };
+      core.gamepadpressed = (b) => { if (replay.playing()) { replay.viewerKey(b === "b" ? "escape" : b === "a" ? "space" : b === "start" ? "p" : ""); return; } replay.note("g", b); gp(b); };
+      window.__replay = replay; // tests
+    }
     rwd = BoozeRewind.create(core);
     LB.attach(core);
     const toast = (text, ms) => { core.g.toast = { text, until: performance.now() + (ms || 2500) }; }; // "\n" for a second line
@@ -292,6 +313,7 @@
 
     const R = BoozeRender.createRenderer(core, { sprites: { spr16, spr8, text8 }, banner, backgrounds, video: videoEl });
     R.setDebug(fpsOn); // test mode: ghost targets and paths
+    R.setReplay(() => replay.info()); // (replays: its label and the EXPERIMENTAL sticker)
     R.setRave(rave); // (on and off in the frame loop; its sound starts with the page's first click / key, like everything else)
     window.__R = R;
     window.__rave = rave; // tests: darkstar's music clock
@@ -739,7 +761,9 @@
       const step = core.FIXED_DT;
       if (touchDir && ["playerUp", "ready", "dying", "caught", "gameover", "levelAnimation", "intermission1", "intermission2", "intermission3", "destroyed"].includes(core.g.mode)) setTouchDir(null);
       if (!dialogOpen()) pollPad();
-      while (acc >= step) { if (!rwd.update()) core.update(); rwd.record(); acc -= step; } // a rewind playing back takes the frame
+      // (a replay: its keys and presses fed in step by step, at 1x / 2x / 4x or paused)
+      if (replay.playing()) acc = acc * replay.speed();
+      while (acc >= step) { replay.beforeStep(); if (!rwd.update()) core.update(); rwd.record(); replay.afterStep(); acc -= step; } // a rewind playing back takes the frame
       LB.tick();
       if (wantsFullBezel() !== fullBezel || (core.g.config && core.g.config.crtEffect) !== fitLook) fit();
       if (raveWanted() !== rave.on()) { if (raveWanted()) rave.start(); else rave.stop(); } // maze style 27 picked or left
@@ -775,7 +799,7 @@
       escBtn.classList.toggle("on", core.g.scene.name !== "attract");
       // achievements for what's on screen: a real game (not the demo / autoplay) just started with no ghosts; the
       // credits; intermission 3 (Mina's film) in a real game
-      { const g = core.g, sn = g.scene.name, real = sn === "game" && !g.attract && !g.autoplay;
+      { const g = core.g, sn = g.scene.name, real = sn === "game" && !g.attract && !g.autoplay && !replay.playing(); // (a replay counts for nothing)
         if (real && lastScene !== "game" && g.config.ghostCount === 0) earned(["park"]);
         // without a scratch 1-3: past board 2 / 5 / 9 (where the intermissions come) with no life lost. By board, so
         // Pro Mode (no intermissions) counts too. These, pac-man fever and peer pressure: games started on level 1 only

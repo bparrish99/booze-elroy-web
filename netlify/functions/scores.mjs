@@ -9,6 +9,9 @@ const nameCheck = (req, name) => nameChecker(accounts())(req, name);
 // logged-out scores that place go on the activity page
 const logAnon = (req, ...args) => anonLogger(accounts())(req, ...args);
 
-export default (req) => handle(req, getStore({ name: "leaderboard", consistency: "strong" }), { nameCheck, logAnon, accountOf: (req) => accountOf(accounts())(req) });
+// replays (2026-11-18): their own store, shared with the arenas; one per top-10 entry that has one
+const replays = () => getStore({ name: "replays", consistency: "strong" });
 
-export const config = { path: ["/api/scores", "/api/scores/boards", "/api/scores/reset"] };
+export default (req) => handle(req, getStore({ name: "leaderboard", consistency: "strong" }), { nameCheck, logAnon, accountOf: (req) => accountOf(accounts())(req), replays: replays() });
+
+export const config = { path: ["/api/scores", "/api/scores/boards", "/api/scores/reset", "/api/scores/replay"] };

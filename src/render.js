@@ -655,6 +655,7 @@
         if (g.attract || g.autoplay) drawHighScore();
         else if (g.highScore) print(core.formatScore(g.highScore), 10, 1);
         if (g.attract) drawAccount();
+        else if (replayInfo && replayInfo()) drawReplayLabel(replayInfo());
         else drawAbility();
       }
       if (g.mode === "gameover") {
@@ -1015,6 +1016,31 @@
         }
       });
     }
+    // ---- replays (EXPERIMENTAL, 2026-11-18): "REPLAY" (with its speed) and the player's name top right, where the ability
+    // shows in a game; and an EXPERIMENTAL sticker at the bottom, a little crooked (the author's)
+    let replayInfo = null;
+    function drawReplayLabel(r) {
+      const tag = "replay" + (r.paused ? " ii" : r.speed > 1 ? " " + r.speed + "x" : "");
+      print(tag, 28 - tag.length, 0, Math.floor(performance.now() / 500) % 2 ? 1 : 2);
+      const n = r.name.slice(0, 8); print(n, 28 - n.length, 1, 0); // (8: more runs into the HIGH SCORE)
+      drawSticker();
+    }
+    let sticker = null;
+    function drawSticker() {
+      if (!sticker) { // yellow, the words cut out of it and backed in black: black on yellow, like a warning label
+        const word = "experimental", W = word.length * 8 + 6, H = 12, c = document.createElement("canvas"); c.width = W; c.height = H;
+        const x = c.getContext("2d"); x.fillStyle = "#ffd400"; x.fillRect(0, 0, W, H);
+        x.globalCompositeOperation = "destination-out";
+        const s2 = sheets.text8;
+        for (let i = 0; i < word.length; i++) { const j = TEXT_CHARS.indexOf(word[i].toUpperCase()); x.drawImage(s2.img, (j % s2.cols) * 8, Math.floor(j / s2.cols) * 8, 8, 8, 3 + i * 8, 2, 8, 8); }
+        x.globalCompositeOperation = "destination-over"; x.fillStyle = "#111"; x.fillRect(0, 0, W, H);
+        x.globalCompositeOperation = "source-over"; x.strokeStyle = "#111"; x.lineWidth = 1; x.strokeRect(0.5, 0.5, W - 1, H - 1);
+        sticker = c;
+      }
+      ctx.save(); ctx.imageSmoothingEnabled = true; ctx.translate(GW / 2, 280); ctx.rotate(-0.05); ctx.scale(0.75, 0.75);
+      ctx.drawImage(sticker, -sticker.width / 2, -sticker.height / 2); ctx.restore(); ctx.imageSmoothingEnabled = false;
+    }
+    function playMark(px, ty) { ctx.fillStyle = "#ffb8ff"; for (let k = 0; k < 5; k++) ctx.fillRect(px, ty * TILE + 1 + k, k < 3 ? k + 1 : 5 - k, 1); }
     function drawLeaderboard() {
       const sc = g.scene;
       begin(true); drawHeader();
@@ -1029,6 +1055,7 @@
       const listTop = fits ? lay.listTop : lay.summaryTop + nLines + 1, step = fits ? 2 : 1;
       const b = sc.board();
       if (!b.entries.length) center(sc.emptyText ? sc.emptyText(b) : b.status === "loading" ? "loading" : b.status === "error" ? "leaderboard offline" : "no scores yet", Math.max(20, listTop + 4), 0);
+      sc.rowRects = []; // (where each score's row is: leaderboard.js makes the ones with a replay clickable)
       b.entries.slice(0, 10).forEach((e, i) => {
         const y = listTop + i * step, hi = sc.highlight === i + 1;
         const o = hi ? (sc.fc % 30 < 15 ? 1 : 3) : 0;
@@ -1036,8 +1063,14 @@
         print(rk, 3 - rk.length, y, o);
         print(core.formatScore(e.score), 4, y, o);
         print(e.name, 12, y, hi ? o : 4);
+        sc.rowRects.push({ i, y });
+        if (e.rid) playMark(2, y); // a replay to watch: a little play mark
       });
       if (sc.message) center(sc.message, lay.messageRow, 2);
+      else if (b.entries.some((e) => e.rid)) { // a key to the marks: the little play mark, "replay available" (the author's wording)
+        const t = "replay available", x0 = (14 - t.length / 2) * TILE + 6, y = lay.messageRow;
+        print(t, 14 - t.length / 2 + 0.75, y, 2); playMark(x0 - 8, y);
+      }
       drawMenu(sc.menu, 12, 33, 1);
     }
     // arena list: names are the menu; time left / winners / headings are sc.decor
@@ -1339,7 +1372,7 @@
       lines.forEach((l, i) => print(l, 14 - l.length / 2, 15 + i, 0));
     }
 
-    return { screen, textMask, draw, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, setRave: (r) => { rave = r; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
+    return { screen, textMask, draw, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, setRave: (r) => { rave = r; }, setReplay: (f) => { replayInfo = f; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
       // account corner: fn() -> the logged-in name or null (fn.online false: no corner); hot = under the mouse
       setAccount(fn, online) { accountName = fn; accountOnline = !!online; }, accountBox: () => accountBox, setAccountHot(h) { accountHot = !!h; } };
   }

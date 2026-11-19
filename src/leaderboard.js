@@ -272,6 +272,29 @@
     // PLAY 1P plays the board on show (its settings borrowed for the game); Share Config only when the page can copy
     // links (opts.share; it shares the board on show)
     // (Add Favorite: the author, 2026-11-15; sharing settings is a favorite's job now, so no Share Config here)
+    // replays (EXPERIMENTAL, 2026-11-18): a score that has one (rid) plays it when clicked / tapped, or by its rank's number
+    // key (1-9, 0 for 10); back: how to come back to the page afterwards
+    async function watch(e, url, back) {
+      if (!e || !e.rid || !opts.watch) return;
+      g.toast = { text: "loading replay", until: performance.now() + 4000 };
+      let r = null;
+      try { r = await fetchFn(url + "/replay?id=" + encodeURIComponent(e.rid), { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)); } catch { r = null; }
+      g.toast = null;
+      if (!r || !r.replay) { g.toast = { text: "replay not available", until: performance.now() + 2500 }; return; }
+      opts.watch(r.replay, e.name, back);
+    }
+    // a page's score rows as links (render.js notes where it drew them, sc.rowRects) for the ones with a replay
+    function rowLinks(sc, url, back) {
+      const b = sc.board();
+      return (sc.rowRects || []).filter((rr) => b.entries[rr.i] && b.entries[rr.i].rid)
+        .map((rr) => ({ x0: 0, y0: rr.y * 8, x1: 224, y1: rr.y * 8 + 8, action: () => watch(b.entries[rr.i], url, back) }));
+    }
+    const watchKey = (sc, key, url, back) => {
+      const n = key === "0" ? 10 : /^[1-9]$/.test(key) ? Number(key) : 0;
+      if (!n) return false;
+      const e = sc.board().entries[n - 1]; if (e && e.rid) watch(e, url, back);
+      return true;
+    };
     const lbMenu = Object.assign([
       { text: "Play 1P", x: 10.5, y: 31, action() { applyBoard(leaderboard.key); startGame(); } },
       ...(opts.addFavorite ? [{ text: "Add Favorite", x: 8, y: 33, action() { opts.addFavorite(leaderboard.key); } }] : []),
@@ -291,15 +314,20 @@
         this.highlight = o.highlight || null;
         this.message = o.message || null;
         this.fc = 0;
-        this.key = currentKey();
+        this.key = o.key || currentKey(); // (o.key: back from a replay of this board)
         lbMenu.selectedItem = 1;
         if (!o.fresh) load(this.key, true);
         loadBoardList();
         if (opts.picks) opts.picks.load(); // (to name the boards that are picks: fresh every time, so a renamed pick shows at once)
         const lx = (x, n) => ({ x0: x * 8 - 6, y0: 3 * 8, x1: (x + n) * 8 + 6, y1: 6 * 8 }); // roomy: the CRT curve bends the corners
-        this.links = [{ ...lx(4, 4), action: () => this.flip(-1) }, { ...lx(20, 4), action: () => this.flip(1) }];
+        this.navLinks = [{ ...lx(4, 4), action: () => this.flip(-1) }, { ...lx(20, 4), action: () => this.flip(1) }];
+        this.links = this.navLinks;
       },
-      update() { this.fc += 1; },
+      update() {
+        this.fc += 1;
+        const key = this.key; // (and the scores with a replay, clickable)
+        this.links = [...this.navLinks, ...rowLinks(this, api, () => core.setScene("leaderboard", { key }))];
+      },
       keys() {
         const cur = currentKey();
         const rest = boardList.boards.filter((b) => b.board !== cur)
@@ -331,6 +359,8 @@
         return summaryParts(width, SK.configFor(this.key));
       },
       keypressed(key) {
+        const bk = this.key;
+        if (watchKey(this, key, api, () => core.setScene("leaderboard", { key: bk }))) return;
         if (key === "return" || key === "space") { const it = lbMenu[lbMenu.selectedItem - 1]; if (it.text !== "Play 1P") wakka(); it.action(); }
         else if (key === "left") this.flip(-1);
         else if (key === "right") this.flip(1);
@@ -459,7 +489,9 @@
         this.fc += 1;
         if (this.fc % 1800 === 0) loadArena(arena.id); // every 30 s
         this.build();
+        const a = arena; this.links = rowLinks(this, arenaApi, () => core.setScene("arena", { arena: a })); // (scores with a replay)
       },
+      links: [],
       build() {
         const items = [];
         if (arenaOpen(arena) && api) items.push({ text: "Play 1P", coin: true, x: 10.5, y: 30, action: () => this.play() });
@@ -478,6 +510,8 @@
       emptyText(b) { return b.status === "loading" ? "loading" : b.status === "gone" ? "arena not found" : b.status === "error" ? "try again soon" : "no scores yet"; },
       keypressed(key) {
         if (key === "escape" || key === "backspace") { wakka(); this.back(); return; }
+        const a = arena;
+        if (watchKey(this, key, arenaApi, () => core.setScene("arena", { arena: a }))) return;
         menuKeys(this, key);
       },
       gamepadpressed(button) {
@@ -561,7 +595,8 @@
         items.push({ text: "Back", x: 12, y: 34.5, action: () => core.setScene("favorites") });
         this.menu = Object.assign(items, { selectedItem: 1 });
       },
-      update() { this.fc += 1; },
+      update() { this.fc += 1; this.links = rowLinks(this, api, () => core.setScene("favorite")); }, // (scores with a replay)
+      links: [],
       play() {
         leaveArena();
         Object.assign(g.config, SK.configFor(this.fav.board)); // they become the player's own settings (the author)
@@ -582,6 +617,7 @@
       board() { return boardFor(this.fav.board); },
       keypressed(key) {
         if (key === "escape" || key === "backspace") { wakka(); core.setScene("favorites"); return; }
+        if (watchKey(this, key, api, () => core.setScene("favorite"))) return;
         menuKeys(this, key);
       },
       gamepadpressed(button) { if (button === "b") core.setScene("favorites"); else menuPad(this, button); },
@@ -739,7 +775,8 @@
         store.set(nameKey(), name); // remembered for next time (logged in: for this account)
         if (this.arenaId) return this.submitArena(name);
         let res = null;
-        try { res = await post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  ") }); } catch { res = null; }
+        const replay = opts.replay ? await opts.replay(this.score) : null; // (its replay goes up with it: kept if it places)
+        try { res = await post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  "), ...(replay ? { replay } : {}) }); } catch { res = null; }
         if (taken(res)) return this.taken(name);
         if (res && res.ok && res.data) {
           boards.set(this.key, { status: "ok", entries: res.data.entries || [], at: performance.now() });
@@ -770,9 +807,10 @@
       },
       // a game in an arena: the arena board, and the regular board for these settings too
       async submitArena(name) {
+        const replay = opts.replay ? await opts.replay(this.score) : null;
         const [ar, gr] = await Promise.all([
-          post2(arenaApi + "/score", { id: this.arenaId, name, score: this.score }).catch(() => null),
-          post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  ") }).catch(() => null),
+          post2(arenaApi + "/score", { id: this.arenaId, name, score: this.score, ...(replay ? { replay } : {}) }).catch(() => null),
+          post("", { board: this.key, name, score: this.score, settings: summary(200, SK.configFor(this.key)).join("  "), ...(replay ? { replay } : {}) }).catch(() => null),
         ]);
         if (taken(ar) || taken(gr)) return this.taken(name);
         if (gr && gr.ok && gr.data) { boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() }); placed(this.key, gr.data.rank, gr.data.entries || [], this.score); }

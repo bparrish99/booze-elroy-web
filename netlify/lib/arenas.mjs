@@ -15,7 +15,7 @@
 // running when the clock ran out still post.
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import scorekey from "../../src/scorekey.js";
-import { json, sha, sleep, readBody, tidy, updateJSON, addScore, shown } from "./scores.mjs";
+import { json, sha, sleep, readBody, tidy, updateJSON, addScore, shown, okReplay, newRid, dropReplays, getReplay } from "./scores.mjs";
 
 const { isKey, cleanName, MAX_SCORE } = scorekey;
 export const HOUR = 3600 * 1000;
@@ -37,6 +37,8 @@ export async function handleArenas(req, store, opts = {}) {
   const u = new URL(req.url);
   const path = u.pathname.replace(/\/+$/, "");
   const now = nowFn();
+  const dropRids = async (id) => dropReplays(opts.replays, tidy(await store.get(entriesKey(id), { type: "json" }).catch(() => null)).map((e) => e.rid).filter(Boolean));
+  if (path.endsWith("/replay")) return getReplay(req, opts.replays);
   const find = async (id) => listOf(await store.get(INDEX, { type: "json" })).find((a) => a.id === id) || null;
 
   if (req.method === "GET" && path.endsWith("/arenas")) {
@@ -68,7 +70,7 @@ export async function handleArenas(req, store, opts = {}) {
     });
     if (r === null) return json(409, { error: "busy, try again" });
     if (r === "taken") return json(409, { error: "name taken" });
-    for (const a of dropped) await store.delete(entriesKey(a.id)).catch(() => {}); // tidy up arenas that fell off
+    for (const a of dropped) { await dropRids(a.id); await store.delete(entriesKey(a.id)).catch(() => {}); } // tidy up arenas that fell off (and their replays)
     return json(200, { now, arena: show(arena) });
   }
 
@@ -83,7 +85,10 @@ export async function handleArenas(req, store, opts = {}) {
     if (now > a.endsAt + GRACE) return json(410, { error: "arena closed", arena: show(a) });
     if (opts.nameCheck && !(await opts.nameCheck(req, name))) return json(403, { error: "name taken" });
     const by = opts.accountOf ? await opts.accountOf(req) : null; // the logged-in account, if any (kept, never shown)
-    const r = await addScore(store, entriesKey(id), name, score, true, by); // one entry per name
+    const rid = opts.replays && okReplay(body.replay) ? newRid() : null; // its replay, kept only if it places
+    const r = await addScore(store, entriesKey(id), name, score, true, by, rid); // one entry per name
+    if (r && r.rank && rid) await opts.replays.set("r/" + rid, body.replay);
+    if (r) { await dropReplays(opts.replays, r.dropped); delete r.dropped; }
     if (!r) return json(409, { error: "busy, try again" });
     if (r.rank && opts.logAnon) await opts.logAnon(req, "anonarenascore", name, JSON.stringify([r.rank, score, a.name])); // logged out: on the activity page
     let arena = a;
@@ -115,6 +120,7 @@ export async function handleArenas(req, store, opts = {}) {
       return all.some((a) => a.id === body.id) ? { value: { arenas: all.filter((a) => a.id !== body.id) }, result: "ok" } : { result: "missing" };
     });
     if (r === "missing") return json(404, { error: "no such arena" });
+    await dropRids(body.id);
     await store.delete(entriesKey(body.id)).catch(() => {});
     return json(200, { deleted: body.id });
   }

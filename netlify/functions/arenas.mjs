@@ -11,6 +11,8 @@ const logAnon = (req, ...args) => anonLogger(accounts())(req, ...args);
 // the logged-in account posting a score (kept with it, never shown: chicken dinner whatever name won)
 const whoIs = (req) => accountOf(accounts())(req);
 
-export default (req) => handleArenas(req, getStore({ name: "arenas", consistency: "strong" }), { nameCheck, logAnon, accountOf: whoIs });
+// replays (2026-11-18): the store the scores function keeps them in too
+const replays = () => getStore({ name: "replays", consistency: "strong" });
+export default (req) => handleArenas(req, getStore({ name: "arenas", consistency: "strong" }), { nameCheck, logAnon, accountOf: whoIs, replays: replays() });
 
-export const config = { path: ["/api/arenas", "/api/arenas/board", "/api/arenas/score", "/api/arenas/delete"] };
+export const config = { path: ["/api/arenas", "/api/arenas/board", "/api/arenas/score", "/api/arenas/delete", "/api/arenas/replay"] };

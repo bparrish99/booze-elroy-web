@@ -562,3 +562,22 @@ test("accounts: purist / patternless from the boards (Classic Pac-Man, and with 
   for (const id of ["purist", "purist2", "patternless"]) assert.ok(d.achievements[id], id);
   for (const id of ["purist3", "patternless2", "patternless3"]) assert.ok(!d.achievements[id], "not " + id);
 });
+
+test("replays: kept only with a score that places, served by id, gone when the score leaves the board or the board is reset", async () => {
+  const B = "junior.1.f.f.f.1.1.f.0.3.t.f.f", R = blobs.replayStore;
+  const call = (method, path, body) => handle(new Request("http://x" + path, { method, body: body === undefined ? undefined : JSON.stringify(body) }), blobs.store, { env, failDelay: 0, replays: R }).then(async (r) => ({ status: r.status, data: await r.json() }));
+  const first = await call("POST", "/api/scores", { board: B, name: "replayer", score: 100, replay: "js:{\"x\":1}" });
+  const rid = first.data.entries[0].rid;
+  assert.ok(rid, "the entry carries its replay's id");
+  assert.equal((await call("GET", "/api/scores/replay?id=" + rid)).data.replay, "js:{\"x\":1}", "served by id");
+  assert.equal((await call("POST", "/api/scores", { board: B, name: "junk", score: 90, replay: "not a replay" })).data.entries.find((e) => e.name === "JUNK").rid, undefined, "a malformed replay isn't kept");
+  for (let i = 0; i < 10; i++) await call("POST", "/api/scores", { board: B, name: "better", score: 1000 + i });
+  assert.equal((await call("GET", "/api/scores/replay?id=" + rid)).status, 404, "pushed off the board: its replay is gone");
+  const low = await call("POST", "/api/scores", { board: B, name: "too low", score: 5, replay: "js:{}" });
+  assert.equal(low.data.rank, null);
+  const kept = await call("POST", "/api/scores", { board: B, name: "kept", score: 5000, replay: "js:{\"y\":2}" });
+  const rid2 = kept.data.entries.find((e) => e.name === "KEPT").rid;
+  await call("POST", "/api/scores/reset", { password: env.LEADERBOARD_ADMIN_PASSWORD, board: B });
+  assert.equal((await call("GET", "/api/scores/replay?id=" + rid2)).status, 404, "a reset board: its replays go too");
+  assert.equal((await call("GET", "/api/scores/replay?id=../etc")).status, 400, "bad ids are refused");
+});

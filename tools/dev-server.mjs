@@ -26,7 +26,7 @@ export async function startDev(opts = {}) {
   const { port: bport } = await blobs.start();
   const url = `http://localhost:${bport}`;
   const mkStore = (name) => getStore({ name, siteID: "dev-site", token, edgeURL: url, uncachedEdgeURL: url, consistency: "strong" });
-  const store = mkStore("leaderboard"), arenaStore = mkStore("arenas"), accountStore = mkStore("accounts");
+  const store = mkStore("leaderboard"), arenaStore = mkStore("arenas"), accountStore = mkStore("accounts"), replayStore = mkStore("replays");
   const env = { LEADERBOARD_ADMIN_PASSWORD: password };
   const nameCheck = nameChecker(accountStore), logAnon = anonLogger(accountStore), whoIs = accountOf(accountStore);
 
@@ -37,9 +37,9 @@ export async function startDev(opts = {}) {
         const chunks = []; for await (const c of req) chunks.push(c);
         const body = chunks.length ? Buffer.concat(chunks) : undefined;
         const request = new Request(u, { method: req.method, headers: req.headers, body: req.method === "GET" ? undefined : body });
-        const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now, nameCheck, logAnon, accountOf: whoIs })
+        const r = u.pathname.startsWith("/api/arenas") ? await handleArenas(request, arenaStore, { env, now: opts.now, nameCheck, logAnon, accountOf: whoIs, replays: replayStore })
           : u.pathname.startsWith("/api/account/") ? await handleAccounts(request, accountStore, { env, failDelay: opts.failDelay, now: opts.now, scoresStore: store, arenasStore: arenaStore })
-          : await handle(request, store, { env, nameCheck, logAnon, accountOf: whoIs });
+          : await handle(request, store, { env, nameCheck, logAnon, accountOf: whoIs, replays: replayStore });
         res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer()));
         if (!quiet) console.log(req.method, u.pathname + u.search, r.status);
         return;

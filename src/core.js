@@ -66,6 +66,9 @@
   function create(DATA, env) {
     env = env || {};
     const rng = env.rng || Math.random;
+    // web edition: leaderboard replays (src/replay.js) re-run a game from its seed and inputs; bump this whenever gameplay
+    // changes (anything the golden replay would catch, or a fix to a mode it doesn't cover), so older replays are marked
+    const REPLAY_VERSION = 1;
     const rand = (m, n) => {
       const r = rng();
       if (m === undefined) return r;
@@ -725,12 +728,12 @@
       const near = (x, y) => (x - pX) * (x - pX) + (y - pY) * (y - pY) <= VACUUM_RADIUS * VACUUM_RADIUS;
       // what it takes, for the picture of it being sucked in (render.js drawVacuum; it's all eaten right now regardless)
       const fly = g.powers.concat(g.dots).filter((it) => near(it.x, it.y))
-        .map((it) => ({ item: it, x: it.x * 8 + 4, y: it.y * 8 + 4, d: Math.hypot(it.x - pX, it.y - pY) }));
+        .map((it) => ({ item: it, x: it.x * 8 + 4, y: it.y * 8 + 4, d: Math.sqrt((it.x - pX) ** 2 + (it.y - pY) ** 2) }));
       for (const p of g.powers.filter((it) => near(it.x, it.y))) checkCollisions(g.powers, p.x, p.y); // (recharging it, if any)
       for (const d of g.dots.filter((it) => near(it.x, it.y))) checkCollisions(g.dots, d.x, d.y);
       const fl = cm.fruitLoc;
       if (T(g.fruitTimer) && near(fl.x / 8, fl.y / 8)) {
-        fly.push({ fruit: g.config.plusMode ? levels.plusModeFruitMap(g.level.fruit) : g.level.fruit, x: fl.x, y: fl.y, d: Math.hypot(fl.x / 8 - pX, fl.y / 8 - pY) });
+        fly.push({ fruit: g.config.plusMode ? levels.plusModeFruitMap(g.level.fruit) : g.level.fruit, x: fl.x, y: fl.y, d: Math.sqrt((fl.x / 8 - pX) ** 2 + (fl.y / 8 - pY) ** 2) });
         eatFruit(true);
       }
       g.vacuumFly = fly;
@@ -775,17 +778,17 @@
         const ch = g.chars[name];
         if (!ch.target || T(ch.dead) || ch.hidden || ch.housing || ch.entering || ch.leaving) continue;
         const [gX, , gY] = cm.getLoc(ch);
-        const d0 = Math.hypot(gX - pX, gY - pY);
+        const d0 = Math.sqrt((gX - pX) ** 2 + (gY - pY) ** 2); // (sqrt, not hypot: the same to the last bit in every browser, for replays)
         if (d0 > PUSH_REACH) continue;
         let ux = gX - pX, uy = gY - pY;                                    // away from him (on his tile: behind him)
         if (!ux && !uy) { ux = back.x; uy = back.y; }
-        const ul = Math.hypot(ux, uy); ux /= ul; uy /= ul;
+        const ul = Math.sqrt(ux * ux + uy * uy); ux /= ul; uy /= ul;
         // the landing: far and along the line, both counting (the line used to count so much more that a ghost a tile
         // short of a tunnel mouth was "pushed" one tile on, and it looked like nothing happened: the author); at least
         // 2 tiles further than it was if anywhere allows, otherwise anywhere further at all
         let best = null, bestScore = -Infinity, bestNear = null, bestNearScore = -Infinity;
         for (const key of open) {
-          const [x, y] = key.split(",").map(Number), dx = x - pX, dy = y - pY, dd = Math.hypot(dx, dy);
+          const [x, y] = key.split(",").map(Number), dx = x - pX, dy = y - pY, dd = Math.sqrt(dx * dx + dy * dy);
           if (dd > PUSH_MAX || dd <= d0) continue;
           const align = (dx * ux + dy * uy) / dd, score = align * 2 + dd * 0.6;
           if (dd >= d0 + 2) { if (score > bestScore) { bestScore = score; best = [x, y]; } }
@@ -1807,6 +1810,9 @@
     const game = {
       name: "game",
       start() {
+        // web edition (replays, 2026-11-18): a real game is starting, before it draws its first random number (main.js
+        // seeds the RNG here and starts recording)
+        if (env.gameStarting && !g.attract && !g.autoplay) env.gameStarting();
         g.volumeBeforeMute = null;
         g.muted = false;
         keyPressTimes = {};
@@ -1887,6 +1893,7 @@
 
           updateFrightenedState();
           handleModeSwitching();
+          if (env.playStep) env.playStep(); // web edition: a step of play, about to read the controls (replays count these)
           handlePlayerInput();
           g.ghostEatenThisFrame = false;
           const frozen = g.freezeLeft > 0; // the Pause ability: the ghosts stand still
@@ -2196,7 +2203,7 @@
         if (anyDead) g.sounds.dead.play(); else if (anyFrightened) g.sounds.scared.play(); else playSiren();
       },
       formatScore, projectGhost, constants: { TILE, CENTER, DELTAS, JOY_DIRS, MAX_THRUST, STUN_DISTANCE }, charKeys, animations, fruits,
-      gamepadpressed, gameFc: () => gameFc, attractFc: () => attractFc, attractMenu,
+      gamepadpressed, gameFc: () => gameFc, attractFc: () => attractFc, attractMenu, REPLAY_VERSION,
       intermissions, MAX_COLORS: DATA.maxColors, INDEXES, optMenu, creditsMenu, creditsBooze,
     };
   }
