@@ -1135,10 +1135,10 @@
       sc.menu.forEach((it, i0) => {
         const on = sc.menu.selectedItem === i0 + 1, m = /^save replay (yes|no)$/.exec(it.text);
         if (!m) { print(it.text, it.x, it.y, on ? 1 : 0); return; }
-        // save replay: YES in green, NO in red, so it reads as a switch (the author); the label shows the selection
+        // save replay: YES in green, NO in yellow, so it reads as a switch (the author); the label shows the selection
         print("save replay", it.x, it.y, on ? 1 : 0);
         if (m[1] === "yes") { setColor(0.3, 1, 0.35); print("yes", it.x + 12, it.y, 0); setColor(1, 1, 1); } // (white, tinted green: the font has no green)
-        else print("no", it.x + 12, it.y, 1);
+        else print("no", it.x + 12, it.y, 6); // (yellow, not red: red is the selection colour; the author)
       });
       if (sc.sending) center("saving", 30, 2);
       else if (sc.mode === "createArena") { if (sc.message) center(sc.message, 30, 1); center("esc to cancel", 32, 2); }
