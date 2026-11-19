@@ -379,20 +379,26 @@
     // Elroy's drunk bubbles (web edition). The core still emits its particles exactly as the Lua does (same RNG use);
     // here some of them become pixel-art cartoon bubbles with their own (render-only) life: they wobble upward, woozy,
     // swell a little and pop.
-    const BUBBLE_SPRITES = [];
-    for (let R = 1; R <= 5; R++) {
+    // (fire versions too, two of them that flicker: once Blinky is in his second Elroy, drunk with rage, the bubbles he
+    // blows come out on fire: the author, 2026-11-19)
+    const BUBBLE_SPRITES = [], FIRE_SPRITES = [[], []];
+    const BLUE = { shine: "#dcdcff", top: "#a8a8ff", under: "#6a6aee", mid: "rgba(128,128,255,0.35)" };
+    const FIRE = [{ shine: "#fff4b0", top: "#ffb020", under: "#e2340e", mid: "rgba(255,120,30,0.42)" },
+      { shine: "#ffffff", top: "#ffd448", under: "#ff5a12", mid: "rgba(255,176,40,0.42)" }];
+    function bubbleSprite(R, pal) {
       const S = 2 * R + 3, c = document.createElement("canvas"); c.width = S; c.height = S;
       const x = c.getContext("2d"), m = S / 2, hx = m - R * 0.45, hy = m - R * 0.45, hr = Math.max(0.7, R * 0.28);
       for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
         const d = Math.hypot(i + 0.5 - m, j + 0.5 - m);
-        if (Math.hypot(i + 0.5 - hx, j + 0.5 - hy) < hr && d < R) x.fillStyle = "#dcdcff"; // shine
-        else if (Math.abs(d - R) < 0.62) x.fillStyle = j + 0.5 > m + R * 0.3 ? "#6a6aee" : "#a8a8ff"; // blue rim, darker underneath
-        else if (d < R - 0.62) x.fillStyle = "rgba(128,128,255,0.35)"; // see-through blue middle (the original's colour)
+        if (Math.hypot(i + 0.5 - hx, j + 0.5 - hy) < hr && d < R) x.fillStyle = pal.shine; // shine
+        else if (Math.abs(d - R) < 0.62) x.fillStyle = j + 0.5 > m + R * 0.3 ? pal.under : pal.top; // rim, darker underneath
+        else if (d < R - 0.62) x.fillStyle = pal.mid; // see-through middle (blue: the original's colour)
         else continue;
         x.fillRect(i, j, 1, 1);
       }
-      BUBBLE_SPRITES[R] = c;
+      return c;
     }
+    for (let R = 1; R <= 5; R++) { BUBBLE_SPRITES[R] = bubbleSprite(R, BLUE); FIRE_SPRITES[0][R] = bubbleSprite(R, FIRE[0]); FIRE_SPRITES[1][R] = bubbleSprite(R, FIRE[1]); }
     const seenBubbles = new WeakSet(), bubbles = [];
     let bubbleCount = 0, bubbleT = 0, bubbleSource = null;
     function updateBubbles() {
@@ -407,16 +413,18 @@
         b.r = Math.min(3, b.r + 0.02 * dt);
       }
     }
+    // Blinky in his second Elroy, the fastest (the dots left at or under the level's elroy2; not while it's suspended)
+    const elroy2 = () => !!(g.chars && g.chars.blinky && g.level && g.dots && g.dots.length <= g.level.elroy2 && !g.suspendElroy);
     function drawBubble(b) {
       const cx = -g.startX + b.x, cy = -g.startY + b.y + 24;
       if (b.age > b.life) { // pop: a little ring of specks flying out
         const t = (b.age - b.life) / 4, rr = b.r + 1 + t * 2;
-        ctx.globalAlpha = (1 - t) * 0.7; ctx.fillStyle = "#b0b0ff";
+        ctx.globalAlpha = (1 - t) * 0.7; ctx.fillStyle = b.fire ? "#ffb040" : "#b0b0ff";
         for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + b.phase; ctx.fillRect(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr), 1, 1); }
         ctx.globalAlpha = 1;
         return;
       }
-      const R = Math.max(1, Math.min(3, Math.round(b.r))), spr = BUBBLE_SPRITES[R];
+      const R = Math.max(1, Math.min(3, Math.round(b.r))), spr = b.fire ? FIRE_SPRITES[Math.floor(b.age / 3 + b.phase) % 2][R] : BUBBLE_SPRITES[R];
       // fade in fast, dissolve over the second half of its life
       ctx.globalAlpha = Math.min(1, b.age / 2) * Math.min(1, 2 * (1 - b.age / b.life)) * 0.9;
       ctx.drawImage(spr, Math.round(cx - spr.width / 2), Math.round(cy - spr.height / 2));
@@ -469,7 +477,7 @@
             seenBubbles.add(p);
             if (bubbleCount++ % 2 === 0) { // mostly tiny, the odd bigger one
               const big = Math.random() < 0.15;
-              bubbles.push({ x: p.x, y: p.y - 2, vx: p.vx * 0.6, vy: -(0.6 + Math.random() * 0.5) + p.vy * 0.3,
+              bubbles.push({ fire: elroy2(), x: p.x, y: p.y - 2, vx: p.vx * 0.6, vy: -(0.6 + Math.random() * 0.5) + p.vy * 0.3,
                 r: big ? 2.4 + Math.random() * 0.6 : 1 + Math.random() * 1, age: 0, life: 16 + Math.random() * 14,
                 phase: Math.random() * Math.PI * 2, wob: 0.5 + Math.random() * 0.9 });
             }
