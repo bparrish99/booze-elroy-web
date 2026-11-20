@@ -284,7 +284,7 @@
       try { r = await fetchFn(url + "/replay?id=" + encodeURIComponent(e.rid), { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)); } catch { r = null; }
       g.toast = null;
       if (!r || !r.replay) { g.toast = { text: "replay not available", until: performance.now() + 2500 }; return; }
-      opts.watch(r.replay, e.name, back);
+      opts.watch(r.replay, e.name, back, e.rid);
     }
     // a page's score rows as links (render.js notes where it drew them, sc.rowRects) for the ones with a replay
     // (and its share icon at the row's right end, which copies a ?replay= link: the author, 2026-11-18; listed first, so a

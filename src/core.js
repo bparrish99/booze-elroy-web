@@ -68,7 +68,7 @@
     const rng = env.rng || Math.random;
     // web edition: leaderboard replays (src/replay.js) re-run a game from its seed and inputs; bump this whenever gameplay
     // changes (anything the golden replay would catch, or a fix to a mode it doesn't cover), so older replays are marked
-    const REPLAY_VERSION = 2; // 2: style picks off the game's RNG (2026-11-18)
+    const REPLAY_VERSION = 3; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19)
     // the Random background / maze style picks (looks only): the game's own RNG unless the web edition hands in another
     // (env.styleRand, 2026-11-18: a viewer's Random styles drew from the game's RNG and threw replays out of step, a
     // phone's replay of a PC's game went its own way); without it, as in the original
@@ -79,6 +79,11 @@
       if (n === undefined) { n = m; m = 1; }
       return m + Math.floor(r * (n - m + 1));
     };
+    const rawRand = rand;
+    // the first intermission's bubbles (looks only): the game's RNG unless the web edition hands in another (env.fxRand,
+    // 2026-11-19: Pro Mode skips the intermission, so its draws threw a replay out when the viewer's Pro Mode differed
+    // from the player's); without it, as in the original
+    const fxRand = (m, n) => (env.fxRand ? env.fxRand(m, n, rand) : rand(m, n));
     const isDown = env.isDown || (() => false);
     const makeSound = env.makeSound || ((name, loop) => new StubSound(loop));
 
@@ -342,7 +347,7 @@
         o.frame = o.frame || 1;
         if (a.speed && frameCounter % a.speed === 0) o.frame = (o.frame % a.frames.length) + 1;
       },
-      emitBlinkyBubbles(x, y) {
+      emitBlinkyBubbles(x, y, rand = rawRand) {
         const n = rand(0, 1);
         for (let i = 0; i < n; i++) {
           const offsetX = (rand() - 0.5) * 8;
@@ -1760,7 +1765,7 @@
               I.blinky.speed = 0.2;
             }
             if (g.modeTimer <= I1.BOOZE_TRANSFORM) {
-              graphics.emitBlinkyBubbles(I.blinky.x, I.blinky.y - 24);
+              graphics.emitBlinkyBubbles(I.blinky.x, I.blinky.y - 24, fxRand);
               graphics.updateParticles();
             }
             const animTimer = I1.START - g.modeTimer;

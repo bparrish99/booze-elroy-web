@@ -42,10 +42,10 @@
       // replays (EXPERIMENTAL): the finished game's, packed, for its score post; and watching one fetched from a board
       replay: (score) => (replay ? replay.packed(score) : null),
       shareReplay: (rid) => shareConfig("?replay=" + rid), // (the share icon on a score with a replay)
-      watch: async (packed, name, back) => {
+      watch: async (packed, name, back, rid) => {
         const data = await replay.unpack(packed);
         if (!data) { toast("replay not available"); return; }
-        audio.unlock(); replay.start(data, name, back);
+        audio.unlock(); replay.start(data, name, back, rid);
       },
       arenaCreated: () => earned(["planner"]),
       arenaWon: () => earned(["dinner"]),
@@ -240,6 +240,9 @@
       isDown: (k) => (replay ? replay.isDown(k, (q) => !!down[q]) : !!down[k]), gameStarting: () => { if (replay) replay.gameStarting(); },
       // (looks: their own randomness, not the game's, so a viewer's Random styles can't throw a replay out; a version 1
       // replay was recorded the old way, drawing from the game's, so it's played back that way)
+      // (the first intermission's bubbles too: Pro Mode skips it; an older replay recorded without Pro Mode drew them from
+      // the game's, so it must again: replay.oldIntermissionRng)
+      fxRand: (m, n, gameRand) => (replay && replay.oldIntermissionRng() ? gameRand(m, n) : m === undefined ? Math.random() : (n === undefined ? 1 : m) + Math.floor(Math.random() * ((n === undefined ? m : n) - (n === undefined ? 1 : m) + 1))),
       styleRand: (m, n, gameRand) => (replay && replay.oldStyleRng() ? gameRand(m, n) : m + Math.floor(Math.random() * (n - m + 1))), playStep: () => { if (replay) replay.playStep((q) => !!down[q]); },
       scenes: { ...LB.scenes, ...ACC.scenes, mina, replayEnd: { name: "replayEnd", start() { replay.finish(); }, update() {}, keypressed() {} } },
       loggedIn: () => !!ACC.name(), addFavorite: () => openFavorite(SK.keyFor(LB.ownSettings())), // (Favorites, Options' Add Favorite)
@@ -332,7 +335,7 @@
         i += 1; ahead = LB.fetchReplay(list[i % list.length]);
         const data = packed && await replay.unpack(packed);
         if (!data) { if (i > list.length * 2) { core.setScene("attract", true); return; } next(); return; } // (all gone: give up)
-        replay.start(data, it.name, (why) => { if (why === "esc") core.setScene("attract", true); else next(); });
+        replay.start(data, it.name, (why) => { if (why === "esc") core.setScene("attract", true); else next(); }, it.rid);
       };
       next();
     }
@@ -393,7 +396,7 @@
           const data = r && r.replay && await replay.unpack(r.replay);
           if (!data) { toast("that replay is gone"); return; }
           const key = SK.keyFor(data.cfg);
-          replay.start(data, r.name || "", () => core.setScene("leaderboard", key ? { key } : undefined));
+          replay.start(data, r.name || "", () => core.setScene("leaderboard", key ? { key } : undefined), rid);
         })();
       }
     }

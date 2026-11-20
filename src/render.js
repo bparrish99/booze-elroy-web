@@ -414,7 +414,8 @@
       }
     }
     // Blinky in his second Elroy, the fastest (the dots left at or under the level's elroy2; not while it's suspended)
-    const elroy2 = () => !!(g.chars && g.chars.blinky && g.level && g.dots && g.dots.length <= g.level.elroy2 && !g.suspendElroy);
+    // (in play only: his intermission bubbles stay the original blue, the author)
+    const elroy2 = () => !!(g.scene.name === "game" && !String(g.mode).startsWith("intermission") && g.chars && g.chars.blinky && g.level && g.dots && g.dots.length <= g.level.elroy2 && !g.suspendElroy);
     function drawBubble(b) {
       const cx = -g.startX + b.x, cy = -g.startY + b.y + 24;
       if (b.age > b.life) { // pop: a little ring of specks flying out

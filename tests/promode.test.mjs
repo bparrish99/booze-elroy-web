@@ -71,3 +71,31 @@ test("Pro Mode never touches the attract demo", () => {
   const m = modes(run(true, true));
   assert.ok(m.includes("dying"), m.join(" "));
 });
+
+// replays (2026-11-19): Pro Mode skips the first intermission, so it mustn't draw the game's random numbers in the web
+// edition (env.fxRand: its bubbles' own); a Pro Mode player's replay watched without it went out of step after board 2.
+// Without the hook (the original, the golden replay) the bubbles still draw from the game's.
+function intermissionDraws(fx) {
+  let s = 7, draws = 0, counting = false;
+  const rng = () => { if (counting) draws++; s = (s * 16807) % 2147483647; return s / 2147483647; };
+  const env = { rng, isDown: () => false, proMode: true };
+  if (fx) env.fxRand = (m) => (m === undefined ? Math.random() : m);
+  const core = create(DATA, env);
+  core.init(); core.g.config.proMode = false;
+  core.g.autoplay = false; core.g.attract = false; core.setScene("game");
+  const g = core.g;
+  let seen = false;
+  for (let f = 0; f < 20000; f++) {
+    if (g.mode === "normal" && !seen) { g.levelNumber = 2; core.mode.setMode("levelComplete"); }
+    counting = g.mode === "intermission1";
+    if (counting) seen = true;
+    if (seen && !counting) break;
+    core.update();
+  }
+  assert.ok(seen, "the intermission played");
+  return draws;
+}
+test("the first intermission draws none of the game's random numbers in the web edition (replays across Pro Mode)", () => {
+  assert.equal(intermissionDraws(true), 0);
+  assert.ok(intermissionDraws(false) > 0, "the original still does");
+});

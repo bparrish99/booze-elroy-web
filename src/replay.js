@@ -18,6 +18,15 @@
     return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
 
+  // replays from before version 3 that need the player's own Pro Mode / Random looks to play back right (Pro Mode skipped
+  // the first intermission, whose bubbles drew from the game's RNG; before version 2 the Random looks did too): the few on
+  // the boards when this came in, each worked out by playing it every way (2026-11-19). While one plays, these are the
+  // viewer's for the moment, theirs back after. Every other old one plays as it is (all three version 2s: Pro Mode)
+  const OLD = {
+    "svzENS4TC7yi": { proMode: false, background: "none", mazeColor: 99 },                         // RJ REPLAY, 50,000
+    "S1Gsyiwb5zaI": { proMode: false, background: "random", mazeColor: 99 },   // PINBACK REPLAY, 24,690
+    "KMe-1b0ilrRX": { background: "random", mazeColor: 99 },                   // PINBACK REPLAY2, 7,510
+  };
   function create(core, opts) {
     const KEYS = Object.keys(core.constants.JOY_DIRS);             // the direction keys the game reads, a bit each
     let rand = Math.random;                                         // the core's RNG (main.js passes rng: () => replay.rng())
@@ -89,11 +98,13 @@
         } catch { return null; }
       },
       /** watch one: its settings borrowed for the game (the viewer's own come back after), the game re-run from its seed */
-      start(data, name, back) {
+      start(data, name, back, rid) {
         rec = null;
         const own = {}; for (const k of CFG) own[k] = core.g.config[k];
-        play = { data, name, back, own, speed: 1, paused: false, old: data.v !== core.REPLAY_VERSION, ki: 0, ei: 0, mask: 0 };
-        Object.assign(core.g.config, data.cfg);
+        const fix = data.v < 3 && OLD[rid] || null;
+        if (fix) for (const k of Object.keys(fix)) own[k] = core.g.config[k];
+        play = { data, name, back, rid, fix, own, speed: 1, paused: false, old: data.v !== core.REPLAY_VERSION, ki: 0, ei: 0, mask: 0 };
+        Object.assign(core.g.config, data.cfg, fix || {});
         core.g.autoplay = false; core.g.attract = false;
         core.setScene("game"); // (env.gameStarting seeds it)
       },
@@ -115,6 +126,10 @@
       speed: () => (play ? (play.paused ? 0 : play.speed) : 1),
       /** a version 1 replay: its style picks drew from the game's RNG (version 2 doesn't), so they must again */
       oldStyleRng: () => !!(play && play.data.v < 2),
+      /** an older replay (before version 3) recorded without Pro Mode: its game drew the first intermission's bubbles from
+       *  the game's RNG, so they must again (Pro Mode skipped them; version 3 never draws them from it). Which ones: the
+       *  few on the boards when this came in, worked out by playing each both ways (2026-11-19); others, as with Pro Mode */
+      oldIntermissionRng: () => !!(play && play.data.v < 3 && play.fix && play.fix.proMode === false),
     };
     return api;
   }
