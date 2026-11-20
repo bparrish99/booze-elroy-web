@@ -52,6 +52,7 @@ try {
     check(i >= 0, label + ": its score went up with a replay");
     await p.evaluate((pro) => { window.__core.g.config.proMode = pro; }, viewerPro); // (the viewer's own Pro Mode: a replay doesn't carry it)
     if (viewerStyle) await p.evaluate((st) => Object.assign(window.__core.g.config, st), viewerStyle); // (and the viewer's own looks)
+    await p.evaluate(() => { window.__core.g.score = 4242; }); // (the viewer's 1UP)
     await p.keyboard.press(String(i + 1 === 10 ? 0 : i + 1)); // (its rank's number watches it)
     check(await p.waitForFunction(() => window.__replay.playing(), null, { timeout: 10000 }).then(() => true, () => false), label + ": the replay plays");
     check(await p.evaluate(() => !!window.__replay.info()), label + ": with its REPLAY label (and the EXPERIMENTAL sticker)");
@@ -61,6 +62,7 @@ try {
     const watched = await p.evaluate(() => window.__lastGameEnd);
     check(JSON.stringify(watched) === JSON.stringify(played), label + ": the replay ends exactly as the game did " + JSON.stringify(played) + (JSON.stringify(watched) === JSON.stringify(played) ? "" : " vs " + JSON.stringify(watched)));
     check(await p.evaluate(() => window.__core.g.scene.name === "leaderboard"), label + ": and comes back to the leaderboard");
+    check(await p.evaluate(() => window.__core.g.score === 4242), label + ": with the viewer's own 1UP back");
     const rid = await p.evaluate((n) => window.__core.g.scene.board().entries.find((e) => e.name === n).rid, label);
     const key = await p.evaluate(() => window.__core.g.scene.key);
     await ctx.close();

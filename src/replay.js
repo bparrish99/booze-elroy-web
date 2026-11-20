@@ -103,7 +103,10 @@
         const own = {}; for (const k of CFG) own[k] = core.g.config[k];
         const fix = data.v < 3 && OLD[rid] || null;
         if (fix) for (const k of Object.keys(fix)) own[k] = core.g.config[k];
-        play = { data, name, back, rid, fix, own, speed: 1, paused: false, old: data.v !== core.REPLAY_VERSION, ki: 0, ei: 0, mask: 0 };
+        // (the header's 1UP: the replay's while it plays, the viewer's back after; the author, 2026-11-19. The high score
+        // needs nothing: the page a replay goes back to, a leaderboard or the title, sets its own)
+        const shown = { score: core.g.score };
+        play = { data, name, back, rid, fix, own, shown, speed: 1, paused: false, old: data.v !== core.REPLAY_VERSION, ki: 0, ei: 0, mask: 0 };
         Object.assign(core.g.config, data.cfg, fix || {});
         core.g.autoplay = false; core.g.attract = false;
         core.setScene("game"); // (env.gameStarting seeds it)
@@ -113,6 +116,7 @@
         if (!play) return;
         const p = play; play = null; rand = Math.random;
         Object.assign(core.g.config, p.own);
+        core.g.score = p.shown.score;
         for (const k of Object.keys(core.g.sounds)) if (core.g.sounds[k].isPlaying()) core.g.sounds[k].stop();
         if (p.back) p.back(reason || "end");
       },
