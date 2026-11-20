@@ -1336,7 +1336,7 @@
       else if (scene === "nameEntry") drawNameEntry();
       else if (scene === "profile") drawProfile();
       else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, GW, GH); print(scene, 2, 2, 0); }
-      if (raveOn()) drawRave();
+      if (raveOn()) drawRave(); else confetti = []; // (none kept through a stretch without the lights, an intermission, to pop up after it)
       if (shaking) { ctx.restore(); mctx.restore(); }
       drawToast();
     }
