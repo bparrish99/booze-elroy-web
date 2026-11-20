@@ -400,6 +400,14 @@ try {
   const log = await p.evaluate(() => document.getElementById("log").textContent);
   check(/PINBACK\s*created an account/.test(log) && /earned SPENT A QUARTER/.test(log) && /logged in/.test(log) && /played blindfold Haunted {2}sonar Terror {2}speed Jetpack \(first game today\)/.test(log) && /played in the arena TEST ARENA: classic Pac-Man/.test(log) && /placed #1 with 31,230 on classic Pac-Man/.test(log), "activity page: signups, logins, scores, achievements (by name) and games");
   await shot("acc9-activity");
+  // a logged-out player's game (the author, 2026-11-20): logged as "anonymous", and "Hide anonymous" hides those
+  await p.evaluate(() => fetch("/api/account/anonplayed", { method: "POST", body: JSON.stringify({ settings: "ghosts 7", arena: "" }) }));
+  await p.click("#reload"); await p.waitForTimeout(600);
+  check(/anonymous\s*played ghosts 7 \(not logged in\)/.test(await p.evaluate(() => document.getElementById("log").textContent)), "activity page: a logged-out player's game, as \"anonymous\"");
+  await p.click("#anon");
+  check(await p.evaluate(() => !/not logged in/.test(document.getElementById("log").textContent) && document.getElementById("anon").textContent === "Show anonymous"), "activity page: \"Hide anonymous\" hides logged-out players");
+  await p.click("#anon");
+  check(/played ghosts 7/.test(await p.evaluate(() => document.getElementById("log").textContent)), "activity page: and \"Show anonymous\" brings them back");
   // auto-refresh: a new signup shows up (lit), and the "updated" line says it's live
   await p.evaluate(() => fetch("/api/account/signup", { method: "POST", body: JSON.stringify({ name: "night owl", password: "hoot" }) }));
   await p.evaluate(() => window.__refresh());

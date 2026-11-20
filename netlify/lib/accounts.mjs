@@ -10,6 +10,7 @@
 //        remembered (once per board, never forgotten even if the score is pushed off later); count = boards placed on
 //        so far. With rank and score it's logged too (settings: the client's one-line summary of the board)
 //   POST /api/account/placed { arena, rank, score } (Bearer) -> { ok }   a top-10 score in an arena: only logged
+//   POST /api/account/anonplayed { settings?, arena? } -> {}   a logged-out player's game started (the activity log)
 //   POST /api/account/played { day: "YYYY-MM-DD", settings?, arena? } (Bearer) -> { streak }   a real game started on
 //        that day (the player's own calendar day, within a day of the server's); streak = days in a row ending on that
 //        day. Every one is logged (settings: the client's one-line summary; arena: its name when it's an arena game)
@@ -231,6 +232,17 @@ export async function handleAccounts(req, store, opts = {}) {
     if (req.method !== "GET") return json(405, { error: "method not allowed" });
     const s = await session();
     return s ? json(200, { name: s.name }) : json(401, { error: "not logged in" });
+  }
+  // a logged-out player's game starting (the author, 2026-11-20): logged as "anongame" under "anonymous" (lower case, so
+  // never an account's name), detail [settings, arena]; a logged-in request is left to /played
+  if (action === "anonplayed") {
+    if (req.method !== "POST") return json(405, { error: "method not allowed" });
+    if (await session()) return json(200, {});
+    const body = await readBody(req);
+    if (!body) return json(400, { error: "bad request" });
+    const text = (v) => (typeof v === "string" ? v.slice(0, 160) : "");
+    await logEvent(store, "anongame", "anonymous", JSON.stringify([text(body.settings), text(body.arena)]), opts.now ? opts.now() : Date.now());
+    return json(200, {});
   }
   if (action === "played") {
     if (req.method !== "POST") return json(405, { error: "method not allowed" });

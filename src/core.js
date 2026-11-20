@@ -68,7 +68,8 @@
     const rng = env.rng || Math.random;
     // web edition: leaderboard replays (src/replay.js) re-run a game from its seed and inputs; bump this whenever gameplay
     // changes (anything the golden replay would catch, or a fix to a mode it doesn't cover), so older replays are marked
-    const REPLAY_VERSION = 3; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19)
+    const REPLAY_VERSION = 4; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19);
+    // 4: a death on the step that clears the board goes straight to the board done (2026-11-20)
     // the Random background / maze style picks (looks only): the game's own RNG unless the web edition hands in another
     // (env.styleRand, 2026-11-18: a viewer's Random styles drew from the game's RNG and threw replays out of step, a
     // phone's replay of a PC's game went its own way); without it, as in the original
@@ -1159,9 +1160,16 @@
             g.chars.pac.frame = 1;
             if (g.config.ability === RANDOM && ((g.newLevel && !g.randomFresh) || !g.randomAbility)) pickRandomAbility(); // Random: a new board's pick
             g.randomFresh = false;
+            const died = !g.newLevel;
             if (g.newLevel) g.newLevel = false; else g.lives = g.lives - 1;
             if (g.lives < 0) mode.setMode("gameover");
-            else {
+            // web edition (the author, 2026-11-20): caught on the step that cleared the board (a Suck taking the last dots
+            // and a ghost that isn't blue): after the death, straight to the board done, no READY and no frame of play on
+            // an empty board first (an older replay plays it the old way: env.oldClearedDeath)
+            else if (died && g.dots.length === 0 && g.powers.length === 0 && !(env.oldClearedDeath && env.oldClearedDeath())) {
+              characters.reset();
+              mode.setMode("levelComplete");
+            } else {
               if (pro()) g.modeTimer = PRO_READY;
               g.fruitTimer = false; g.fruitScoreTimer = false;
               g.state = { showPac: true, showGhosts: true, showReady: true };

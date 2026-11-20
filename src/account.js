@@ -141,7 +141,7 @@
     /** a real game started on `day` (the player's "YYYY-MM-DD"), with these settings (a one-line summary) and in this
      *  arena (its name, or null) -> days in a row played (null: unknown). Every game (the activity page logs them) */
     async function playedOn(day, settings, arena) {
-      if (!me) return null;
+      if (!me) { call("anonplayed", { settings, arena: arena || "" }); return null; } // (logged out: just the activity log)
       const r = await (saving = saving.then(() => call("played", { day, settings, arena: arena || "" })));
       return r.ok && r.data ? r.data.streak : null;
     }

@@ -130,6 +130,8 @@
       speed: () => (play ? (play.paused ? 0 : play.speed) : 1),
       /** a version 1 replay: its style picks drew from the game's RNG (version 2 doesn't), so they must again */
       oldStyleRng: () => !!(play && play.data.v < 2),
+      /** a replay recorded before version v is playing */
+      olderThan: (v) => !!(play && play.data.v < v),
       /** an older replay (before version 3) recorded without Pro Mode: its game drew the first intermission's bubbles from
        *  the game's RNG, so they must again (Pro Mode skipped them; version 3 never draws them from it). Which ones: the
        *  few on the boards when this came in, worked out by playing each both ways (2026-11-19); others, as with Pro Mode */

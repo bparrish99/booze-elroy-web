@@ -456,6 +456,18 @@ test("accounts: the activity log (signups, logins, achievements, every game with
   for (let i = 1; i < r.data.events.length; i++) assert.ok(r.data.events[i - 1].at >= r.data.events[i].at, "newest first");
 });
 
+test("accounts: a logged-out player's game is logged as \"anonymous\" (a logged-in one only once, by /played)", async () => {
+  const before = (await acct("GET", "activity", undefined, null, { "x-admin-key": "correct horse" })).data.events.filter((e) => e.type === "anongame").length;
+  assert.equal((await acct("POST", "anonplayed", { settings: "ghosts 6", arena: "" })).status, 200);
+  assert.equal((await acct("POST", "anonplayed", { settings: "classic Pac-Man", arena: "SAT NIGHT" })).status, 200);
+  const { token } = (await acct("POST", "signup", { name: "not anon", password: "pw12" })).data;
+  await acct("POST", "anonplayed", { settings: "x" }, token); // logged in: left to /played
+  const ev = (await acct("GET", "activity", undefined, null, { "x-admin-key": "correct horse" })).data.events.filter((e) => e.type === "anongame");
+  assert.equal(ev.length, before + 2);
+  assert.ok(ev.every((e) => e.name === "anonymous"));
+  assert.deepEqual(ev.slice(0, 2).map((e) => JSON.parse(e.detail)).sort(), [["classic Pac-Man", "SAT NIGHT"], ["ghosts 6", ""]]);
+});
+
 test("accounts: favorites: named settings, replaced by name, at most 15, removable, own login only", async () => {
   const { token } = (await acct("POST", "signup", { name: "fav fan", password: "pw12" })).data;
   const B1 = "pac.0.f.f.f.3.1.f.0.4.t.f.f", B2 = "booze.0.f.f.f.3.1.6.0.4.t.f.f";

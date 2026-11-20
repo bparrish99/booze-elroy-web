@@ -113,3 +113,34 @@ test("Vacuum: the charge comes back at READY (a new life)", () => {
 });
 
 function T(v) { return v !== false && v !== null && v !== undefined; }
+
+// caught on the step that clears the board (a Suck taking the last dots and a ghost that isn't blue; the author,
+// 2026-11-20): the death, then straight to the board done and the next board, no READY / frame of play on an empty board
+// first; on the last life, game over
+function clearedDeath(pro, lives) {
+  const { core, g, pX, pY } = start();
+  g.config.proMode = pro;
+  g.dots = g.dots.filter((d) => dist2(d, pX, pY) <= 36); g.powers = []; // only dots the Suck reaches are left
+  at(g.chars.blinky, pX + 3, pY);
+  g.lives = lives;
+  const level = g.levelNumber;
+  core.keypressed("space"); settle(core);
+  const modes = [];
+  for (let f = 0; f < 3000 && g.scene.name === "game" && g.levelNumber === level; f++) { core.update(); if (modes[modes.length - 1] !== g.mode) modes.push(g.mode); }
+  return { g, modes, level };
+}
+for (const pro of [false, true]) {
+  test("Suck: caught as it clears the board: the death, then the board done (Pro Mode " + (pro ? "on" : "off") + ")", () => {
+    const { g, modes, level } = clearedDeath(pro, 2);
+    const i = modes.indexOf("caught"), j = modes.indexOf("levelComplete");
+    assert.ok(i >= 0 && j > i, modes.join(" "));
+    assert.ok(!modes.slice(i, j).includes("normal"), "no play before the board done: " + modes.join(" "));
+    if (!pro) assert.ok(modes.slice(i, j).includes("dying"), "the death animation: " + modes.join(" "));
+    assert.equal(g.levelNumber, level + 1, "onto the next board");
+    assert.equal(g.lives, 1, "a life lost");
+  });
+}
+test("Suck: caught as it clears the board on the last life: game over", () => {
+  const { modes } = clearedDeath(false, 0);
+  assert.ok(modes.includes("gameover") && !modes.includes("levelComplete"), modes.join(" "));
+});

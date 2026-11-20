@@ -242,6 +242,7 @@
       // replay was recorded the old way, drawing from the game's, so it's played back that way)
       // (the first intermission's bubbles too: Pro Mode skips it; an older replay recorded without Pro Mode drew them from
       // the game's, so it must again: replay.oldIntermissionRng)
+      oldClearedDeath: () => !!(replay && replay.olderThan(4)), // (a replay from before that played it the old way)
       fxRand: (m, n, gameRand) => (replay && replay.oldIntermissionRng() ? gameRand(m, n) : m === undefined ? Math.random() : (n === undefined ? 1 : m) + Math.floor(Math.random() * ((n === undefined ? m : n) - (n === undefined ? 1 : m) + 1))),
       styleRand: (m, n, gameRand) => (replay && replay.oldStyleRng() ? gameRand(m, n) : m + Math.floor(Math.random() * (n - m + 1))), playStep: () => { if (replay) replay.playStep((q) => !!down[q]); },
       scenes: { ...LB.scenes, ...ACC.scenes, mina, replayEnd: { name: "replayEnd", start() { replay.finish(); }, update() {}, keypressed() {} } },
