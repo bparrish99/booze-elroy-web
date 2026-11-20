@@ -139,13 +139,17 @@
     let rave = null;
     // darkstar: the fruit dances too, on the offbeat (the author, 2026-11-17); one hop for every place it's drawn (Lantern's
     // faded copy in the dark stood still at first)
-    const fruitHop = () => (raveOn() ? -Math.round(2.5 * Math.exp(-((rave.beat() + 0.5) % 1) * 4)) : 0);
+    // the beat the pictures follow: the music's, held still while the game is paused (the dancing, lights, lasers, bokeh
+    // and all stop with it; the author, 2026-11-19), back in time with the music when play goes on
+    let heldBeat = null;
+    const beat = () => (g.paused && heldBeat !== null ? heldBeat : (heldBeat = rave.beat()));
+    const fruitHop = () => (raveOn() ? -Math.round(2.5 * Math.exp(-((beat() + 0.5) % 1) * 4)) : 0);
     const BOKEH = Array.from({ length: 40 }, (_, i) => ({ // (fixed, so the same circles every time: hashed from i; 22 at first, "add more")
       x: (i * 89) % GW, y: (i * 137) % GH, r: 4 + ((i * 53) % 36), h: (i * 47) % 360, a: 0.1 + ((i * 31) % 10) / 70, /* (0.07-0.16 at first; boosted, the author) */
       ax: 20 + ((i * 17) % 40), ay: 20 + ((i * 29) % 40), fx: 0.5 + ((i * 7) % 10) / 10, fy: 0.4 + ((i * 11) % 10) / 10, p: i * 1.7 }));
     // (off for every intermission, not just Mina's film: the author, 2026-11-17)
     const raveOn = () => !!(rave && rave.on()) && g.scene.name !== "mina" && !/intermission/i.test(g.mode || "");
-    const raveBeat = () => { const b = rave.beat(), ph = b % 1; return { b, ph, kick: Math.exp(-ph * 5), bar: Math.floor(b / 4) }; };
+    const raveBeat = () => { const b = beat(), ph = b % 1; return { b, ph, kick: Math.exp(-ph * 5), bar: Math.floor(b / 4) }; };
     const HUES = [300, 190, 55, 130, 20, 260];                         // magenta, cyan, yellow, green, orange, violet
     // a colour on the rainbow (h degrees) as a tint (0-1 rgb), for the dots, energizers and letters that pulse
     function hueTint(h, l) {
@@ -208,7 +212,7 @@
       const rv = raveOn() && (o.target || (g.chars && o === g.chars.pac) || o === g.attractPac) && !o.dead;
       if (rv) { // everybody dances: the ghosts hop to the beat, every other one on the offbeat, Pac-Man with the first lot
         const idx = o.target ? Math.max(0, ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"].findIndex((n) => (g.chars && g.chars[n] === o) || (g.ghosts && g.ghosts[n] === o))) : 0;
-        const ph = (rave.beat() + (idx % 2) * 0.5) % 1; hop = -Math.round(2.5 * Math.exp(-ph * 4));
+        const ph = (beat() + (idx % 2) * 0.5) % 1; hop = -Math.round(2.5 * Math.exp(-ph * 4));
       }
       // the Pause ability's freeze: every ghost (eyes and the ones in the pen too) shakes like crazy, straining to move, but
       // never more than a pixel from where it really is: a new offset every frame (the author, 2026-11-18; drawing only)
@@ -402,7 +406,7 @@
     const seenBubbles = new WeakSet(), bubbles = [];
     let bubbleCount = 0, bubbleT = 0, bubbleSource = null;
     function updateBubbles() {
-      const now = performance.now(), dt = bubbleT ? Math.min(3, (now - bubbleT) / 16.67) : 1; bubbleT = now;
+      const now = performance.now(), dt = g.paused ? 0 : bubbleT ? Math.min(3, (now - bubbleT) / 16.67) : 1; bubbleT = now; // (held while paused)
       for (let i = bubbles.length - 1; i >= 0; i--) {
         const b = bubbles[i];
         b.age += dt;
@@ -1319,13 +1323,13 @@
       masking = g.config.crtEffect === "vector";
       const scene = g.scene.name;
       // darkstar: an energizer shakes the whole picture for a moment, a few pixels at first, settling
-      const shaking = shake > 0 && raveOn();
+      const shaking = shake > 0 && raveOn() && !g.paused; // (held while paused)
       if (shaking) {
         const amp = 4 * shake / SHAKE, dx = Math.round((Math.random() * 2 - 1) * amp), dy = Math.round((Math.random() * 2 - 1) * amp);
         ctx.fillStyle = "#000"; ctx.fillRect(0, 0, GW, GH);
         for (const c of [ctx, mctx]) { c.save(); c.translate(dx, dy); }
         shake -= 1;
-      } else shake = 0;
+      } else if (!g.paused) shake = 0;
       if (scene === "game") drawGame();
       else if (scene === "attract") drawAttract();
       else if (scene === "options") drawOptions();
@@ -1378,10 +1382,10 @@
         lastFright = typeof g.frightened === "number" ? g.frightened : 0;
       }
       lastMode = g.mode;
-      confetti = confetti.filter((c) => (c.life -= 1) > 0);
+      if (!g.paused) confetti = confetti.filter((c) => (c.life -= 1) > 0); // (stopped in mid-air while paused)
       ctx.save(); ctx.globalCompositeOperation = "lighter"; // (the colours glow: brighter, more intense, the author)
       for (const c of confetti) {
-        c.vy += 0.06; c.vx *= 0.99; c.x += c.vx; c.y += c.vy;
+        if (!g.paused) { c.vy += 0.06; c.vx *= 0.99; c.x += c.vx; c.y += c.vy; }
         ctx.fillStyle = `hsl(${c.c},100%,${62 + 18 * Math.sin(c.life * 0.5)}%)`;
         ctx.fillRect(Math.round(c.x), Math.round(c.y), Math.sin(c.life * 0.4) > 0 ? 2 : 1, 1);
       }
