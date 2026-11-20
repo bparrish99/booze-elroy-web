@@ -363,6 +363,10 @@ try {
     check(await p.evaluate(() => JSON.stringify(window.__core.g.scene.summaryParts(28))) === JSON.stringify([[["", "pinback's pick"]], [["", "SIX OF THEM", 6]]]), "a pick's leaderboard: \"pinback's pick\" and its name");
     await p.evaluate(() => { const c = window.__core; c.g.scene.key = window.BoozeScoreKey.keyFor(c.g.defaultConfig); });
     check(await p.evaluate(() => JSON.stringify(window.__core.g.scene.summaryParts(28))) === JSON.stringify([[["", "classic Pac-Man"]]]), "the Classic board stays \"classic Pac-Man\"");
+    // and an arena with a pick's settings, the same (the author, 2026-11-20)
+    await p.evaluate(() => { const c = window.__core; c.setScene("arena", { arena: { id: "abcdefghij", name: "PICK ARENA", board: window.BoozeScoreKey.keyFor({ ...c.g.defaultConfig, ghostCount: 6, mazepack: "mspac" }), createdAt: Date.now(), endsAt: Date.now() + 3600000, leader: null } }); });
+    await p.waitForTimeout(500);
+    check(await p.evaluate(() => window.__core.g.scene.name === "arena" && JSON.stringify(window.__core.g.scene.summaryParts(28)) === JSON.stringify([[["", "pinback's pick"]], [["", "SIX OF THEM", 6]]])), "an arena of a pick's settings: \"pinback's pick\" and its name");
     await p.evaluate(() => window.__core.setScene("attract"));
     await p.evaluate(() => { const c = window.__core; c.setScene("favorites"); });
     await p.waitForFunction(() => window.__core.g.scene.menu.some((i) => i.text === "SIX OF THEM"), null, { timeout: 5000 });

@@ -167,6 +167,13 @@
     }
     const partsText = (line) => line.map(([l, v]) => (l ? l + " " : "") + v).join("  ");
     function summary(width, cfg) { return summaryParts(width, cfg).map(partsText); }
+    // a board's settings, or the pick's name when it's one of Pinback's Picks (leaderboard and arena pages; not Classic
+    // Pac-Man, which stays "classic Pac-Man" whatever the pick is called)
+    function boardParts(width, key) {
+      const pick = key !== SK.keyFor(g.defaultConfig) && picksGet().list.find((f) => f.board === key);
+      if (pick) return [[["", "pinback's pick"]], [["", pick.name, 6]]];
+      return summaryParts(width, SK.configFor(key));
+    }
 
     // ---------------------------------------------------------------- arenas (list, boards, the one being played)
     let clockOffset = 0; // server clock - this browser's clock
@@ -372,11 +379,7 @@
       summary(width) { return summary(width, SK.configFor(this.key)); },
       // a board that's one of Pinback's Picks shows the pick's name instead of its settings (the author, 2026-11-18), but
       // not Classic Pac-Man, which stays "classic Pac-Man" whatever the pick is called
-      summaryParts(width) {
-        const pick = this.key !== SK.keyFor(g.defaultConfig) && picksGet().list.find((f) => f.board === this.key);
-        if (pick) return [[["", "pinback's pick"]], [["", pick.name, 6]]];
-        return summaryParts(width, SK.configFor(this.key));
-      },
+      summaryParts(width) { return boardParts(width, this.key); },
       escape() { lbBack(); }, // (Esc does what Back does: the picks after a pick's game, else the title)
       keypressed(key) {
         const bk = this.key;
@@ -497,6 +500,7 @@
       start(o) {
         o = o || {};
         if (o.arena) arena = o.arena;
+        if (opts.picks) opts.picks.load(); // (to name a pick's board)
         this.highlight = o.highlight || null;
         this.message = o.message || null;
         this.fc = 0;
@@ -526,7 +530,7 @@
       title() { return arena.name; },
       subtitle() { return arenaOpen(arena) ? "ends in " + timeLeft(arena.endsAt - serverNow()) : "finished"; },
       summary(width) { return summary(width, SK.configFor(arena.board)); },
-      summaryParts(width) { return summaryParts(width, SK.configFor(arena.board)); },
+      summaryParts(width) { return boardParts(width, arena.board); }, // (a pick's name, like the leaderboard page: the author, 2026-11-20)
       board() { return arenaBoards.get(arena.id) || { status: "loading", entries: [] }; },
       emptyText(b) { return b.status === "loading" ? "loading" : b.status === "gone" ? "arena not found" : b.status === "error" ? "try again soon" : "no scores yet"; },
       keypressed(key) {
