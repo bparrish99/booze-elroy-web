@@ -20,6 +20,27 @@
   const DELTAS = [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }];
   const JOY_DIRS = { down: 1, right: 0, z: 1, left: 2, up: 3, a: 2, w: 3, d: 0, s: 1, q: 3 };
   const FRUIT_FRIGHT = [6, 6, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
+  // ---- EXACT (the side project, 2026-11-20): the arcade's own numbers, read from the ROMs, used only when env.exact()
+  // is on (never for the game booze-elroy.com plays). The arcade's speed sets (its table at 0x330F; levels use sets 3-6):
+  // speeds as the fractions this game uses, and the scatter / chase switch frames
+  const EXACT_SETS = {
+    3: { pacSpeed: 0.8, pacFrightenedSpeed: 0.9, elroy2Speed: 0.85, elroy1Speed: 0.8, ghostSpeed: 0.75, frightenedSpeed: 0.5, tunnelSpeed: 0.4, switch: [420, 1620, 2040, 3240, 3540, 4740, 5040] },
+    4: { pacSpeed: 0.9, pacFrightenedSpeed: 0.95, elroy2Speed: 0.95, elroy1Speed: 0.9, ghostSpeed: 0.85, frightenedSpeed: 0.55, tunnelSpeed: 0.45, switch: [420, 1620, 2040, 3240, 3540, 65534, 65535] },
+    5: { pacSpeed: 1, pacFrightenedSpeed: 1, elroy2Speed: 1.05, elroy1Speed: 1, ghostSpeed: 0.95, frightenedSpeed: 0.6, tunnelSpeed: 0.5, switch: [300, 1500, 1800, 3000, 3300, 65534, 65535] },
+    6: { pacSpeed: 0.9, pacFrightenedSpeed: 0.9, elroy2Speed: 1.05, elroy1Speed: 1, ghostSpeed: 0.95, frightenedSpeed: 0.45, tunnelSpeed: 0.5, switch: [300, 1500, 1800, 3000, 3300, 65534, 65535] },
+  };
+  // Pac-Man Plus's level table (decrypted from pacplus.zip, 7 bytes a level at 0x07AC): [speed set, pen dot limits
+  // (pinky, inky, clyde), Elroy dots (1, 2), scare time s, no-dot timer frames, the fruit's scare time s]; level 21 on
+  const EXACT_PLUS = [
+    [5, 0, 0, 50, 30, 15, 4, 240, 6], [5, 0, 0, 0, 40, 20, 3, 240, 6], [5, 0, 0, 0, 50, 25, 2, 240, 5], [5, 0, 0, 0, 50, 25, 2, 240, 4],
+    [5, 0, 0, 0, 60, 30, 2, 180, 3], [5, 0, 0, 0, 60, 30, 4, 180, 5], [5, 0, 0, 0, 80, 40, 2, 180, 3], [5, 0, 0, 0, 80, 40, 1, 180, 3],
+    [5, 0, 0, 0, 80, 40, 1, 180, 2], [5, 0, 0, 0, 100, 50, 2, 180, 4], [5, 0, 0, 0, 100, 50, 1, 180, 2], [5, 0, 0, 0, 100, 50, 0, 180, 2],
+    [5, 0, 0, 0, 100, 50, 0, 180, 2], [5, 0, 0, 0, 80, 40, 2, 180, 4], [5, 0, 0, 0, 100, 50, 0, 180, 2], [6, 0, 0, 0, 100, 50, 1, 180, 2],
+    [6, 0, 0, 0, 120, 60, 0, 180, 2], [6, 0, 0, 0, 120, 60, 2, 180, 2], [6, 0, 0, 0, 120, 60, 0, 180, 1], [6, 0, 0, 0, 120, 60, 0, 180, 1],
+    [6, 0, 0, 0, 120, 60, 0, 180, 0],
+  ];
+  // the speed set a level of this game's own tables runs at (by its speeds)
+  const exactSetOf = (l) => (l.ghostSpeed <= 0.75 ? 3 : l.ghostSpeed <= 0.85 ? 4 : l.pacSpeed >= 1 ? 5 : 6);
   const BACKGROUND_OPTIONS = ["none", "stars", "beach", "arcade", "forest", "city", "canyon", "clouds", "planets", "abstract",
     "wave1", "wave2", "lines", "retro", "tan", "aqua", "green", "blue", "purple", "pac1", "pac2", "pac3"]; // (purple: web edition, the author, 2026-11-16)
   const SOUND_NAMES = ["thrust", "crash", "bonk", "ping", "reload", "opening", "wakka1", "wakka2", "fruit", "died", "scared", "ateGhost", "siren1", "siren2", "siren3",
@@ -169,6 +190,8 @@
     // the opening jingle, the death animation, the board-complete flashing and the intermissions, and READY is short.
     // Not the attract demo; no gameplay changes (none of it runs during play)
     const PRO_READY = 45, PRO_BOARD_DONE = 45;
+    // EXACT (the side project): the arcade-exact switch; off, this is the author's game, untouched (the golden replay)
+    const exact = () => !!(env.exact && env.exact());
     const pro = () => !g.attract && ((!!env.proMode && g.config.proMode === true) || !!(env.testMode && env.testMode()));
 
     for (const name of SOUND_NAMES) g.sounds[name] = makeSound(name, LOOPING.has(name));
@@ -257,6 +280,19 @@
           lvl = currentLevels[defaultLevel];
           lvl.fruitFrightenedDuration = FRUIT_FRIGHT[FRUIT_FRIGHT.length - 1] * 60;
         }
+        if (exact()) lvl = levels.exactLevel(lvl, levelNumber);
+        return lvl;
+      },
+      // EXACT: a level with the arcade's numbers (a copy: this game's own tables stay as they are). The scatter / chase
+      // switches are the ROM's for the level's speed set (level 1's last is 5040, not 4200); on the Plus difficulty, the
+      // whole level is Pac-Man Plus's, its fruit scare time too
+      exactLevel(own, n) {
+        const lvl = { ...own };
+        if (g.config.difficulty === 2) {
+          const [set, pc, ic, cc, e1, e2, fr, starv, fruit] = EXACT_PLUS[Math.min(n, 21) - 1];
+          Object.assign(lvl, EXACT_SETS[set], { pinkyCounter: pc, inkyCounter: ic, clydeCounter: cc, elroy1: e1, elroy2: e2, frightened: fr * 60, starvation: starv, fruitFrightenedDuration: fruit * 60 });
+        }
+        lvl.switch = EXACT_SETS[g.config.difficulty === 2 ? EXACT_PLUS[Math.min(n, 21) - 1][0] : exactSetOf(own)].switch;
         return lvl;
       },
       startLevel() {
@@ -1054,8 +1090,12 @@
       const cm = getCurrentMaze();
       const [xTile, xOff, yTile, yOff] = cm.getLoc(c);
       if (c.housing) {
-        if (yOff === 0) { c.dir = 1; c.facing = 1; }
-        if (yOff === 7) { c.dir = 3; c.facing = 3; }
+        if (exact()) { // EXACT: the arcade's bob runs 4 pixels either side of the house's middle, turning on whole tiles
+          if (yOff === 0) { if (yTile <= cm.houseCenter.y) { c.dir = 1; c.facing = 1; } else { c.dir = 3; c.facing = 3; } }
+        } else {
+          if (yOff === 0) { c.dir = 1; c.facing = 1; }
+          if (yOff === 7) { c.dir = 3; c.facing = 3; }
+        }
       } else if (c.leaving) {
         const hc = cm.houseCenter;
         if (xTile < hc.x) c.dir = 0;
@@ -1092,8 +1132,8 @@
     };
 
     logic.getGhostSpeed = (c) => {
-      if (c.housing) return 0.35;
-      if (c.leaving) return 0.35;
+      if (c.housing) return exact() ? 0.4 : 0.35; // EXACT: half a pixel a frame, as the arcade
+      if (c.leaving) return exact() ? 0.4 : 0.35;
       if (c.dead) return 1.6;
       if (c.elroy && !g.suspendElroy) {
         if (g.dots.length <= g.level.elroy2) return g.level.elroy2Speed;
@@ -1735,6 +1775,7 @@
 
     const forceLeave = (char) => {
       char.leaving = true; char.housing = false; char.speed = logic.getGhostSpeed(char);
+      if (exact()) logic.turn(char); // EXACT: a released ghost heads for the door at once (not one more step of its bob)
       if (char === g.chars.clyde && g.suspendElroy) g.suspendElroy = false;
     };
 

@@ -51,7 +51,7 @@ export function coreTrace(joy, frames, cfg = {}) {
   const create = loadCore(process.env.CORE || join(ROOT, "src/core.js"));
   let held = null, s = 1;
   const rng = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-  const core = create(DATA, { rng, isDown: (k) => k === held });
+  const core = create(DATA, { rng, isDown: (k) => k === held, exact: () => !!process.env.EXACT }); // (EXACT=1: the side project's switch)
   core.init(); Object.assign(core.g.config, cfg);
   core.g.autoplay = false; core.g.attract = false; core.setScene("game");
   const g = core.g;
