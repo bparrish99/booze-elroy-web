@@ -1108,10 +1108,12 @@
                 if (anyFrightened) g.sounds.scared.play(); else playSiren();
               }
               c.entering = false;
-              // (EXACT: an eaten ghost back home leaves again at once, whatever its dot counter: those only hold ghosts starting a life in the house)
-              if (!T(c.leavingPreference) || exact()) c.leaving = true; else c.housing = true;
+              if (!T(c.leavingPreference)) c.leaving = true; else c.housing = true;
               c.speed = logic.getGhostSpeed(c);
-              if (exact()) logic.turn(c); // EXACT: revived, it sets off the right way at once (as a released ghost does)
+              // EXACT: revived, it's under the house's release rules again, checked on the spot (its own counter already met: out
+              // at once; the shared counter after a death: it waits its turn), and sets off the right way at once
+              if (exact() && c.housing && !T(g.globalCounter) && !(c.dotCounter > 0)) forceLeave(c);
+              else if (exact()) logic.turn(c);
             }
             if (c.leaving && newY === c.houseY - 3 && newYOff === CENTER) {
               c.dir = c.leavesRight ? 0 : 2;
@@ -2050,7 +2052,9 @@
         // EXACT: the arcade's free-running divider (frames mod 6: a tenth of a second rolls over at 0), ticking every frame as
         // its interrupt does; it times the arcade's timed tasks (the eat-a-ghost pause). Its phase at a game's start is whatever
         // it is (the arcade's depends on when START was pressed); the harness can set it to the ROM's (env.exactDivSync)
-        if (exact()) { g.exactDiv = ((g.exactDiv || 0) + 1) % 6; g.exactF = ((g.exactF || 0) + 1) & 255; } // (and its frame counter: the house bob steps on odd frames)
+        if (exact()) { g.exactDiv = ((g.exactDiv || 0) + 1) % 6; g.exactF = ((g.exactF || 0) + 1) & 255; } // (and its frame counter)
+        // EXACT: the no-dot timer keeps counting through the pause after eating a ghost (in play: counted after the ticks, below)
+        if (exact() && g.scene.name === "game" && g.mode === "ateGhost") g.starvation = (g.starvation || 0) + 1;
         if (g.vacuumFx > 0) g.vacuumFx -= 1; // the Vacuum's swirl (render.js)
         if (g.pushFx > 0) g.pushFx -= 1;     // the Push's rings
         mode.handle();
@@ -2129,6 +2133,7 @@
             for (const name of charKeys()) { const ch = g.chars[name]; if (ch.target && (ch.housing || ch.leaving) && !(frozen && ch !== g.chars.pac)) updateCharacterMovement(ch); }
             g.exactHousePass = false;
           }
+          // EXACT: the no-dot timer stands still while Pac-Man is paused (a dot, an energizer): it counts a frame he ends unpaused
           if (exact() && !(g.chars.pac.skipCounter > 0)) g.starvation = (g.starvation || 0) + 1;
           if (exact()) releaseGhosts("timer");
           if (T(g.fruitTimer)) {
