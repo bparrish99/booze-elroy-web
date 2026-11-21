@@ -316,14 +316,14 @@
       exactPatterns() {
         const P = EXACT_PATTERNS[g.level.exactSet || 3];
         g.exactPat = {};
-        for (const name of charKeys()) { const o = {}; PATTERN_KINDS.forEach((k, i) => { o[k] = patternValue(P[i]); }); g.exactPat[name] = o; }
+        for (const name of charKeys()) { const o = { eyes: 0xffffffff }; PATTERN_KINDS.forEach((k, i) => { o[k] = patternValue(P[i]); }); g.exactPat[name] = o; }
       },
       startLevel() {
         const musicList = Object.keys(g.music);
         const idx = rand(1, musicList.length);
         g.levelMusic = g.music[musicList[idx - 1]];
         g.level = levels.getLevel(g.levelNumber);
-        g.exactPatLevel = null; // EXACT: the level's patterns copied in afresh
+        g.exactPatLevel = null; g.exactHouse = undefined; // EXACT: the level's patterns copied in afresh, the house pattern afresh
         g.fruitTimer = false; g.fruitScoreTimer = false; g.starvation = 0;
         g.level.timer = 0;
         g.radarTimer = false;
@@ -938,6 +938,7 @@
           ghost.speed = logic.getGhostSpeed(ghost);
           ghost.target();
           ghost.hidden = true;
+          if (exact()) g.exactEatFrames = 59 - (g.exactDiv || 0);
           mode.setMode("ateGhost");
           g.sounds.thrust.stop();
           g.sounds.ateGhost.play();
@@ -1010,6 +1011,7 @@
         if (T(g.frightened) && c.speed === L.pacFrightenedSpeed) return "pacFright";
         return c.speed === L.pacSpeed ? "pac" : null;
       }
+      if (c.dead && c.target && !c.entering && c.speed === 1.6) return "eyes"; // (eyes: a pixel every tick, as the arcade's)
       if (!c.target || c.housing || c.leaving || c.entering || c.dead || T(c.stunned)) return null;
       return c.speed === L.tunnelSpeed ? "tunnel" : c.speed === L.frightenedSpeed ? "ghostFright" : c.speed === L.elroy2Speed && c.elroy ? "elroy2"
         : c.speed === L.elroy1Speed && c.elroy ? "elroy1" : c.speed === L.ghostSpeed ? "ghost" : null;
@@ -1019,6 +1021,10 @@
       if (exact()) { // EXACT: a pattern's bit a tick for what the arcade moves by pattern; everything else once a frame
         const kind = exactKind(c);
         if (!kind && g.exactTick === 0) return;
+        if (!kind && (c.housing || c.leaving)) { // the house (and the way out): a pixel on the frames the house pattern says
+          if (!g.exactHouseStep) return;
+          c.accum16 = 16; c.exactStep = true;
+        }
         if (kind) {
           if (c.skipCounter && c.skipCounter > 0) { c.skipCounter -= 1; return; } // (the dot pause: the pattern stands still)
           const pat = g.exactPat[c.name], v = pat[kind];
@@ -1031,7 +1037,7 @@
       if (c.skipCounter && c.skipCounter > 0) { c.skipCounter -= 1; return; }
       c.accum16 = c.accum16 || 0;
       const speed16 = c.speed * SPEED_FACTOR * 16;
-      if (!(exact() && exactKind(c))) c.accum16 += speed16;
+      if (c.exactStep) c.exactStep = false; else if (!(exact() && exactKind(c))) c.accum16 += speed16;
       while (c.accum16 >= 16) {
         c.moved = false;
         const cm = getCurrentMaze();
@@ -1334,7 +1340,11 @@
         },
         ateGhost: {
           state: { running: false, showPac: false, showGhosts: true }, frames: 60, nextMode: "normal",
+          // EXACT: the arcade's pause is a timed task of 10 tenths of a second, counted by its free-running divider: it ends on
+          // the 10th tenth after the eating, 55-60 frames by the divider's phase (g.exactDiv, frames mod 6)
+          startFunc() { if (exact() && g.exactEatFrames != null) { g.modeTimer = g.exactEatFrames; g.exactEatFrames = null; } },
           endFunc() {
+            if (exact()) g.exactResumeTick = true; // (EXACT: the arcade spends the resuming frame's first tick clearing the pause)
             for (const name of charKeys()) g.chars[name].hidden = false;
             g.sounds.scared.stop();
             if (!g.sounds.dead.isPlaying()) g.sounds.dead.play();
@@ -2026,6 +2036,10 @@
       update() {
         if (g.paused) return;
         gameFc += 1;
+        // EXACT: the arcade's free-running divider (frames mod 6: a tenth of a second rolls over at 0), ticking every frame as
+        // its interrupt does; it times the arcade's timed tasks (the eat-a-ghost pause). Its phase at a game's start is whatever
+        // it is (the arcade's depends on when START was pressed); the harness can set it to the ROM's (env.exactDivSync)
+        if (exact()) { g.exactDiv = ((g.exactDiv || 0) + 1) % 6; g.exactF = ((g.exactF || 0) + 1) & 255; } // (and its frame counter: the house bob steps on odd frames)
         if (g.vacuumFx > 0) g.vacuumFx -= 1; // the Vacuum's swirl (render.js)
         if (g.pushFx > 0) g.pushFx -= 1;     // the Push's rings
         mode.handle();
@@ -2070,21 +2084,30 @@
           g.ghostEatenThisFrame = false;
           const frozen = g.freezeLeft > 0; // the Pause ability: the ghosts stand still
           // EXACT: two ticks a frame, as the arcade's game loop (each character a pixel at most a tick, by its pattern)
-          const modeAtStart = g.mode; // (EXACT: the arcade's per-frame movers still move on the frame play stops)
+          const modeAtStart = g.mode; // (EXACT: the frame began in play, or after a ghost was eaten)
+          g.exactHouseStep = false;
           for (let tick = 0, ticks = exact() ? 2 : 1; tick < ticks; tick++) {
             g.exactTick = tick;
             if (exact()) updateFrightenedState(true);
+            if (exact() && tick === 0 && g.exactResumeTick) { g.exactResumeTick = false; continue; } // (play back on the second tick)
             // EXACT: the arcade checks Pac-Man against the ghosts once, at each tick's start, by tile (before anyone moves): a ghost
             // reaching him mid-tick isn't caught till the next tick, and two swapping tiles within a tick pass right through
             if (exact() && g.mode === "normal") {
               const cmx = getCurrentMaze(), [pX, , pY] = cmx.occ(g.chars.pac);
               for (const name of charKeys()) { const ch = g.chars[name]; if (ch.target) { const [gX, , gY] = cmx.occ(ch); if (handleGhostCollision(ch, pX, pY, gX, gY)) break; } }
             }
+            // EXACT: the house's own pattern (the arcade's byte at 0x4D94, its phase set at a board's start, carried across lives):
+            // rotated once a frame, after the ticks (here: the last tick, once its collisions are known), unless a ghost was just
+            // eaten (the arcade's pause flag stops it); ghosts in the house move on the frames a 1 rotates out
+            if (exact() && tick === 1 && modeAtStart !== "ateGhost" && g.mode !== "ateGhost") {
+              const h = g.exactHouse === undefined ? 0x55 : g.exactHouse;
+              g.exactHouseStep = !!(h & 0x80); g.exactHouse = ((h << 1) | (h >> 7)) & 0xff;
+            }
             if (!(exact() && exactKind(g.chars.pac))) logic.turn(g.chars.pac);
             for (const name of charKeys()) {
               const char = g.chars[name];
               if (frozen && char !== g.chars.pac) { char.moved = false; continue; }
-              if ((g.mode !== "caught" && g.mode !== "ateGhost") || (exact() && tick === 1 && (char.housing || char.leaving || char.entering) && modeAtStart !== "caught" && modeAtStart !== "ateGhost")) updateCharacterMovement(char);
+              if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
               if (exact() && char === g.chars.pac) releaseGhosts("dots");
             }
           }
