@@ -452,7 +452,14 @@
           if (g.config.movement === 0 && ((!T(ability()) || ability() === 1) || (!T(pac.phased) || pac.phased <= 0))) pac.speed = g.level.pacFrightenedSpeed;
           if (!g.sounds.scared.isPlaying()) { g.sounds.scared.play(); stopSiren(); }
           let immuneChar;
-          if (g.config.plusMode && !byFruit) {
+          // EXACT: Pac-Man Plus's draws come from its byte at 0x4C8B as the energizer goes (0x1AEF): bit 6 clear, the ghost its low two
+          // bits name (Blinky to Clyde) stays as it is, blue flag and all; from board 3, bit 4 clear, the maze goes invisible
+          g.exactImmune = null;
+          if (g.config.plusMode && !byFruit && exact()) {
+            const r = g.exactRnd || 0;
+            if (!(r & 0x40)) immuneChar = g.exactImmune = g.chars[["blinky", "pinky", "inky", "clyde"][r & 3]] || null;
+            if (g.levelNumber > 2 && !(r & 0x10)) g.mazeFrightened = true;
+          } else if (g.config.plusMode && !byFruit) {
             if (rand() < 0.5) {
               const candidates = [];
               for (const name of charKeys()) { const c = g.chars[name]; if (c.target && !c.dead) candidates.push(c); }
@@ -1331,7 +1338,6 @@
             // EXACT: READY after a death is the arcade's timed task of 20 tenths (set two frames after the sprites go): 115-120 frames,
             // by the divider's phase
             if (exact() && died && !pro()) { const d = ((g.exactDiv || 0) + 2) % 6; g.modeTimer = 117 + ((6 - d) % 6 || 6); }
-            if (exact() && !died && g.exactInterCore != null) { if (!pro()) g.modeTimer += ((g.exactInterRom - g.exactInterCore) % 60 + 60) % 60; g.exactInterCore = null; }
             if (g.newLevel) g.newLevel = false; else g.lives = g.lives - 1;
             if (g.lives < 0) mode.setMode("gameover");
             // web edition (the author, 2026-11-20): caught on the step that cleared the board (a Suck taking the last dots
@@ -1469,9 +1475,9 @@
           startFunc() { g.fruitTimer = false; g.fruitScoreTimer = false; },
           endFunc() {
             const n = g.levelNumber;
-            // EXACT: the intermission's own length is the author's (their films, Mina's included); the arcade's free-running counter
-            // only matters modulo 60 frames, so READY after it makes up the difference to the arcade's (cutscene 1 after board 2:
-            // 636 frames, 2 after board 5: 510, 3 after 9, 13 and 17: 522)
+            // EXACT: the intermission's own length is the author's (their films, Mina's included); as it ends the arcade's counters
+            // are stepped on by the difference to the arcade's (cutscene 1 after board 2: 636 frames, 2 after board 5: 510, 3 after
+            // 9, 13 and 17: 522), so they stand where the arcade's would
             if (exact()) { g.exactInterStart = g.exactClock; g.exactInterRom = n === 2 ? 636 : n === 5 ? 510 : n === 9 || n === 13 || n === 17 ? 522 : 0; }
             if (n === 2 || n === 13) mode.setMode("intermission1");
             else if (n === 5 || n === 17) mode.setMode("intermission2");
@@ -1482,7 +1488,8 @@
         pause: {
           state: { hideMaze: true, running: false, showPac: false, showGhosts: false }, frames: 20, nextMode: "ready",
           startFunc() { if (exact() && g.exactInterStart != null) { // (the intermission's frames: the start to here, less the one frame it takes without one)
-            g.exactInterCore = g.exactClock - g.exactInterStart - 1; g.exactInterStart = null; } },
+            const ran = g.exactClock - g.exactInterStart - 1; g.exactInterStart = null;
+            if (!pro()) for (let i = ((g.exactInterRom - ran) % 3840 + 3840) % 3840; i > 0; i--) exactCounters(); } }, // (3840: where the 60- and 256-frame cycles meet)
           endFunc() {
             g.levelNumber += 1;
             levels.startLevel(g.levelNumber);
@@ -1875,7 +1882,7 @@
         // (and at once, count or not, when no ghost's flag is left: the arcade's 0x137F; an eaten ghost's flag stays while its eyes
         // go home, cleared as it revives, so every blue one eaten and home)
         let blue = false;
-        for (const name of charKeys()) { const c = g.chars[name]; if (c.target && (c.frightened || c.dead)) { blue = true; break; } }
+        for (const name of charKeys()) { const c = g.chars[name]; if (c.target && (c.frightened || (c.dead && c !== g.exactImmune))) { blue = true; break; } } // (the immune ghost's flag is cleared even on its eyes)
         g.exactFrightTicks -= 1;
         if (blue && g.exactFrightTicks > 0) { g.frightened = Math.ceil(g.exactFrightTicks / 2); return; }
         g.frightened = 1;
@@ -1949,6 +1956,15 @@
           c.exactNext = [tx + DELTAS[c.dir].x, ty + DELTAS[c.dir].y]; c.target(); c.exactNext = null;
           c.frightened = blue;
         }
+      }
+    };
+    // EXACT: the arcade's free-running counters, a frame's step (its interrupt, 0x01DC-0x0218): the divider (frames mod 6), its
+    // tenths (0x4C86's top half) and the seconds they roll over into (the fruit's timed task counts those), the frame counter, and
+    // the byte at 0x4C8B, x = 5x + 1 every frame, that Pac-Man Plus draws its immune ghost and its invisible maze from
+    const exactCounters = () => {
+      g.exactDiv = ((g.exactDiv || 0) + 1) % 6; g.exactF = ((g.exactF || 0) + 1) & 255; g.exactRnd = ((g.exactRnd || 0) * 5 + 1) & 255;
+      if (g.exactDiv === 0 && (g.exactTenths = ((g.exactTenths || 0) + 1) % 10) === 0 && g.exactFruitSecs > 0 && --g.exactFruitSecs === 0) {
+        g.fruitTimer = false; g.exactFruitHeld = false; // (gone, or after it was eaten, out of the way of the next)
       }
     };
     const updateCharacterMovement = (char) => {
@@ -2120,11 +2136,7 @@
         // EXACT: the arcade's free-running divider (frames mod 6: a tenth of a second rolls over at 0), ticking every frame as
         // its interrupt does; it times the arcade's timed tasks (the eat-a-ghost pause). Its phase at a game's start is whatever
         // it is (the arcade's depends on when START was pressed); the harness can set it to the ROM's (env.exactDivSync)
-        if (exact()) { g.exactDiv = ((g.exactDiv || 0) + 1) % 6; g.exactF = ((g.exactF || 0) + 1) & 255; g.exactClock = (g.exactClock || 0) + 1; } // (and its frame counter; and a plain count, for timing the intermissions)
-        // EXACT: and its tenths (0x4C86's top half), and the seconds they roll over into: the fruit's timed task counts those
-        if (exact() && g.exactDiv === 0 && (g.exactTenths = ((g.exactTenths || 0) + 1) % 10) === 0 && g.exactFruitSecs > 0 && --g.exactFruitSecs === 0) {
-          g.fruitTimer = false; g.exactFruitHeld = false; // (gone, or after it was eaten, out of the way of the next)
-        }
+        if (exact()) { exactCounters(); g.exactClock = (g.exactClock || 0) + 1; } // (and a plain count, for timing the intermissions)
         // EXACT: the no-dot timer keeps counting through the pause after eating a ghost (in play: counted after the ticks, below)
         if (exact() && g.scene.name === "game" && g.mode === "ateGhost") { g.starvation = (g.starvation || 0) + 1; releaseGhosts("timer"); } // (its limit too: a ghost can be let out in the pause)
         if (g.vacuumFx > 0) g.vacuumFx -= 1; // the Vacuum's swirl (render.js)
