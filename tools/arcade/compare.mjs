@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadProgram, PacmanMachine } from "./pacman-machine.mjs";
-import { loadCore } from "../golden.mjs";
+import { loadCore, botKeyForStats } from "../golden.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const DATA = JSON.parse(readFileSync(join(ROOT, "assets/data.json"), "utf8"));
@@ -34,7 +34,7 @@ export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames
   const m = new PacmanMachine(loadProgram(game));
   const coinAt = game === "pacplus" ? 800 : 300;
   const pat = (base) => { const b = [0, 1, 2, 3].map((i) => m.peek(base + i)); return (((b[1] << 24) | (b[0] << 16) | (b[3] << 8) | b[2]) >>> 0).toString(16).padStart(8, "0"); };
-  const snap = () => { const o = { dots: m.peek(0x4e0e), bpat: pat(0x4d56) + "/" + pat(0x4d5a) }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
+  const snap = () => { const o = { dots: m.peek(0x4e0e), bpat: pat(0x4d56) + "/" + pat(0x4d5a), eat: m.peek(0x4da4) }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
   let f = 0;
   for (; f < coinAt + 140; f++) {
     if (f === coinAt) m.setInputs({ coin: true }); else if (f === coinAt + 6) m.setInputs({}); else if (f === coinAt + 100) m.setInputs({ start: true }); else if (f === coinAt + 106) m.setInputs({});
@@ -61,7 +61,9 @@ export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames
 }
 
 /** the author's core the same way: [life][frame] from Blinky's first step after READY */
-export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000 } = {}) {
+// (bot: the golden test's pathfinding bot plays instead of a plan, its stick recorded per life in bot.rec, to replay into
+// the arcade: the same inputs, so the same game if the two match)
+export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000, bot = null } = {}) {
   const create = loadCore(process.env.CORE || join(ROOT, "src/core.js"));
   let held = null, s = 1;
   const rng = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
@@ -84,7 +86,11 @@ export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000 
   const out = [];
   let cur = null, life = -1, armed = false, prevBx = null;
   for (let i = 0; i < maxFrames && g.scene.name === "game"; i++) {
-    held = cur ? joy(life, cur.length) : joy(life + 1, 0);
+    if (bot) {
+      held = botKeyForStats(core) || held;
+      const L = cur ? life : life + 1, k = cur ? cur.length : 0;
+      (bot.rec[L] = bot.rec[L] || [])[k] = held; // (before READY goes: frame 0's entry, held through it as the arcade's)
+    } else held = cur ? joy(life, cur.length) : joy(life + 1, 0);
     core.update();
     const live = g.mode === "normal" || g.mode === "ateGhost" || g.mode === "vacuum" || g.mode === "push";
     if (!cur) {
@@ -118,7 +124,15 @@ export function compare(A, B, who = ACTORS, show = 12) {
   return lines;
 }
 
-if (process.argv[1] && process.argv[1].endsWith("compare.mjs")) {
+/** a recorded bot game as a joy(life, frame) */
+export const fromRecording = (rec) => (life, k) => { const r = rec[life] || []; for (let i = Math.min(k, r.length - 1); i >= 0; i--) if (r[i] !== undefined) return r[i]; return null; };
+
+if (process.argv[1] && process.argv[1].endsWith("compare.mjs") && process.argv[2] === "bot") {
+  // node tools/arcade/compare.mjs bot [frames per life] [lives]: the bot plays the core, the arcade replays its stick
+  const frames = +(process.argv[3] || 3000), lives = +(process.argv[4] || 3), bot = { rec: [] };
+  const B = coreTrace(null, frames, { lives, bot }), A = arcadeTrace(fromRecording(bot.rec), frames, { lives });
+  console.log(compare(A, B).join("\n"));
+} else if (process.argv[1] && process.argv[1].endsWith("compare.mjs")) {
   const joy = plans(process.argv[2] || "left:40,up:200");
   const frames = +(process.argv[3] || 600), who = process.argv[4] ? process.argv[4].split(",") : ACTORS;
   const A = arcadeTrace(joy, frames), B = coreTrace(joy, frames);

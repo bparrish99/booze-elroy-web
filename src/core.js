@@ -1038,6 +1038,9 @@
         const [xTile, xOff, yTile, yOff] = cm.getLoc(c);
         const oldX = xTile, oldY = yTile;
         c.accum16 -= 16;
+        // EXACT: a reversal the mode change (or an energizer) asked for happens at the ghost's tile centre (already there, or
+        // the next it reaches): it turns round and steps off the other way; no new decision till the next tile
+        if (c.exactReverse && c.target && exact() && !c.housing && !c.leaving && !c.entering && xOff === CENTER && yOff === CENTER) { c.exactReverse = false; c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.iDir = c.dir; }
         const exactPac = isPac && exact() && exactKind(c); // EXACT: his walls and centres by the arcade's tiles
         const ex = exactPac ? cm.occ(c) : null, ecx = ex && ex[0] * TILE + CENTER, ecy = ex && ex[2] * TILE + CENTER;
         if (exactPac ? (!cm.isWall(ex[0] + DELTAS[c.dir].x, ex[2] + DELTAS[c.dir].y) || (c.dir === 2 && c.x > ecx) || (c.dir === 3 && c.y > ecy) ||
@@ -1046,6 +1049,8 @@
           (c.dir === 2 && xOff > CENTER) || (c.dir === 3 && yOff > CENTER) ||
           (c.dir === 0 && xOff < CENTER) || (c.dir === 1 && yOff < CENTER))) {
           logic.advance(c, xOff, yOff);
+          // (EXACT: and one arriving at the centre with a reversal waiting turns round right there)
+          if (c.exactReverse && c.target && exact() && !c.housing && !c.leaving && !c.entering && mod(c.x, TILE) === CENTER && mod(c.y, TILE) === CENTER) { c.exactReverse = false; c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.iDir = c.dir; }
           // EXACT: the tunnel's slow zone by the arcade's tiles (its boundary a pixel over horizontally)
           if (exact() && c.target && !c.housing && !c.leaving && !c.entering) {
             const [ox, , oy] = cm.occ(c), key = ox + "," + oy;
@@ -1057,8 +1062,6 @@
             if (tx <= 0 || tx >= cm.w - 1) c.iDir = c.dir; // (no decisions at the tunnel's ends and beyond: straight on, as the arcade)
             else { c.exactNext = [tx + DELTAS[c.dir].x, ty + DELTAS[c.dir].y]; c.target(); c.exactNext = null; }
           }
-          // EXACT: a reversal the mode change (or an energizer) asked for happens when the ghost reaches its tile's centre
-          if (c.exactReverse && c.target && exact() && !c.housing && !c.leaving && !c.entering && mod(c.x, TILE) === CENTER && mod(c.y, TILE) === CENTER) { c.exactReverse = false; c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.iDir = c.dir; } // (no new decision till the next tile)
         } else if (T(c.iDir) && !cm.isBlocked(c, c.iDir)) {
           if (isPac && g.config.movement === 3) {
             if (c.speed > MAX_THRUST) {
@@ -1103,7 +1106,7 @@
               c.iDir = false; c.leaving = false; c.speed = logic.getGhostSpeed(c);
               if (!T(c.leaveRight) && !exact()) c.target();
             }
-            if (g.mode !== "ateGhost") {
+            if (g.mode !== "ateGhost" && !exact()) { // (EXACT: checked at each tick's start instead)
               const [pX, , pY] = cm.occ(g.chars.pac);
               const [gX, , gY] = cm.occ(c);
               if (handleGhostCollision(c, pX, pY, gX, gY)) break;
@@ -1116,7 +1119,7 @@
             // it wins a tie with a ghost the same way: eaten before the ghosts are checked (it used to come after, and a
             // ghost reached on the same step caught him). Elsewhere the fruit is still eaten after them, as before
             if (g.config.plusMode) eatFruit();
-            for (const name of charKeys()) {
+            if (!exact()) for (const name of charKeys()) { // (EXACT: checked at each tick's start instead)
               const ch = g.chars[name];
               if (ch.target) {
                 const [gX, , gY] = cm.occ(ch);
@@ -2067,14 +2070,21 @@
           g.ghostEatenThisFrame = false;
           const frozen = g.freezeLeft > 0; // the Pause ability: the ghosts stand still
           // EXACT: two ticks a frame, as the arcade's game loop (each character a pixel at most a tick, by its pattern)
+          const modeAtStart = g.mode; // (EXACT: the arcade's per-frame movers still move on the frame play stops)
           for (let tick = 0, ticks = exact() ? 2 : 1; tick < ticks; tick++) {
             g.exactTick = tick;
             if (exact()) updateFrightenedState(true);
+            // EXACT: the arcade checks Pac-Man against the ghosts once, at each tick's start, by tile (before anyone moves): a ghost
+            // reaching him mid-tick isn't caught till the next tick, and two swapping tiles within a tick pass right through
+            if (exact() && g.mode === "normal") {
+              const cmx = getCurrentMaze(), [pX, , pY] = cmx.occ(g.chars.pac);
+              for (const name of charKeys()) { const ch = g.chars[name]; if (ch.target) { const [gX, , gY] = cmx.occ(ch); if (handleGhostCollision(ch, pX, pY, gX, gY)) break; } }
+            }
             if (!(exact() && exactKind(g.chars.pac))) logic.turn(g.chars.pac);
             for (const name of charKeys()) {
               const char = g.chars[name];
               if (frozen && char !== g.chars.pac) { char.moved = false; continue; }
-              if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
+              if ((g.mode !== "caught" && g.mode !== "ateGhost") || (exact() && tick === 1 && (char.housing || char.leaving || char.entering) && modeAtStart !== "caught" && modeAtStart !== "ateGhost")) updateCharacterMovement(char);
               if (exact() && char === g.chars.pac) releaseGhosts("dots");
             }
           }
