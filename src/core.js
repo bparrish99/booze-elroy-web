@@ -100,8 +100,9 @@
     const rng = env.rng || Math.random;
     // web edition: leaderboard replays (src/replay.js) re-run a game from its seed and inputs; bump this whenever gameplay
     // changes (anything the golden replay would catch, or a fix to a mode it doesn't cover), so older replays are marked
-    const REPLAY_VERSION = 4; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19);
-    // 4: a death on the step that clears the board goes straight to the board done (2026-11-20)
+    const REPLAY_VERSION = 5; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19);
+    // 4: a death on the step that clears the board goes straight to the board done (2026-11-20); 5: a new game's first maze
+    // picked fresh, not "anything but the last one on screen" (2026-11-21)
     // the Random background / maze style picks (looks only): the game's own RNG unless the web edition hands in another
     // (env.styleRand, 2026-11-18: a viewer's Random styles drew from the game's RNG and threw replays out of step, a
     // phone's replay of a PC's game went its own way); without it, as in the original
@@ -2041,6 +2042,9 @@
         g.wakka = false;
         g.particles = [];
         g.state = { hideMaze: true };
+        // a brand new game: its first maze is picked fresh, not "anything but the one on screen before" (the author,
+        // 2026-11-21: what was on screen, the demo's or the last game's, made a game, and so a replay, start differently)
+        g.currentMaze = null;
         levels.startLevel(g.levelNumber);
         getCurrentMaze().init();
         characters.initialize();
