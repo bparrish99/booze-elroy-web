@@ -1079,8 +1079,8 @@
             if (key !== c.exactTile) { c.exactTile = key; if (!T(c.leaveRight)) updateGhostSpeed(c, ox, oy); }
           }
           // EXACT: a ghost decides one pixel past a tile's centre, for the next tile (the arcade's one tile ahead)
-          // (made at the second tick's end, after its moves, Pac-Man's included: exactDecisions)
-          if (exact() && c.target && !c.housing && !c.leaving && !c.entering && !T(c.leaveRight) && (c.dir % 2 === 0 ? xOff === CENTER : yOff === CENTER)) c.exactDecide = true;
+          // (queued, made at the frame's end in the order queued: exactDecisions)
+          if (exact() && c.target && !c.housing && !c.leaving && !c.entering && !T(c.leaveRight) && (c.dir % 2 === 0 ? xOff === CENTER : yOff === CENTER)) { if (!c.exactDecide) (g.exactQueue = g.exactQueue || []).push(c); c.exactDecide = true; c.exactDecideBlue = !!c.frightened; }
         } else if (T(c.iDir) && (exactPac ? !cm.isWall(ex[0] + DELTAS[c.iDir].x, ex[2] + DELTAS[c.iDir].y) : !cm.isBlocked(c, c.iDir))) { // (EXACT: his way out by the arcade's tiles too)
           if (isPac && g.config.movement === 3) {
             if (c.speed > MAX_THRUST) {
@@ -1903,18 +1903,24 @@
       }
     };
 
-    // EXACT: the decisions ghosts owe since stepping a pixel past a tile's centre, for the next tile: the arcade makes them once a
-    // frame, at its second tick's end (a step on the first tick decides with Pac-Man where he is after the second)
+    // EXACT: the decisions ghosts owe since stepping a pixel past a tile's centre, for the next tile: the arcade queues each as a
+    // task (its foreground task table, 0x23BF and on) and its main loop runs them after the frame's interrupt work, in the order
+    // queued (a step on the first tick before one on the second; Blinky to Clyde within a tick), with Pac-Man where he is by then
     const exactDecisions = () => {
-      const cm = getCurrentMaze();
-      for (const name of charKeys()) {
-        const c = g.chars[name];
+      const cm = getCurrentMaze(), queue = g.exactQueue || [];
+      g.exactQueue = [];
+      for (const c of queue) {
         if (!c.exactDecide) continue;
         c.exactDecide = false;
         if (!c.target || c.housing || c.leaving || c.entering || T(c.leaveRight)) continue;
+        if (c.exactReverse) continue; // (a reversal waiting: no decision, the ghost goes on to the centre and turns round there)
         const [tx, , ty] = cm.occ(c);
         if (tx <= 0 || tx >= cm.w - 1) c.iDir = c.dir; // (no decisions at the tunnel's ends and beyond: straight on, as the arcade)
-        else { c.exactNext = [tx + DELTAS[c.dir].x, ty + DELTAS[c.dir].y]; c.target(); c.exactNext = null; }
+        else { // (a blue one's task is the random pick, a fright run out since or not: the kind of task is fixed as it's queued)
+          const blue = c.frightened; c.frightened = c.exactDecideBlue;
+          c.exactNext = [tx + DELTAS[c.dir].x, ty + DELTAS[c.dir].y]; c.target(); c.exactNext = null;
+          c.frightened = blue;
+        }
       }
     };
     const updateCharacterMovement = (char) => {
@@ -2180,7 +2186,6 @@
             // at the frame's end (the scatter / chase clock) sees it already over on the tick it ran out; then the house's dot
             // counts (0x20C9 and its neighbours): a ghost freed here, and Blinky's Elroy back with Clyde's release, count for the
             // ghosts from the next tick. Only on a tick that's played: a ghost caught at its start stops the rest of it
-            if (exact() && tick === 1 && (g.mode === "normal" || g.mode === "ateGhost")) exactDecisions();
             if (exact() && g.mode === "normal") { updateFrightenedState(true); releaseGhosts("dots"); }
           }
           // EXACT: the no-dot timer, after both ticks and before the house's ghosts move (the arcade's 0x13DD: reset while a dot has gone since the last tick his pattern moved him, a pause included; a ghost it lets out heads for the door this frame)
@@ -2195,6 +2200,7 @@
           // EXACT: the scatter / chase clock ticks at the frame's end, after everyone has moved (the arcade's 0x0E3B): a switch
           // flags the reversals for the next frame, so a ghost standing on a tile centre as the frame began goes on to the next
           if (exact()) handleModeSwitching();
+          if (exact()) exactDecisions(); // (the frame's queued decisions, last of all)
           if (exact()) g.chars.pac.moved = pacMovedAny;
           if (T(g.fruitTimer)) {
             g.fruitTimer -= 1;
@@ -2217,8 +2223,8 @@
               const c = g.chars[name];
               if (c.dead && !c.hidden && !c.exactFresh) updateCharacterMovement(c);
             }
-            if (exact() && tick === 1) exactDecisions();
           }
+          if (exact()) exactDecisions(); // (EXACT: the frame's queued decisions)
         }
 
         if (g.chars && g.mode !== "playerUp" && g.mode !== "ready" && g.mode !== "levelComplete") {
