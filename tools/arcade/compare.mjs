@@ -33,7 +33,8 @@ export function plans(script) {
 export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames = 40000 } = {}) {
   const m = new PacmanMachine(loadProgram(game));
   const coinAt = game === "pacplus" ? 800 : 300;
-  const snap = () => { const o = { dots: m.peek(0x4e0e) }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
+  const pat = (base) => { const b = [0, 1, 2, 3].map((i) => m.peek(base + i)); return (((b[1] << 24) | (b[0] << 16) | (b[3] << 8) | b[2]) >>> 0).toString(16).padStart(8, "0"); };
+  const snap = () => { const o = { dots: m.peek(0x4e0e), bpat: pat(0x4d56) + "/" + pat(0x4d5a) }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
   let f = 0;
   for (; f < coinAt + 140; f++) {
     if (f === coinAt) m.setInputs({ coin: true }); else if (f === coinAt + 6) m.setInputs({}); else if (f === coinAt + 100) m.setInputs({ start: true }); else if (f === coinAt + 106) m.setInputs({});
@@ -64,14 +65,19 @@ export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000 
   const create = loadCore(process.env.CORE || join(ROOT, "src/core.js"));
   let held = null, s = 1;
   const rng = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-  const core = create(DATA, { rng, isDown: (k) => k === held, exact: () => !!process.env.EXACT }); // (EXACT=1: NEAT's switch)
+  // (EXACT=1: NEAT's switch; and the arcade's own generator for frightened ghosts' first pick, from the player's ROM: local only)
+  const rom = process.env.EXACT ? loadProgram(process.env.GAME || "pacman") : null;
+  let seed = 0;
+  const frightPick = () => { seed = (seed * 5 + 1) & 0x1fff; return rom[seed]; };
+  const core = create(DATA, { rng, isDown: (k) => k === held, exact: () => !!process.env.EXACT, frightPick: rom ? frightPick : undefined, frightReset: () => { seed = 0; } });
   core.init(); Object.assign(core.g.config, cfg);
   core.g.autoplay = false; core.g.attract = false; core.setScene("game");
   const g = core.g;
   // the core's coordinates -> the arcade's (the screen is rotated on the board: x runs right to left)
   const base = { x: 128 + 112, y: 196 - 188 };
   const snap = () => {
-    const o = { dots: 244 - g.dots.length - g.powers.length, mode: g.mode };
+    const P = g.exactPat && g.exactPat.blinky, h = (v) => v.toString(16).padStart(8, "0");
+    const o = { dots: 244 - g.dots.length - g.powers.length, mode: g.mode, bpat: P ? h(P.ghost) + "/" + h(P.ghostFright) : "" };
     for (const a of ACTORS) { const c = g.chars[a]; o[a] = c ? { x: base.x - c.x, y: c.y + base.y, dir: c.dir } : null; }
     return o;
   };
@@ -103,7 +109,7 @@ export function compare(A, B, who = ACTORS, show = 12) {
     let shown = 0;
     for (let k = 0; k < Math.min(a.length, b.length) && shown < show; k++) {
       const d = [];
-      for (const n of who) { const p = a[k][n], q = b[k][n]; if (!q || (p.x === 0 && p.y === 0)) continue; if (Math.floor(q.x) !== p.x || Math.floor(q.y) !== p.y) d.push(`${n} ${p.x},${p.y} vs ${Math.floor(q.x)},${Math.floor(q.y)}`); }
+      for (const n of who) { const p = a[k][n], q = b[k][n]; if (!q || (p.x === 0 && p.y === 0)) continue; if ((Math.floor(q.x) & 255) !== p.x || (Math.floor(q.y) & 255) !== p.y) d.push(`${n} ${p.x},${p.y} vs ${Math.floor(q.x)},${Math.floor(q.y)}`); }
       if (d.length) { lines.push(`life ${L + 1} frame ${k}: ${d.join("; ")}`); shown++; }
     }
     lines.push(`life ${L + 1}: compared ${Math.min(a.length, b.length)} frames (arcade ${a.length}, core ${b.length})${shown ? "" : ", identical"}`);

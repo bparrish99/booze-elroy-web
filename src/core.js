@@ -440,6 +440,7 @@
         g.frightened = byFruit ? g.level.fruitFrightenedDuration : g.level.frightened;
         if (g.frightened === 0) g.frightened = false;
         else {
+          if (exact()) g.exactFrightTicks = g.frightened * 2; // EXACT: the arcade counts it in ticks, from the tick it began
           g.ghostScore = false;
           const pac = g.chars.pac;
           if (g.config.movement === 0 && ((!T(ability()) || ability() === 1) || (!T(pac.phased) || pac.phased <= 0))) pac.speed = g.level.pacFrightenedSpeed;
@@ -463,7 +464,8 @@
         for (const name of charKeys()) {
           const c = g.chars[name];
           if (c.target) {
-            if (!c.housing && !c.leaving && !c.entering) { if (exact()) c.exactReverse = true; else { c.dir = (c.dir + 2) % 4; c.target(); } } // EXACT: turns round at its tile's centre
+            if (exact()) c.exactReverse = true; // EXACT: every ghost, those in the house too, turns round at its next tile centre out in the maze
+            else if (!c.housing && !c.leaving && !c.entering) { c.dir = (c.dir + 2) % 4; c.target(); }
           }
         }
       },
@@ -485,6 +487,7 @@
       },
       handlePowerEaten() {
         if (g.wakka) { g.sounds.wakka2.play(); g.wakka = false; } else { g.sounds.wakka1.play(); g.wakka = true; }
+        if (exact()) g.starvation = 0; // EXACT: an energizer restarts the no-dot timer too, as the arcade's
         rechargeAbilities();
         handlers.activateFrightenedMode();
         if (g.config.afterDark === 4) g.fadeTimer = g.fadeLength();
@@ -496,6 +499,9 @@
 
     // ------------------------------------------------------------------ characters
     const getRandomFrightenedDir = () => {
+      // EXACT: the first way a frightened ghost tries can come from outside (env.frightPick: the harness feeds it the arcade's own
+      // generator from the player's ROM, to check fright frame for frame; NEAT itself keeps this game's randomness)
+      if (exact() && env.frightPick) return env.frightPick() & 3;
       const r = rand();
       if (r < 0.252) return 0;
       if (r < 0.537) return 1;
@@ -554,8 +560,11 @@
       const self = this;
       if (!T(self.iDir)) { self.iDir = self.dir; return; }
       const cm = getCurrentMaze();
-      const [xTile, , yTile] = cm.getLoc(self);
-      const candidates = getCandidates(self);
+      // EXACT: the arcade plans one tile ahead (self.exactNext: the next tile, its exits, never back the way it came)
+      const ahead = exact() && self.exactNext;
+      const [xTile, , yTile] = ahead ? [ahead[0], 0, ahead[1]] : cm.getLoc(self);
+      const candidates = ahead ? [0, 1, 2, 3].filter((i) => !cm.isWall(xTile + DELTAS[i].x, yTile + DELTAS[i].y) && Math.abs(i - self.dir) !== 2) : getCandidates(self);
+      if (self.frightened && exact() && env.frightPick) { handleFrightenedDirection(self, candidates); return; } // (EXACT: the arcade draws at every tile, one way or not)
       if (candidates.length === 1) { self.iDir = candidates[0]; return; }
       if (self.frightened) { handleFrightenedDirection(self, candidates); return; }
       const hc = cm.houseCenter;
@@ -959,7 +968,7 @@
           if (c.leaveRight === 0) { c.leaveRight = false; c.dir = 0; }
         } else {
           rand(); // nod to the OG random number thing
-          c.target();
+          if (!exact()) c.target(); // (EXACT: decided a pixel past the last tile's centre instead, below)
           updateGhostSpeed(c, newX, newY);
         }
       }
@@ -1037,8 +1046,14 @@
           (c.dir === 2 && xOff > CENTER) || (c.dir === 3 && yOff > CENTER) ||
           (c.dir === 0 && xOff < CENTER) || (c.dir === 1 && yOff < CENTER))) {
           logic.advance(c, xOff, yOff);
+          // EXACT: a ghost decides one pixel past a tile's centre, for the next tile (the arcade's one tile ahead)
+          if (exact() && c.target && !c.housing && !c.leaving && !c.entering && !T(c.leaveRight) && (c.dir % 2 === 0 ? xOff === CENTER : yOff === CENTER)) {
+            const [tx, , ty] = cm.occ(c);
+            if (tx <= 0 || tx >= cm.w - 1) c.iDir = c.dir; // (no decisions at the tunnel's ends and beyond: straight on, as the arcade)
+            else { c.exactNext = [tx + DELTAS[c.dir].x, ty + DELTAS[c.dir].y]; c.target(); c.exactNext = null; }
+          }
           // EXACT: a reversal the mode change (or an energizer) asked for happens when the ghost reaches its tile's centre
-          if (c.exactReverse && c.target && exact() && mod(c.x, TILE) === CENTER && mod(c.y, TILE) === CENTER) { c.exactReverse = false; c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.target(); }
+          if (c.exactReverse && c.target && exact() && !c.housing && !c.leaving && !c.entering && mod(c.x, TILE) === CENTER && mod(c.y, TILE) === CENTER) { c.exactReverse = false; c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.iDir = c.dir; } // (no new decision till the next tile)
         } else if (T(c.iDir) && !cm.isBlocked(c, c.iDir)) {
           if (isPac && g.config.movement === 3) {
             if (c.speed > MAX_THRUST) {
@@ -1081,7 +1096,7 @@
               c.dir = c.leavesRight ? 0 : 2;
               c.facing = c.dir;
               c.iDir = false; c.leaving = false; c.speed = logic.getGhostSpeed(c);
-              if (!T(c.leaveRight)) c.target();
+              if (!T(c.leaveRight) && !exact()) c.target();
             }
             if (g.mode !== "ateGhost") {
               const [pX, , pY] = cm.occ(g.chars.pac);
@@ -1288,6 +1303,7 @@
                 for (const name of charKeys()) g.chars[name].accum16 = undefined;
                 g.exactPatLevel = null; // (and the speed patterns copied in afresh, as the arcade does every life)
                 g.chars.pac.skipCounter = 1;
+                if (env.frightReset) env.frightReset(); // (and the arcade's generator back to its start)
               }
             }
           },
@@ -1787,7 +1803,13 @@
         }
       }
     };
-    const updateFrightenedState = () => {
+    const updateFrightenedState = (tick) => {
+      if (exact() && !tick) return; // (EXACT: counted a tick at a time, in the tick loop)
+      if (T(g.frightened) && tick) { // EXACT: a tick's worth; it ends on the very tick (the frame count follows, for the flashing)
+        g.exactFrightTicks -= 1;
+        if (g.exactFrightTicks > 0) { g.frightened = Math.ceil(g.exactFrightTicks / 2); return; }
+        g.frightened = 1;
+      }
       if (T(g.frightened)) {
         g.frightened -= 1;
         if (g.frightened <= 0) {
@@ -1801,7 +1823,9 @@
           if (g.config.movement === 0 && (!T(ability()) || ability() === 1)) g.chars.pac.speed = g.level.pacSpeed;
           for (const name of charKeys()) {
             const c = g.chars[name];
-            if (c.target && c.frightened) { c.speed = logic.getGhostSpeed(c); c.frightened = false; }
+            // (the speed is worked out while it's still frightened, so it stays slow till its next tile: the author's game;
+            // EXACT: the arcade's ghost is back to normal speed at once)
+            if (c.target && c.frightened) { if (exact()) c.frightened = false; c.speed = logic.getGhostSpeed(c); c.frightened = false; }
           }
         }
       }
@@ -2002,7 +2026,7 @@
         }
         if (g.state.running) {
           g.starvation = g.starvation || 0;
-          g.starvation += 1;
+          if (!exact()) g.starvation += 1; // (EXACT: counted after the ticks, below)
           const pac = g.chars.pac;
           if (g.config.radar) {
             let allFrightened = true;
@@ -2037,6 +2061,7 @@
           // EXACT: two ticks a frame, as the arcade's game loop (each character a pixel at most a tick, by its pattern)
           for (let tick = 0, ticks = exact() ? 2 : 1; tick < ticks; tick++) {
             g.exactTick = tick;
+            if (exact()) updateFrightenedState(true);
             if (!(exact() && exactKind(g.chars.pac))) logic.turn(g.chars.pac);
             for (const name of charKeys()) {
               const char = g.chars[name];
@@ -2045,6 +2070,8 @@
               if (exact() && char === g.chars.pac) releaseGhosts("dots");
             }
           }
+          // EXACT: the no-dot timer stands still while Pac-Man is paused (a dot, an energizer): it counts a frame he ends unpaused
+          if (exact() && !(g.chars.pac.skipCounter > 0)) g.starvation = (g.starvation || 0) + 1;
           if (exact()) releaseGhosts("timer");
           if (T(g.fruitTimer)) {
             g.fruitTimer -= 1;
