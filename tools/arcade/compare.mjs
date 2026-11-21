@@ -34,7 +34,7 @@ export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames
   const m = new PacmanMachine(loadProgram(game), dips);
   const coinAt = game === "pacplus" ? 800 : 300;
   const pat = (base) => { const b = [0, 1, 2, 3].map((i) => m.peek(base + i)); return (((b[1] << 24) | (b[0] << 16) | (b[3] << 8) | b[2]) >>> 0).toString(16).padStart(8, "0"); };
-  const snap = () => { const o = { dots: m.peek(0x4e0e), bpat: pat(0x4d56) + "/" + pat(0x4d5a), eat: m.peek(0x4da4), div: m.peek(0x4c86) & 0x0f, fc: m.peek(0x4c84), ptun: pat(0x4d6a), ptile: m.peek(0x4d35) + "," + m.peek(0x4d34), house: m.peek(0x4d94), pc: [0x4e0f, 0x4e10, 0x4e11, 0x4e12].map((a) => m.peek(a)).join(","), level: m.peek(0x4e13), starv: m.peek(0x4d97) }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
+  const snap = () => { const o = { dots: m.peek(0x4e0e), bpat: pat(0x4d56) + "/" + pat(0x4d5a), eat: m.peek(0x4da4), div: m.peek(0x4c86) & 0x0f, fc: m.peek(0x4c84), ptun: pat(0x4d6a), ptile: m.peek(0x4d35) + "," + m.peek(0x4d34), house: m.peek(0x4d94), pc: [0x4e0f, 0x4e10, 0x4e11, 0x4e12].map((a) => m.peek(a)).join(","), level: m.peek(0x4e13), starv: m.peek(0x4d97), score: [0x4e82, 0x4e81, 0x4e80].map((a) => m.peek(a).toString(16).padStart(2, "0")).join("") * 1 }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
   let f = 0;
   for (; f < coinAt + 140; f++) {
     if (f === coinAt) m.setInputs({ coin: true }); else if (f === coinAt + 6) m.setInputs({}); else if (f === coinAt + 100) m.setInputs({ start: true }); else if (f === coinAt + 106) m.setInputs({});
@@ -86,7 +86,7 @@ export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000,
     const P = g.exactPat && g.exactPat.blinky, h = (v) => v.toString(16).padStart(8, "0");
     const pk = g.chars.pinky, cmz = core.getCurrentMaze ? core.getCurrentMaze() : null;
     const o = { dots: 244 - g.dots.length - g.powers.length, mode: g.mode, bpat: P ? h(P.ghost) + "/" + h(P.ghostFright) : "",
-      level: g.levelNumber - 1, starv: g.starvation, house: g.exactHouse, pc: ["pinky", "inky", "clyde"].map((n) => g.chars[n] ? g.chars[n].dotCounter : "-").join(",") + " gc " + g.globalCounter, pdbg: pk && cmz ? `spd ${pk.speed} occ ${cmz.occ(pk)[0]},${cmz.occ(pk)[2]} tun ${cmz.isTunnel(cmz.occ(pk)[0], cmz.occ(pk)[2])} fr ${pk.frightened} dead ${pk.dead}` : "" };
+      level: g.levelNumber - 1, starv: g.starvation, score: g.score, house: g.exactHouse, pc: ["pinky", "inky", "clyde"].map((n) => g.chars[n] ? g.chars[n].dotCounter : "-").join(",") + " gc " + g.globalCounter, pdbg: pk && cmz ? `spd ${pk.speed} occ ${cmz.occ(pk)[0]},${cmz.occ(pk)[2]} tun ${cmz.isTunnel(cmz.occ(pk)[0], cmz.occ(pk)[2])} fr ${pk.frightened} dead ${pk.dead}` : "" };
     for (const a of ACTORS) { const c = g.chars[a]; o[a] = c ? { x: base.x - c.x, y: c.y + base.y, dir: c.dir } : null; }
     return o;
   };
@@ -129,6 +129,7 @@ export function compare(A, B, who = ACTORS, show = 12) {
     for (let k = 0; k < Math.min(a.length, b.length) && shown < show; k++) {
       const d = [];
       for (const n of who) { const p = a[k][n], q = b[k][n]; if (!q || (p.x === 0 && p.y === 0)) continue; if ((Math.floor(q.x) & 255) !== p.x || (Math.floor(q.y) & 255) !== p.y) d.push(`${n} ${p.x},${p.y} vs ${Math.floor(q.x)},${Math.floor(q.y)}`); }
+      if (a[k].score !== undefined && b[k].score !== undefined && a[k].score !== b[k].score) d.push(`score ${a[k].score} vs ${b[k].score}`);
       if (d.length) { lines.push(`life ${L + 1} frame ${k}: ${d.join("; ")}`); shown++; }
     }
     lines.push(`life ${L + 1}: compared ${Math.min(a.length, b.length)} frames (arcade ${a.length}, core ${b.length})${shown ? "" : ", identical"}`);
