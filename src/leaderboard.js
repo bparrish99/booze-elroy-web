@@ -720,6 +720,8 @@
     // activity log; settings: a one-line summary; first: the board's first ever score)
     const placed = (key, rank, entries, score) => {
       if (rank && opts.placed && !SK.isNeat(key)) opts.placed({ key, rank, score, settings: summary(200, SK.configFor(key)).join("  "), isDefault: key === SK.keyFor(g.defaultConfig), first: rank === 1 && entries.length === 1 });
+      // (a NEAT board: no achievements, only the activity page's NEAT log)
+      if (rank && opts.neatPlaced && SK.isNeat(key)) opts.neatPlaced({ key, rank, score, settings: "NEAT  " + summary(200, SK.configFor(key)).join("  ") });
     };
     const neMenu = [];
     GRID.forEach((row, r) => { for (let c = 0; c < row.length; c++) neMenu.push({ text: row[c], char: row[c], x: GRID_X + c * 2, y: GRID_Y + r * 2 }); });

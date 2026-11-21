@@ -50,9 +50,9 @@ tr.new td{animation:glow 6s ease-out}
 </div>
 <div id="out" hidden>
   <div class="box stats" id="stats"></div>
-  <div class="box"><div class="bar"><strong>ACCOUNTS</strong> <span class="sub" id="filterNote" style="margin:0"></span><button id="clear" hidden>Show everyone</button><button id="pinback"></button><button id="anon"></button></div><div class="accts" id="accts"></div></div>
+  <div class="box"><div class="bar"><strong>ACCOUNTS</strong> <span class="sub" id="filterNote" style="margin:0"></span><button id="clear" hidden>Show everyone</button><button id="pinback"></button><button id="anon"></button><button id="neat"></button></div><div class="accts" id="accts"></div></div>
   <div class="box" id="achBox" hidden><div class="bar"><strong id="achHead"></strong></div><table><tbody id="achList"></tbody></table></div>
-  <div class="box"><div class="bar"><strong>ACTIVITY</strong> <span class="sub" id="spanNote" style="margin:0"></span><button id="reload">Refresh</button><span class="live" id="live"></span></div><table><tbody id="log"></tbody></table>
+  <div class="box"><div class="bar"><strong id="logHead">ACTIVITY</strong> <span class="sub" id="spanNote" style="margin:0"></span><button id="reload">Refresh</button><span class="live" id="live"></span></div><table><tbody id="log"></tbody></table>
     <div class="bar more" id="more" hidden><span class="sub" id="moreNote" style="margin:0"></span><button id="earlier">24 hours earlier</button><button id="all">Show everything</button></div></div>
 </div>
 <div class="msg" id="msg"></div>
@@ -69,6 +69,14 @@ tr.new td{animation:glow 6s ease-out}
   // logged-out players (games and scores): shown to start, a button hides them (the author, 2026-11-20)
   let hideAnon = false;
   const isAnon = (e) => /^anon/.test(e.type);
+  // NEAT (the author's arcade-exact game, 2026-11-22): its games and scores are a log of their own, a button away (the
+  // regular log to start); they're told by their settings, which start "NEAT"
+  let neat = false;
+  const isNeat = (e) => {
+    if (!/^(anon)?(game|score)$/.test(e.type)) return false;
+    let d; try { d = JSON.parse(e.detail); } catch { return false; }
+    return Array.isArray(d) && /^NEAT /.test(String(d[/score$/.test(e.type) ? 2 : 0]));
+  };
   // auto-refresh: every 30 s (and at once when the tab comes back); events not seen before light up, and while the tab
   // is in the background the title counts them
   const EVERY = 30000, TITLE = document.title;
@@ -106,14 +114,15 @@ tr.new td{animation:glow 6s ease-out}
     const now = Date.now(), day = 864e5;
     // the last `days` days (24 hours to start; the author, 2026-11-15: the page got long), older ones a button away;
     // one player's (a name clicked) all show, however old
-    const all = data.events.filter((e) => (!who || e.name === who) && !(hideAnon && isAnon(e)));
+    const view = data.events.filter((e) => isNeat(e) === neat); // the regular log or NEAT's
+    const all = view.filter((e) => (!who || e.name === who) && !(hideAnon && isAnon(e)));
     const ev = who || days === Infinity ? all : all.filter((e) => now - Date.parse(e.at) < days * day);
     const hidden = all.length - ev.length;
     $("spanNote").textContent = who ? "all of " + who + "'s" : days === Infinity ? "everything kept (the last 1000)" : days === 1 ? "the last 24 hours" : "the last " + days * 24 + " hours";
     $("more").hidden = !hidden;
     $("moreNote").textContent = hidden + " earlier " + (hidden === 1 ? "entry" : "entries");
-    const since = (ms, t) => data.events.filter((e) => (!t || e.type === t) && now - Date.parse(e.at) < ms).length;
-    const active = new Set(data.events.filter((e) => now - Date.parse(e.at) < day).map((e) => e.name)).size;
+    const since = (ms, t) => view.filter((e) => (!t || e.type === t) && now - Date.parse(e.at) < ms).length;
+    const active = new Set(view.filter((e) => now - Date.parse(e.at) < day).map((e) => e.name)).size;
     $("stats").innerHTML = [[data.accounts.length, "accounts"], [active, "active today"], [since(day, "signup"), "signups today"],
       [since(day, "login"), "logins today"], [since(day, "game"), "games today"], [since(day, "anongame"), "logged-out games today"], [since(day, "achievement"), "achievements today"], [since(day, "anonscore") + since(day, "anonarenascore"), "logged-out scores today"], [since(7 * day, "signup"), "signups this week"]]
       .map(([n, l]) => "<div><b>" + n + "</b><span>" + l + "</span></div>").join("");
@@ -122,6 +131,8 @@ tr.new td{animation:glow 6s ease-out}
     $("clear").hidden = !who;
     $("pinback").textContent = HIDE.size ? "Show PINBACK" : "Hide PINBACK";
     $("anon").textContent = hideAnon ? "Show anonymous" : "Hide anonymous";
+    $("neat").textContent = neat ? "Show normal" : "Show NEAT";
+    $("logHead").textContent = neat ? "NEAT ACTIVITY" : "ACTIVITY";
     // a player picked: their achievements, earned / all, then the earned ones in the game's order with the date
     const mine = who && data.achievements ? data.achievements[who] || {} : null, ids = Object.keys(ACH);
     $("achBox").hidden = !mine;
@@ -175,6 +186,7 @@ tr.new td{animation:glow 6s ease-out}
   $("reload").addEventListener("click", () => load());
   $("pinback").addEventListener("click", () => { HIDE = new Set(HIDE.size ? [] : ["PINBACK"]); seen = null; if (HIDE.has(who)) who = null; load(); });
   $("anon").addEventListener("click", () => { hideAnon = !hideAnon; if (who === "anonymous" && hideAnon) who = null; render(); });
+  $("neat").addEventListener("click", () => { neat = !neat; render(); });
   $("earlier").addEventListener("click", () => { days += 1; render(); });
   $("all").addEventListener("click", () => { days = Infinity; render(); });
   window.__refresh = () => load(true); // tests: an auto-refresh now

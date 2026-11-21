@@ -450,9 +450,12 @@ test("accounts: the activity log (signups, logins, achievements, every game with
   await acct("POST", "placed", { board: BOARD, rank: 3, score: 12340, settings: "default settings" }, a.token);
   await acct("POST", "placed", { arena: "FRIDAY FIGHT", rank: 1, score: 8200 }, a.token);
   assert.equal((await acct("POST", "placed", { arena: "X", rank: 11, score: 5 }, a.token)).status, 400);
+  // a NEAT board: logged (its settings start "NEAT"), never counted as a board placed on
+  assert.deepEqual((await acct("POST", "placed", { board: "neat:" + BOARD, rank: 1, score: 9990, settings: "NEAT  classic Pac-Man" }, a.token)).data, { count: null });
   const r2 = await acct("GET", "activity", undefined, null, { "x-admin-key": "correct horse" });
   const scores = r2.data.events.filter((e) => e.name === "LOGGED ONE" && /score/.test(e.type)).map((e) => [e.type, JSON.parse(e.detail)]);
-  assert.deepEqual(scores.sort(), [["arenascore", [1, 8200, "FRIDAY FIGHT"]], ["score", [3, 12340, "default settings"]]]);
+  assert.deepEqual(scores.sort(), [["arenascore", [1, 8200, "FRIDAY FIGHT"]], ["score", [1, 9990, "NEAT  classic Pac-Man"]], ["score", [3, 12340, "default settings"]]]);
+  assert.deepEqual((await acct("POST", "placed", { board: BOARD }, a.token)).data, { count: 1 }); // (only BOARD: the NEAT one left out)
   for (let i = 1; i < r.data.events.length; i++) assert.ok(r.data.events[i - 1].at >= r.data.events[i].at, "newest first");
 });
 

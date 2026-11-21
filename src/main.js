@@ -55,6 +55,7 @@
         // the booze dogs: top 10 on 3 / 5 / 10 / 20 different boards (counted by the server)
         ACC.placedOn(p.key, p.rank, p.score, p.settings).then((n) => { if (n) earned(BoozeAchievements.LIST.filter((a) => a.boards && n >= a.boards).map((a) => a.id)); });
       },
+      neatPlaced: (p) => ACC.placedOn(p.key, p.rank, p.score, p.settings), // (NEAT: only logged, for the activity page's NEAT log)
       auth: () => ACC.auth(), // logged in: score posts carry the login (an account's name is only its owner's)
       playerName: () => ACC.name(), // logged in: a top-10 score goes on the board under the account's name, no name entry
       // favorites (the author, 2026-11-15): the list (account.js), "Add Favorite" (asks for a name), and playing one
@@ -879,7 +880,7 @@
         if (real && lastScene !== "game") { // one week chip: a game on 7 days in a row (the player's own calendar); every
           // game is logged for the activity page, with its settings (and starting level when it isn't 1) and arena
           const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
-          const settings = LB.summary(200).join("  ") + (g.config.startingLevel > 1 ? "  starting level " + g.config.startingLevel : "");
+          const settings = (neatOn ? "NEAT  " : "") /* (NEAT games: the activity page's NEAT log) */ + LB.summary(200).join("  ") + (g.config.startingLevel > 1 ? "  starting level " + g.config.startingLevel : "");
           const ar = LB.inArena() && LB.currentArena();
           ACC.playedOn(d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()), settings, ar ? ar.name : null).then((n) => { if (n >= 7) earned(["streak"]); });
         }
