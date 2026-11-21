@@ -539,7 +539,7 @@
       for (const dir of candidates) {
         const nx = xTile + DELTAS[dir].x, ny = yTile + DELTAS[dir].y;
         const cm = getCurrentMaze();
-        if (!isGhost || g.config.freeGhost || !cm.isDisallowed(nx, ny)) {
+        if (!isGhost || g.config.freeGhost || (exact() && self.dead) || !cm.isDisallowed(nx, ny)) { // (EXACT: eyes ignore the no-up tiles, as the arcade's)
           const dist = (nx - targetX) ** 2 + (ny - targetY) ** 2;
           if (dist <= shortest) { shortest = dist; self.iDir = dir; }
         }
@@ -946,7 +946,9 @@
           ghost.speed = logic.getGhostSpeed(ghost);
           if (!exact()) ghost.target(); // (EXACT: the eyes keep the turn already planned for the next tile, as the arcade's; they next decide a tile on)
           ghost.hidden = true;
-          if (exact()) g.exactEatFrames = 55 + ((10 - (g.exactDiv || 0)) % 6); // (55-60 frames: the divider at 4 the shortest, at 5 the longest)
+          // EXACT: the arcade's pause is a timed task of 10 tenths, added at the tick after the catch (this frame after a first-tick
+          // catch, the next after a second-tick one), each tenth counted when the divider wraps (frames mod 6, at 0)
+          if (exact()) { const d = g.exactDiv || 0; g.exactEatFrames = g.exactTick ? 60 - ((d + 1) % 6) : 59 - d; }
           mode.setMode("ateGhost");
           g.sounds.thrust.stop();
           g.sounds.ateGhost.play();
@@ -1080,7 +1082,7 @@
             if (tx <= 0 || tx >= cm.w - 1) c.iDir = c.dir; // (no decisions at the tunnel's ends and beyond: straight on, as the arcade)
             else { c.exactNext = [tx + DELTAS[c.dir].x, ty + DELTAS[c.dir].y]; c.target(); c.exactNext = null; }
           }
-        } else if (T(c.iDir) && !cm.isBlocked(c, c.iDir)) {
+        } else if (T(c.iDir) && (exactPac ? !cm.isWall(ex[0] + DELTAS[c.iDir].x, ex[2] + DELTAS[c.iDir].y) : !cm.isBlocked(c, c.iDir))) { // (EXACT: his way out by the arcade's tiles too)
           if (isPac && g.config.movement === 3) {
             if (c.speed > MAX_THRUST) {
               mode.setMode("destroyed");
@@ -1151,7 +1153,7 @@
             }
           }
 
-          logic.turn(c);
+          if (!exactPac) logic.turn(c); // (EXACT: the arcade reads his stick once, before the step, not again after it)
           eatFruit();
         } else if (isPac && g.config.movement === 3) {
           if (g.chars.pac.speed > MAX_THRUST) {
@@ -2128,7 +2130,18 @@
             // reaching him mid-tick isn't caught till the next tick, and two swapping tiles within a tick pass right through
             if (exact() && g.mode === "normal") {
               const cmx = getCurrentMaze(), [pX, , pY] = cmx.occ(g.chars.pac);
-              for (const name of charKeys()) { const ch = g.chars[name]; if (ch.target) { const [gX, , gY] = cmx.occ(ch); if (handleGhostCollision(ch, pX, pY, gX, gY)) break; } }
+              // (Clyde first, Blinky last, as the arcade's 0x171D; then, while he's energized and no tile matched, its 0x1789: a ghost
+              // whose coordinates less his are 0-3 pixels on both axes (unsigned, so only on one side of him) touches him too, eaten if
+              // blue, deadly if not)
+              const order = charKeys().filter((n) => g.chars[n].target).reverse(), pc = g.chars.pac;
+              let hit = false;
+              for (const name of order) { const ch = g.chars[name]; const [gX, , gY] = cmx.occ(ch); if (handleGhostCollision(ch, pX, pY, gX, gY)) { hit = true; break; } }
+              if (!hit && T(g.frightened)) for (const name of order) {
+                const ch = g.chars[name];
+                if (ch.dead) continue;
+                const dx = (Math.floor(pc.x) - Math.floor(ch.x)) & 255, dy = (Math.floor(ch.y) - Math.floor(pc.y)) & 255; // (the arcade's x runs the other way)
+                if (dx < 4 && dy < 4 && handleGhostCollision(ch, 0, 0, 0, 0)) break;
+              }
             }
             // EXACT: the house's own pattern (the arcade's byte at 0x4D94, set to 0x55 at every READY):
             // rotated once a frame, after the ticks (here: the last tick, once its collisions are known), unless a ghost was just
