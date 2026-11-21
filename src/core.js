@@ -29,6 +29,17 @@
     5: { pacSpeed: 1, pacFrightenedSpeed: 1, elroy2Speed: 1.05, elroy1Speed: 1, ghostSpeed: 0.95, frightenedSpeed: 0.6, tunnelSpeed: 0.5, switch: [300, 1500, 1800, 3000, 3300, 65534, 65535] },
     6: { pacSpeed: 0.9, pacFrightenedSpeed: 0.9, elroy2Speed: 1.05, elroy1Speed: 1, ghostSpeed: 0.95, frightenedSpeed: 0.45, tunnelSpeed: 0.5, switch: [300, 1500, 1800, 3000, 3300, 65534, 65535] },
   };
+  // and its speed patterns: per set, 32 bits each (the ROM's bytes in its order), rotated left one bit a tick (two ticks a
+  // frame), a 1 rotating out = a pixel's step: Pac-Man, Pac-Man frightened, Elroy 2, Elroy 1, ghost, ghost frightened, tunnel
+  const EXACT_PATTERNS = {
+    3: ["55555555", "d56ad56a", "aa6a55d5", "55555555", "aa2a5555", "92249224", "22222222"],
+    4: ["d56ad56a", "d65aadb5", "d65aadb5", "d56ad56a", "aa6a55d5", "92242549", "48242291"],
+    5: ["6d6d6d6d", "6d6d6d6d", "b66d6ddb", "6d6d6d6d", "d65aadb5", "25252525", "92249224"],
+    6: ["d56ad56a", "d56ad56a", "b66d6ddb", "6d6d6d6d", "d65aadb5", "48242291", "92249224"],
+  };
+  const PATTERN_KINDS = ["pac", "pacFright", "elroy2", "elroy1", "ghost", "ghostFright", "tunnel"];
+  // the ROM's 4 bytes (as stored) -> the 32-bit value its code rotates (high word first, each word little-endian)
+  const patternValue = (h) => { const b = [0, 2, 4, 6].map((i) => parseInt(h.slice(i, i + 2), 16)); return ((b[1] << 24) | (b[0] << 16) | (b[3] << 8) | b[2]) >>> 0; };
   // Pac-Man Plus's level table (decrypted from pacplus.zip, 7 bytes a level at 0x07AC): [speed set, pen dot limits
   // (pinky, inky, clyde), Elroy dots (1, 2), scare time s, no-dot timer frames, the fruit's scare time s]; level 21 on
   const EXACT_PLUS = [
@@ -219,6 +230,10 @@
       const upperCase = (c) => UPPER_MAP[c] || c.toUpperCase();
       self.upperCase = upperCase;
       self.getLoc = (c) => [Math.floor(c.x / TILE), mod(c.x, TILE), Math.floor(c.y / TILE), mod(c.y, TILE)];
+      // which tile a character is in, for what asks that (targets, collisions, eating, the tunnel) rather than where it is
+      // within one (centres, turns: getLoc). EXACT: the arcade's screen is mirrored to this game's, so its tiles start a
+      // pixel over horizontally (the centres agree; the boundaries are a pixel apart): its tile is (x - 1) / 8
+      self.occ = (c) => { const L = self.getLoc(c); if (exact()) L[0] = Math.floor((c.x - 1) / TILE); return L; };
       self.getChar = (x, y) => (x < 0 || x >= map[0].length || y < 0 || y >= map.length) ? false : map[y][x];
       self.isWall = (x, y) => {
         if (x < 0 || x >= map[0].length || y < 0 || y >= map.length) return false;
@@ -292,14 +307,23 @@
           const [set, pc, ic, cc, e1, e2, fr, starv, fruit] = EXACT_PLUS[Math.min(n, 21) - 1];
           Object.assign(lvl, EXACT_SETS[set], { pinkyCounter: pc, inkyCounter: ic, clydeCounter: cc, elroy1: e1, elroy2: e2, frightened: fr * 60, starvation: starv, fruitFrightenedDuration: fruit * 60 });
         }
-        lvl.switch = EXACT_SETS[g.config.difficulty === 2 ? EXACT_PLUS[Math.min(n, 21) - 1][0] : exactSetOf(own)].switch;
+        lvl.exactSet = g.config.difficulty === 2 ? EXACT_PLUS[Math.min(n, 21) - 1][0] : exactSetOf(own);
+        lvl.switch = EXACT_SETS[lvl.exactSet].switch;
         return lvl;
+      },
+      // EXACT: every character's own copies of the level's patterns (the arcade copies them in at a level's start; each
+      // only turns while it's the one in use, so a speed change doesn't lose its place)
+      exactPatterns() {
+        const P = EXACT_PATTERNS[g.level.exactSet || 3];
+        g.exactPat = {};
+        for (const name of charKeys()) { const o = {}; PATTERN_KINDS.forEach((k, i) => { o[k] = patternValue(P[i]); }); g.exactPat[name] = o; }
       },
       startLevel() {
         const musicList = Object.keys(g.music);
         const idx = rand(1, musicList.length);
         g.levelMusic = g.music[musicList[idx - 1]];
         g.level = levels.getLevel(g.levelNumber);
+        g.exactPatLevel = null; // EXACT: the level's patterns copied in afresh
         g.fruitTimer = false; g.fruitScoreTimer = false; g.starvation = 0;
         g.level.timer = 0;
         g.radarTimer = false;
@@ -605,7 +629,7 @@
           x: 8 * hc.x, y: 8 * (hc.y - 3) + 4, dir: 2, scatterX: sp.blinky.x, scatterY: sp.blinky.y, houseX: hc.x, houseY: hc.y, elroy: true,
         }, makeTarget((self, cm2) => {
           if (g.level.chase || (g.dots.length <= g.level.elroy1 && !g.suspendElroy)) {
-            const [px, , py] = cm2.getLoc(g.chars.pac); return [px, py];
+            const [px, , py] = cm2.occ(g.chars.pac); return [px, py];
           }
           return [self.scatterX, self.scatterY];
         }), "blinky", true);
@@ -614,7 +638,7 @@
           leavingPreference: 0, dotCounter: level.pinkyCounter, globalCounter: 7,
         }, makeTarget((self, cm2) => {
           if (g.level.chase) {
-            const [px, , py] = cm2.getLoc(g.chars.pac);
+            const [px, , py] = cm2.occ(g.chars.pac);
             const d = DELTAS[g.chars.pac.dir];
             let tx = px + d.x * 4; const ty = py + d.y * 4;
             if (g.config.pinkyBug && g.chars.pac.dir === 3) tx = px - 4;
@@ -627,8 +651,8 @@
           leavingPreference: 1, globalCounter: 17, dotCounter: level.inkyCounter,
         }, makeTarget((self, cm2) => {
           if (g.level.chase) {
-            const [px, , py] = cm2.getLoc(g.chars.pac);
-            const [bx, , by] = cm2.getLoc(g.chars.blinky);
+            const [px, , py] = cm2.occ(g.chars.pac);
+            const [bx, , by] = cm2.occ(g.chars.blinky);
             const d = DELTAS[g.chars.pac.dir];
             let midX = px + d.x * 2; const midY = py + d.y * 2;
             if (g.config.pinkyBug && g.chars.pac.dir === 3) midX = px - 2;
@@ -641,7 +665,7 @@
           leavingPreference: 2, dotCounter: level.clydeCounter, globalCounter: 32,
         }, makeTarget((self, cm2, xTile, yTile) => {
           if (g.level.chase) {
-            const [px, , py] = cm2.getLoc(g.chars.pac);
+            const [px, , py] = cm2.occ(g.chars.pac);
             if ((xTile - px) ** 2 + (yTile - py) ** 2 >= 64) return [px, py];
           }
           return [self.scatterX, self.scatterY];
@@ -649,7 +673,7 @@
         if (N > 4) { const s = cm.punkyStart; mk("punky", {
           x: 8 * s.x, y: 8 * s.y + 4, dir: 0, houseX: hc.x, houseY: hc.y, leavesRight: true,
         }, makeTarget((self, cm2) => {
-          const [px, , py] = cm2.getLoc(g.chars.pac);
+          const [px, , py] = cm2.occ(g.chars.pac);
           const d = DELTAS[g.chars.pac.dir];
           const tx = px + d.y * (rand(0, 8) - 4);
           const ty = py + d.x * (rand(0, 8) - 4);
@@ -658,7 +682,7 @@
         if (N > 5) { const s = cm.gunkyStart; mk("gunky", {
           x: 8 * s.x, y: 8 * s.y + 4, dir: 0, houseX: hc.x, houseY: hc.y, leavesRight: false,
         }, makeTarget((self, cm2) => {
-          const [px, , py] = cm2.getLoc(g.chars.pac);
+          const [px, , py] = cm2.occ(g.chars.pac);
           const px2 = cm2.w / 2 - px, py2 = cm2.h / 2 - py;
           return [px + px2 * 2, py + py2 * 2];
         }), "gunky", false); }
@@ -732,7 +756,7 @@
         const item = collectibles[i];
         if (xTile === item.x && yTile === item.y) {
           score(item.score);
-          g.chars.pac.skipCounter = item.skipCounter;
+          g.chars.pac.skipCounter = exact() ? (item.skipCounter === 1 ? 2 : 7) : item.skipCounter; // EXACT: the arcade's pause, in ticks (a dot 2, an energizer 7)
           collectibles.splice(i, 1);
           if (item.action) item.action(xTile, yTile);
         }
@@ -743,11 +767,11 @@
     // (the collision loop stops after the first ghost, and collisions are off during ateGhost).
     logic.eatOverlappingFrightened = () => {
       const cm = getCurrentMaze();
-      const [pX, , pY] = cm.getLoc(g.chars.pac);
+      const [pX, , pY] = cm.occ(g.chars.pac);
       for (const name of charKeys()) {
         const ch = g.chars[name];
         if (ch.target && T(ch.frightened) && !T(ch.dead)) {
-          const [gX, , gY] = cm.getLoc(ch);
+          const [gX, , gY] = cm.occ(ch);
           if (handleGhostCollision(ch, pX, pY, gX, gY)) break;
         }
       }
@@ -770,7 +794,7 @@
       if (g.sounds.phase.isPlaying()) g.sounds.phase.stop();
       g.sounds.phase.play();
       const cm = getCurrentMaze();
-      const [pX, , pY] = cm.getLoc(g.chars.pac);
+      const [pX, , pY] = cm.occ(g.chars.pac);
       const near = (x, y) => (x - pX) * (x - pX) + (y - pY) * (y - pY) <= VACUUM_RADIUS * VACUUM_RADIUS;
       // what it takes, for the picture of it being sucked in (render.js drawVacuum; it's all eaten right now regardless)
       const fly = g.powers.concat(g.dots).filter((it) => near(it.x, it.y))
@@ -790,7 +814,7 @@
       for (const name of charKeys()) {
         const ch = g.chars[name];
         if (!ch.target || T(ch.dead) || ch.hidden || ch.housing || ch.entering) continue;
-        const [gX, , gY] = cm.getLoc(ch);
+        const [gX, , gY] = cm.occ(ch);
         if (near(gX, gY)) g.vacuumGhosts.push({ ch, x0: ch.x, y0: ch.y });
       }
       mode.setMode("vacuum");
@@ -802,7 +826,7 @@
       if (g.sounds.phase.isPlaying()) g.sounds.phase.stop();
       g.sounds.phase.play();
       const cm = getCurrentMaze(), hc = cm.houseCenter, pac = g.chars.pac;
-      const [pX, , pY] = cm.getLoc(pac);
+      const [pX, , pY] = cm.occ(pac);
       // the tiles he could walk to (flood fill), leaving out the house and the tunnels
       // the pen itself: its inside and door, not a tile more (a wider box swallowed the corridor beside the pen's right
       // wall, and standing there the Push found nowhere to throw a ghost and did nothing: the author)
@@ -823,7 +847,7 @@
       for (const name of charKeys()) {
         const ch = g.chars[name];
         if (!ch.target || T(ch.dead) || ch.hidden || ch.housing || ch.entering || ch.leaving) continue;
-        const [gX, , gY] = cm.getLoc(ch);
+        const [gX, , gY] = cm.occ(ch);
         const d0 = Math.sqrt((gX - pX) ** 2 + (gY - pY) ** 2); // (sqrt, not hypot: the same to the last bit in every browser, for replays)
         if (d0 > PUSH_REACH) continue;
         let ux = gX - pX, uy = gY - pY;                                    // away from him (on his tile: behind him)
@@ -948,6 +972,10 @@
         if (c.dir % 2 === 0) {
           if (yOff > CENTER) c.y -= 1;
           if (yOff < CENTER) c.y += 1;
+        } else if (exact()) { // EXACT: a corner cut pulls him toward the centre of the tile he's in by the arcade's tiles
+          const cx = getCurrentMaze().occ(c)[0] * TILE + CENTER, x0 = c.x - DELTAS[c.dir].x;
+          if (x0 < cx) c.x += 1;
+          if (x0 > cx) c.x -= 1;
         } else {
           if (xOff < CENTER) c.x += 1;
           if (xOff > CENTER) c.x -= 1;
@@ -962,21 +990,52 @@
       c.moved = true;
     };
 
+    // EXACT: which of a character's patterns the arcade would turn now (null: not moved by pattern: the house, eyes, the
+    // other movement modes, an ability's speed); by its speed, which already follows the arcade's order (tunnel first)
+    const exactKind = (c) => {
+      if (g.exactPatLevel !== g.levelNumber) { levels.exactPatterns(); g.exactPatLevel = g.levelNumber; } // (a new level: fresh copies)
+      if (!g.exactPat[c.name]) return null;
+      const L = g.level;
+      if (c === g.chars.pac) {
+        if (g.config.movement !== 0) return null;
+        if (T(g.frightened) && c.speed === L.pacFrightenedSpeed) return "pacFright";
+        return c.speed === L.pacSpeed ? "pac" : null;
+      }
+      if (!c.target || c.housing || c.leaving || c.entering || c.dead || T(c.stunned)) return null;
+      return c.speed === L.tunnelSpeed ? "tunnel" : c.speed === L.frightenedSpeed ? "ghostFright" : c.speed === L.elroy2Speed && c.elroy ? "elroy2"
+        : c.speed === L.elroy1Speed && c.elroy ? "elroy1" : c.speed === L.ghostSpeed ? "ghost" : null;
+    };
     logic.move = (c) => {
       const isPac = c === g.chars.pac;
+      if (exact()) { // EXACT: a pattern's bit a tick for what the arcade moves by pattern; everything else once a frame
+        const kind = exactKind(c);
+        if (!kind && g.exactTick === 0) return;
+        if (kind) {
+          if (c.skipCounter && c.skipCounter > 0) { c.skipCounter -= 1; return; } // (the dot pause: the pattern stands still)
+          const pat = g.exactPat[c.name], v = pat[kind];
+          pat[kind] = ((v << 1) | (v >>> 31)) >>> 0;
+          if (!(v >>> 31)) return;
+          if (isPac) logic.turn(c); // EXACT: the arcade reads the stick only on a tick he moves (after the pause, a 1 from his pattern)
+          c.accum16 = 16;
+        }
+      }
       if (c.skipCounter && c.skipCounter > 0) { c.skipCounter -= 1; return; }
       c.accum16 = c.accum16 || 0;
       const speed16 = c.speed * SPEED_FACTOR * 16;
-      c.accum16 += speed16;
+      if (!(exact() && exactKind(c))) c.accum16 += speed16;
       while (c.accum16 >= 16) {
         c.moved = false;
         const cm = getCurrentMaze();
         const [xTile, xOff, yTile, yOff] = cm.getLoc(c);
         const oldX = xTile, oldY = yTile;
         c.accum16 -= 16;
-        if (c.housing || c.leaving || c.entering || !cm.isBlocked(c, c.dir) ||
+        const exactPac = isPac && exact() && exactKind(c); // EXACT: his walls and centres by the arcade's tiles
+        const ex = exactPac ? cm.occ(c) : null, ecx = ex && ex[0] * TILE + CENTER, ecy = ex && ex[2] * TILE + CENTER;
+        if (exactPac ? (!cm.isWall(ex[0] + DELTAS[c.dir].x, ex[2] + DELTAS[c.dir].y) || (c.dir === 2 && c.x > ecx) || (c.dir === 3 && c.y > ecy) ||
+          (c.dir === 0 && c.x < ecx) || (c.dir === 1 && c.y < ecy)) :
+          (c.housing || c.leaving || c.entering || !cm.isBlocked(c, c.dir) ||
           (c.dir === 2 && xOff > CENTER) || (c.dir === 3 && yOff > CENTER) ||
-          (c.dir === 0 && xOff < CENTER) || (c.dir === 1 && yOff < CENTER)) {
+          (c.dir === 0 && xOff < CENTER) || (c.dir === 1 && yOff < CENTER))) {
           logic.advance(c, xOff, yOff);
         } else if (T(c.iDir) && !cm.isBlocked(c, c.iDir)) {
           if (isPac && g.config.movement === 3) {
@@ -1023,12 +1082,12 @@
               if (!T(c.leaveRight)) c.target();
             }
             if (g.mode !== "ateGhost") {
-              const [pX, , pY] = cm.getLoc(g.chars.pac);
-              const [gX, , gY] = cm.getLoc(c);
+              const [pX, , pY] = cm.occ(g.chars.pac);
+              const [gX, , gY] = cm.occ(c);
               if (handleGhostCollision(c, pX, pY, gX, gY)) break;
             }
           } else {
-            const [pX, , pY] = cm.getLoc(g.chars.pac);
+            const [pX, , pY] = cm.occ(g.chars.pac);
             checkCollisions(g.powers, pX, pY);
             checkCollisions(g.dots, pX, pY);
             // web edition bug fix (2026-11-13; the Lua had it too): in Plus Mode the fruit frightens the ghosts like an energizer, so
@@ -1038,7 +1097,7 @@
             for (const name of charKeys()) {
               const ch = g.chars[name];
               if (ch.target) {
-                const [gX, , gY] = cm.getLoc(ch);
+                const [gX, , gY] = cm.occ(ch);
                 if (handleGhostCollision(ch, pX, pY, gX, gY)) break;
               }
             }
@@ -1123,7 +1182,10 @@
         }
         if (mod(c.dir - c.iDir, 2) === 1 && yTile > 0 && yTile < cm.h && xTile > 0 && xTile < cm.w) {
           const turnWindow = c.turnWindow || 0;
-          if (c.dir % 2 === 0) {
+          if (exact() && isPac) { // EXACT: the arcade turns him anywhere inside the junction's tile (its tiles: 4 pixels short of the centre on one side, 3 on the other)
+            const [ox, , oy] = cm.occ(c);
+            if (!cm.isWall(ox + DELTAS[c.iDir].x, oy + DELTAS[c.iDir].y)) { c.dir = c.iDir; c.facing = c.iDir; }
+          } else if (c.dir % 2 === 0) {
             if (!cm.isBlocked(c, c.iDir) && Math.abs(xOff - CENTER) <= turnWindow) { c.dir = c.iDir; c.facing = c.iDir; }
           } else if (!cm.isBlocked(c, c.iDir) && Math.abs(yOff - CENTER) <= turnWindow) { c.dir = c.iDir; c.facing = c.iDir; }
         }
@@ -1219,6 +1281,7 @@
               g.pauseSpent = false; g.freezeLeft = 0;                            // and the Pause's
               characters.reset();
               levels.resetLevel();
+              if (exact()) g.chars.pac.skipCounter = 1; // EXACT: the arcade's pause counter starts at 0: Pac-Man sits out play's first tick
             }
           },
           endFunc() { playSiren(); },
@@ -1570,8 +1633,8 @@
           const ch = g.chars[name];
           if (ch.target && !ch.dead) {
             const cm = getCurrentMaze();
-            const [cx, , cy] = cm.getLoc(ch);
-            const [px, , py] = cm.getLoc(g.chars.pac);
+            const [cx, , cy] = cm.occ(ch);
+            const [px, , py] = cm.occ(g.chars.pac);
             const dv = DELTAS[g.chars.pac.dir];
             for (let i = 1; i <= STUN_DISTANCE; i++) {
               const tx = px + dv.x * i, ty = py + dv.y * i;
@@ -1589,7 +1652,7 @@
       g.playerInput = false;
       if (g.autoplay || g.attract) {
         const cm = getCurrentMaze();
-        const [xTile, xOff, yTile, yOff] = cm.getLoc(pac);
+        const [xTile, xOff, yTile, yOff] = cm.occ(pac);
         const d = DELTAS[pac.dir];
         const oneAhead = { xTile: xTile + d.x, yTile: yTile + d.y };
         if (isScaryMonster(xTile, yTile, pac.dir, 1) || isScaryMonster(xTile, yTile, pac.dir, 2) ||
@@ -1764,6 +1827,7 @@
     };
 
     const updateCharacterMovement = (char) => {
+      if (exact() && g.exactTick === 0 && !exactKind(char)) return; // EXACT: what doesn't move by pattern moves once a frame, after the ticks (the arcade's per-frame routines)
       char.moved = false;
       if (T(char.stunned) && char.stunned > 0) {
         char.stunned -= 1;
@@ -1955,11 +2019,15 @@
           handlePlayerInput();
           g.ghostEatenThisFrame = false;
           const frozen = g.freezeLeft > 0; // the Pause ability: the ghosts stand still
-          logic.turn(g.chars.pac);
-          for (const name of charKeys()) {
-            const char = g.chars[name];
-            if (frozen && char !== g.chars.pac) { char.moved = false; continue; }
-            if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
+          // EXACT: two ticks a frame, as the arcade's game loop (each character a pixel at most a tick, by its pattern)
+          for (let tick = 0, ticks = exact() ? 2 : 1; tick < ticks; tick++) {
+            g.exactTick = tick;
+            if (!(exact() && exactKind(g.chars.pac))) logic.turn(g.chars.pac);
+            for (const name of charKeys()) {
+              const char = g.chars[name];
+              if (frozen && char !== g.chars.pac) { char.moved = false; continue; }
+              if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
+            }
           }
           if (T(g.fruitTimer)) {
             g.fruitTimer -= 1;
