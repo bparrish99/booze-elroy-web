@@ -504,6 +504,8 @@
 
     // fixed visiting order for g.chars (see header)
     const charKeys = () => g.charOrder;
+    // the dots left that Elroy goes by (EXACT: the energizers still on the board count too, as the arcade's 244 less those eaten)
+    const elroyLeft = () => g.dots.length + (exact() ? g.powers.length : 0);
 
     // ------------------------------------------------------------------ characters
     const getRandomFrightenedDir = () => {
@@ -556,7 +558,7 @@
         if (g.frightened < 120 || T(self.stunned)) return animations.scaredBluePlus;
         return undefined;
       }
-      if (elroyCheck && g.dots.length <= g.level.elroy1 && !g.suspendElroy) return animations.booze;
+      if (elroyCheck && elroyLeft() <= g.level.elroy1 && !g.suspendElroy) return animations.booze;
       if (T(self.iDir) && !self.leaving && !self.housing) return animations[ghostName][self.iDir];
       return animations[ghostName][self.dir];
     };
@@ -645,7 +647,7 @@
         if (N > 0) mk("blinky", {
           x: 8 * hc.x, y: 8 * (hc.y - 3) + 4, dir: 2, scatterX: sp.blinky.x, scatterY: sp.blinky.y, houseX: hc.x, houseY: hc.y, elroy: true,
         }, makeTarget((self, cm2) => {
-          if (g.level.chase || (g.dots.length <= g.level.elroy1 && !g.suspendElroy)) {
+          if (g.level.chase || (elroyLeft() <= g.level.elroy1 && !g.suspendElroy)) {
             const [px, , py] = cm2.occ(g.chars.pac); return [px, py];
           }
           return [self.scatterX, self.scatterY];
@@ -1077,11 +1079,8 @@
             if (key !== c.exactTile) { c.exactTile = key; if (!T(c.leaveRight)) updateGhostSpeed(c, ox, oy); }
           }
           // EXACT: a ghost decides one pixel past a tile's centre, for the next tile (the arcade's one tile ahead)
-          if (exact() && c.target && !c.housing && !c.leaving && !c.entering && !T(c.leaveRight) && (c.dir % 2 === 0 ? xOff === CENTER : yOff === CENTER)) {
-            const [tx, , ty] = cm.occ(c);
-            if (tx <= 0 || tx >= cm.w - 1) c.iDir = c.dir; // (no decisions at the tunnel's ends and beyond: straight on, as the arcade)
-            else { c.exactNext = [tx + DELTAS[c.dir].x, ty + DELTAS[c.dir].y]; c.target(); c.exactNext = null; }
-          }
+          // (made at the second tick's end, after its moves, Pac-Man's included: exactDecisions)
+          if (exact() && c.target && !c.housing && !c.leaving && !c.entering && !T(c.leaveRight) && (c.dir % 2 === 0 ? xOff === CENTER : yOff === CENTER)) c.exactDecide = true;
         } else if (T(c.iDir) && (exactPac ? !cm.isWall(ex[0] + DELTAS[c.iDir].x, ex[2] + DELTAS[c.iDir].y) : !cm.isBlocked(c, c.iDir))) { // (EXACT: his way out by the arcade's tiles too)
           if (isPac && g.config.movement === 3) {
             if (c.speed > MAX_THRUST) {
@@ -1251,8 +1250,8 @@
       if (c.leaving) return exact() ? 0.4 : 0.35;
       if (c.dead) return 1.6;
       if (c.elroy && !g.suspendElroy) {
-        if (g.dots.length <= g.level.elroy2) return g.level.elroy2Speed;
-        else if (g.dots.length <= g.level.elroy1) return g.level.elroy1Speed;
+        if (elroyLeft() <= g.level.elroy2) return g.level.elroy2Speed;
+        else if (elroyLeft() <= g.level.elroy1) return g.level.elroy1Speed;
       }
       if (c.frightened) return g.level.frightenedSpeed;
       return g.level.ghostSpeed;
@@ -1367,7 +1366,7 @@
           startFunc() { if (exact() && g.exactEatFrames != null) { g.modeTimer = g.exactEatFrames; g.exactEatFrames = null; } },
           endFunc() {
             if (exact()) g.exactResumeTick = true; // (EXACT: the arcade spends the resuming frame's first tick clearing the pause)
-            for (const name of charKeys()) g.chars[name].hidden = false;
+            for (const name of charKeys()) { const c = g.chars[name]; if (exact() && c.hidden) c.exactFresh = true; c.hidden = false; } // (EXACT: the ghost just eaten: its eyes set off with play)
             g.sounds.scared.stop();
             if (!g.sounds.dead.isPlaying()) g.sounds.dead.play();
             logic.eatOverlappingFrightened();
@@ -1904,6 +1903,20 @@
       }
     };
 
+    // EXACT: the decisions ghosts owe since stepping a pixel past a tile's centre, for the next tile: the arcade makes them once a
+    // frame, at its second tick's end (a step on the first tick decides with Pac-Man where he is after the second)
+    const exactDecisions = () => {
+      const cm = getCurrentMaze();
+      for (const name of charKeys()) {
+        const c = g.chars[name];
+        if (!c.exactDecide) continue;
+        c.exactDecide = false;
+        if (!c.target || c.housing || c.leaving || c.entering || T(c.leaveRight)) continue;
+        const [tx, , ty] = cm.occ(c);
+        if (tx <= 0 || tx >= cm.w - 1) c.iDir = c.dir; // (no decisions at the tunnel's ends and beyond: straight on, as the arcade)
+        else { c.exactNext = [tx + DELTAS[c.dir].x, ty + DELTAS[c.dir].y]; c.target(); c.exactNext = null; }
+      }
+    };
     const updateCharacterMovement = (char) => {
       if (exact() && g.exactTick === 0 && !exactKind(char)) return; // EXACT: what doesn't move by pattern moves once a frame, after the ticks (the arcade's per-frame routines)
       if (exact() && (char.housing || char.leaving) && !g.exactHousePass) return; // (the house: its own pass after both ticks, below)
@@ -2125,7 +2138,12 @@
           g.exactHouseStep = false;
           for (let tick = 0, ticks = exact() ? 2 : 1; tick < ticks; tick++) {
             g.exactTick = tick;
-            if (exact() && tick === 0 && g.exactResumeTick) { g.exactResumeTick = false; continue; } // (play back on the second tick)
+            if (exact() && tick === 0 && g.exactResumeTick) { // (play back on the second tick; eyes already on their way take this one too)
+              g.exactResumeTick = false;
+              if (!frozen) for (const name of charKeys()) { const ch = g.chars[name]; if (ch.target && ch.dead && !ch.exactFresh) updateCharacterMovement(ch); }
+              for (const name of charKeys()) g.chars[name].exactFresh = false;
+              continue;
+            }
             // EXACT: the arcade checks Pac-Man against the ghosts once, at each tick's start, by tile (before anyone moves): a ghost
             // reaching him mid-tick isn't caught till the next tick, and two swapping tiles within a tick pass right through
             if (exact() && g.mode === "normal") {
@@ -2162,6 +2180,7 @@
             // at the frame's end (the scatter / chase clock) sees it already over on the tick it ran out; then the house's dot
             // counts (0x20C9 and its neighbours): a ghost freed here, and Blinky's Elroy back with Clyde's release, count for the
             // ghosts from the next tick. Only on a tick that's played: a ghost caught at its start stops the rest of it
+            if (exact() && tick === 1 && (g.mode === "normal" || g.mode === "ateGhost")) exactDecisions();
             if (exact() && g.mode === "normal") { updateFrightenedState(true); releaseGhosts("dots"); }
           }
           // EXACT: the no-dot timer, after both ticks and before the house's ghosts move (the arcade's 0x13DD: reset while a dot has gone since the last tick his pattern moved him, a pause included; a ghost it lets out heads for the door this frame)
@@ -2183,12 +2202,12 @@
           }
           if (g.dots.length === 0 && g.powers.length === 0) mode.setMode("levelComplete");
           const b = g.chars.blinky;
-          if (b && !b.dead && !b.frightened && !b.hidden && g.state.showGhosts && g.dots.length <= g.level.elroy1 && !g.suspendElroy && (!g.config.radar || g.radarTimer > g.config.radar)) {
+          if (b && !b.dead && !b.frightened && !b.hidden && g.state.showGhosts && elroyLeft() <= g.level.elroy1 && !g.suspendElroy && (!g.config.radar || g.radarTimer > g.config.radar)) {
             graphics.emitBlinkyBubbles(b.x, b.y);
           }
           graphics.updateParticles();
           if (g.chars.pac.moved || (g.config.movement === 3 && g.chars.pac.speed > 0.3)) graphics.updateAnimation(g.chars.pac, gameFc);
-        } else if (g.mode === "ateGhost") {
+        } else if (g.mode === "ateGhost" || (exact() && g.mode === "normal" && g.exactResumeTick)) { // (EXACT: and the frame the pause ends, still the pause for the eyes)
           // (the eyes head home during the pause, as in the arcade; not while the Pause ability has the ghosts frozen:
           // a second ghost eaten used to set the first one's eyes going again, the author, 2026-11-17)
           // (EXACT: a pixel each tick, both ticks of the frame, as the arcade's eyes keep going through the pause)
@@ -2196,8 +2215,9 @@
             if (exact()) g.exactTick = tick;
             for (const name of charKeys()) {
               const c = g.chars[name];
-              if (c.dead && !c.hidden) updateCharacterMovement(c);
+              if (c.dead && !c.hidden && !c.exactFresh) updateCharacterMovement(c);
             }
+            if (exact() && tick === 1) exactDecisions();
           }
         }
 
