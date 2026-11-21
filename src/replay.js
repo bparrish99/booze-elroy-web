@@ -45,7 +45,8 @@
         const seed = (Math.random() * 4294967296) >>> 0;
         rand = mulberry32(seed); step = 0;
         const cfg = {}; for (const k of CFG) cfg[k] = core.g.config[k];
-        rec = { v: core.REPLAY_VERSION, seed, cfg, keys: [], ev: [], mask: 0, end: 0, score: 0 };
+        // (prev: the maze on show before the game: a pack's first pick avoids repeating it, so playback puts it back first)
+        rec = { v: core.REPLAY_VERSION, seed, cfg, prev: core.g.currentMaze, keys: [], ev: [], mask: 0, end: 0, score: 0 };
       },
       /** before each update (main.js): a replay's presses made after this many steps of play go in now */
       beforeStep() {
@@ -75,7 +76,7 @@
         if (!rec || !rec.done || rec.score !== score) return null;
         let prev = 0;
         const keys = rec.keys.map(([s, m]) => { const d = s - prev; prev = s; return d.toString(36) + "." + m.toString(36); }).join(",");
-        const json = JSON.stringify({ v: rec.v, seed: rec.seed, cfg: rec.cfg, keys, ev: rec.ev, end: rec.end, score: rec.score });
+        const json = JSON.stringify({ v: rec.v, seed: rec.seed, cfg: rec.cfg, prev: rec.prev, keys, ev: rec.ev, end: rec.end, score: rec.score });
         try {
           if (typeof CompressionStream === "undefined") throw new Error("no gzip");
           const buf = await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
@@ -108,6 +109,9 @@
         const shown = { score: core.g.score };
         play = { data, name, back, rid, fix, own, shown, speed: 1, paused: false, old: data.v !== core.REPLAY_VERSION, ki: 0, ei: 0, mask: 0 };
         Object.assign(core.g.config, data.cfg, fix || {});
+        // (the maze before the game, as when it was played; an older replay didn't keep it: none, the pick without a reroll,
+        // the same every viewing)
+        core.g.currentMaze = data.prev !== undefined ? data.prev : null;
         core.g.autoplay = false; core.g.attract = false;
         core.setScene("game"); // (env.gameStarting seeds it)
       },
