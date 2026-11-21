@@ -969,7 +969,7 @@
         } else {
           rand(); // nod to the OG random number thing
           if (!exact()) c.target(); // (EXACT: decided a pixel past the last tile's centre instead, below)
-          updateGhostSpeed(c, newX, newY);
+          if (!exact()) updateGhostSpeed(c, newX, newY); // (EXACT: by the arcade's tiles, below)
         }
       }
     };
@@ -1046,6 +1046,11 @@
           (c.dir === 2 && xOff > CENTER) || (c.dir === 3 && yOff > CENTER) ||
           (c.dir === 0 && xOff < CENTER) || (c.dir === 1 && yOff < CENTER))) {
           logic.advance(c, xOff, yOff);
+          // EXACT: the tunnel's slow zone by the arcade's tiles (its boundary a pixel over horizontally)
+          if (exact() && c.target && !c.housing && !c.leaving && !c.entering) {
+            const [ox, , oy] = cm.occ(c), key = ox + "," + oy;
+            if (key !== c.exactTile) { c.exactTile = key; if (!T(c.leaveRight)) updateGhostSpeed(c, ox, oy); }
+          }
           // EXACT: a ghost decides one pixel past a tile's centre, for the next tile (the arcade's one tile ahead)
           if (exact() && c.target && !c.housing && !c.leaving && !c.entering && !T(c.leaveRight) && (c.dir % 2 === 0 ? xOff === CENTER : yOff === CENTER)) {
             const [tx, , ty] = cm.occ(c);
@@ -1847,8 +1852,11 @@
             for (const name of charKeys()) {
               const c = g.chars[name];
               if (c.target) {
-                if (c.housing) c.leaveRight = 2;
-                if (!c.housing && !c.leaving && !c.entering && !c.dead) { if (exact()) c.exactReverse = true; else { c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.target(); } } // EXACT: at its tile's centre
+                if (exact()) { if (!c.dead) c.exactReverse = true; } // EXACT: every ghost, in the house too, turns round at its next tile centre out in the maze
+                else {
+                  if (c.housing) c.leaveRight = 2;
+                  if (!c.housing && !c.leaving && !c.entering && !c.dead) { c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.target(); }
+                }
               }
             }
             break;
