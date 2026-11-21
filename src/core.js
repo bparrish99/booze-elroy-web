@@ -458,7 +458,7 @@
           if (g.config.plusMode && !byFruit && exact()) {
             const r = g.exactRnd || 0;
             if (!(r & 0x40)) immuneChar = g.exactImmune = g.chars[["blinky", "pinky", "inky", "clyde"][r & 3]] || null;
-            if (g.levelNumber > 2 && !(r & 0x10)) g.mazeFrightened = true;
+            if (g.levelNumber > 2 && !(r & 0x10)) { g.mazeFrightened = true; g.exactTunnelClearAt = (g.exactClock || 0) + 1; } // (its colours, the tunnel's too, gone from the next frame)
           } else if (g.config.plusMode && !byFruit) {
             if (rand() < 0.5) {
               const candidates = [];
@@ -550,7 +550,8 @@
       for (const dir of candidates) {
         const nx = xTile + DELTAS[dir].x, ny = yTile + DELTAS[dir].y;
         const cm = getCurrentMaze();
-        if (!isGhost || g.config.freeGhost || (exact() && self.dead) || !cm.isDisallowed(nx, ny)) { // (EXACT: eyes ignore the no-up tiles, as the arcade's)
+        // (EXACT: eyes ignore the no-up tiles, as the arcade's; and in Pac-Man Plus they're colour too, gone with the maze's colours)
+        if (!isGhost || g.config.freeGhost || (exact() && (self.dead || (g.config.plusMode && g.exactTunnelOff))) || !cm.isDisallowed(nx, ny)) {
           const dist = (nx - targetX) ** 2 + (ny - targetY) ** 2;
           if (dist <= shortest) { shortest = dist; self.iDir = dir; }
         }
@@ -577,7 +578,7 @@
     const lastTargets = new WeakMap();
     const makeTarget = (chaseFn, random) => Object.assign(function () {
       const self = this;
-      if (!T(self.iDir)) { self.iDir = self.dir; return; }
+      if (!T(self.iDir)) { self.iDir = self.dir; if (!exact()) return; } // (EXACT: the first decision out of the house aims like any other)
       const cm = getCurrentMaze();
       // EXACT: the arcade plans one tile ahead (self.exactNext: the next tile, its exits, never back the way it came)
       const ahead = exact() && self.exactNext;
@@ -733,6 +734,7 @@
         // timer's copy of the dot count (0x4D9E) to none eaten: a life's first frame before he moves resets the timer if any are gone
         if (exact()) {
           g.exactQueue = []; g.exactDotsSeen = g.exactBoardTotal; g.exactFruitSecs = 0; g.exactFruitHeld = false;
+          g.exactTunnelOff = false; g.exactTunnelClearAt = g.exactTunnelBackAt = null; // (the maze drawn afresh)
           for (const name of charKeys()) { const c = g.chars[name]; if (c) { c.exactReverse = false; c.exactDecide = false; c.exactFresh = false; } }
         }
         // the Lua only treats the "mspac" scatter option (2) like "random" (1) for blinky and pinky
@@ -985,7 +987,9 @@
     };
 
     const updateGhostSpeed = (c, xTile, yTile) => {
-      if (!c.dead && getCurrentMaze().isTunnel(xTile, yTile)) c.speed = g.level.tunnelSpeed;
+      // (EXACT, Pac-Man Plus: the arcade's slow zone is the tunnel colour, 0x1B, in its colour RAM, and Plus repaints the maze: no
+      // tunnel while the colour is gone, g.exactTunnelOff)
+      if (!c.dead && getCurrentMaze().isTunnel(xTile, yTile) && !(exact() && g.config.plusMode && g.exactTunnelOff)) c.speed = g.level.tunnelSpeed;
       else if (c.frightened) c.speed = g.level.frightenedSpeed;
       else if (!c.housing) c.speed = logic.getGhostSpeed(c);
     };
@@ -1890,6 +1894,7 @@
       if (T(g.frightened)) {
         g.frightened -= 1;
         if (g.frightened <= 0) {
+          if (exact() && g.config.plusMode) { g.exactTunnelClearAt = (g.exactClock || 0) + 1; g.exactTunnelBackAt = (g.exactClock || 0) + 2; } // (EXACT, Plus: the maze repainted: a frame without the tunnel)
           g.sounds.scared.stop();
           let anyDead = false;
           for (const name of charKeys()) if (g.chars[name].dead) { anyDead = true; break; }
@@ -2137,6 +2142,10 @@
         // its interrupt does; it times the arcade's timed tasks (the eat-a-ghost pause). Its phase at a game's start is whatever
         // it is (the arcade's depends on when START was pressed); the harness can set it to the ROM's (env.exactDivSync)
         if (exact()) { exactCounters(); g.exactClock = (g.exactClock || 0) + 1; } // (and a plain count, for timing the intermissions)
+        // EXACT, Pac-Man Plus: its maze repaints run after a frame's ticks (a main-loop task): the tunnel colour goes as a fright ends or
+        // the maze turns invisible, and comes back a frame after the fright's end
+        if (exact() && g.exactTunnelClearAt === g.exactClock) g.exactTunnelOff = true;
+        if (exact() && g.exactTunnelBackAt === g.exactClock) g.exactTunnelOff = false;
         // EXACT: the no-dot timer keeps counting through the pause after eating a ghost (in play: counted after the ticks, below)
         if (exact() && g.scene.name === "game" && g.mode === "ateGhost") { g.starvation = (g.starvation || 0) + 1; releaseGhosts("timer"); } // (its limit too: a ghost can be let out in the pause)
         if (g.vacuumFx > 0) g.vacuumFx -= 1; // the Vacuum's swirl (render.js)
