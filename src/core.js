@@ -944,7 +944,7 @@
           if (ghost.leaving) { ghost.leaving = false; ghost.entering = true; }
           ghost.frightened = false;
           ghost.speed = logic.getGhostSpeed(ghost);
-          ghost.target();
+          if (!exact()) ghost.target(); // (EXACT: the eyes keep the turn already planned for the next tile, as the arcade's; they next decide a tile on)
           ghost.hidden = true;
           if (exact()) g.exactEatFrames = 55 + ((10 - (g.exactDiv || 0)) % 6); // (55-60 frames: the divider at 4 the shortest, at 5 the longest)
           mode.setMode("ateGhost");
@@ -1041,6 +1041,7 @@
           const pat = g.exactPat[c.name], v = pat[kind];
           pat[kind] = ((v << 1) | (v >>> 31)) >>> 0;
           if (!(v >>> 31)) return;
+          if (isPac) g.exactDotsSeen = g.dots.length + g.powers.length; // (the no-dot timer's copy of the count: the arcade's 0x1843, on every tick his pattern moves him, a wall or not)
           if (isPac) logic.turn(c); // EXACT: the arcade reads the stick only on a tick he moves (after the pause, a 1 from his pattern)
           c.accum16 = 16;
         }
@@ -1888,7 +1889,7 @@
             for (const name of charKeys()) {
               const c = g.chars[name];
               if (c.target) {
-                if (exact()) { if (!c.dead) c.exactReverse = true; } // EXACT: every ghost, in the house too, turns round at its next tile centre out in the maze
+                if (exact()) c.exactReverse = true; // EXACT: every ghost, in the house too, eyes too (the arcade flags all four), turns round at its next tile centre out in the maze
                 else {
                   if (c.housing) c.leaveRight = 2;
                   if (!c.housing && !c.leaving && !c.entering && !c.dead) { c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.target(); }
@@ -1917,6 +1918,8 @@
     // (EXACT: the arcade checks the dot counts after Pac-Man's step each tick, "dots", and the no-dot timer at the frame's
     // end, after the house ghosts' move, "timer"; otherwise both at once)
     const releaseGhosts = (only) => {
+      // EXACT: the arcade's no-dot timer starts again at its limit whether or not anyone is in the house to let out
+      if (exact() && only === "timer" && g.starvation >= g.level.starvation && !charKeys().some((n) => g.chars[n].housing && g.chars[n].leavingPreference != null)) { g.starvation = 0; return; }
       const leavingChars = [];
       for (const name of charKeys()) { const c = g.chars[name]; if (c.housing && c.leavingPreference != null) leavingChars.push(c); }
       leavingChars.sort((a, b) => a.leavingPreference - b.leavingPreference);
@@ -2139,6 +2142,7 @@
               const char = g.chars[name];
               if (frozen && char !== g.chars.pac) { char.moved = false; continue; }
               if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
+              else if (exact() && g.mode === "ateGhost" && char.dead && !char.hidden) updateCharacterMovement(char); // (EXACT: eyes already heading home keep going on the tick a ghost is caught)
             }
             if (g.chars.pac.moved) pacMovedAny = true;
             // EXACT: the fright counts down at the tick's end, after everyone has moved (the arcade's 0x1376): what looks at it
@@ -2147,16 +2151,15 @@
             // ghosts from the next tick. Only on a tick that's played: a ghost caught at its start stops the rest of it
             if (exact() && g.mode === "normal") { updateFrightenedState(true); releaseGhosts("dots"); }
           }
-          // EXACT: the no-dot timer stands still while Pac-Man is paused (a dot, an energizer): it counts a frame he ends unpaused
-          // EXACT: the house's ghosts move in the arcade's per-frame routine, after both ticks (one revived this frame included)
+          // EXACT: the no-dot timer, after both ticks and before the house's ghosts move (the arcade's 0x13DD: reset while a dot has gone since the last tick his pattern moved him, a pause included; a ghost it lets out heads for the door this frame)
+          if (exact()) { const left = g.dots.length + g.powers.length; g.starvation = g.exactDotsSeen !== undefined && left !== g.exactDotsSeen ? 0 : (g.starvation || 0) + 1; }
+          if (exact()) releaseGhosts("timer");
+          // EXACT: the house's ghosts move in the arcade's per-frame routine, after both ticks and the no-dot timer (one revived this frame included)
           if (exact() && g.mode !== "caught" && g.mode !== "ateGhost") {
             g.exactHousePass = true; g.exactTick = 1;
             for (const name of charKeys()) { const ch = g.chars[name]; if (ch.target && (ch.housing || ch.leaving) && !(frozen && ch !== g.chars.pac)) updateCharacterMovement(ch); }
             g.exactHousePass = false;
           }
-          // EXACT: the no-dot timer stands still while Pac-Man is paused (a dot, an energizer): it counts a frame he ends unpaused
-          if (exact() && !(g.chars.pac.skipCounter > 0)) g.starvation = (g.starvation || 0) + 1;
-          if (exact()) releaseGhosts("timer");
           // EXACT: the scatter / chase clock ticks at the frame's end, after everyone has moved (the arcade's 0x0E3B): a switch
           // flags the reversals for the next frame, so a ghost standing on a tile centre as the frame began goes on to the next
           if (exact()) handleModeSwitching();
@@ -2175,9 +2178,13 @@
         } else if (g.mode === "ateGhost") {
           // (the eyes head home during the pause, as in the arcade; not while the Pause ability has the ghosts frozen:
           // a second ghost eaten used to set the first one's eyes going again, the author, 2026-11-17)
-          if (!(g.freezeLeft > 0)) for (const name of charKeys()) {
-            const c = g.chars[name];
-            if (c.dead && !c.hidden) updateCharacterMovement(c);
+          // (EXACT: a pixel each tick, both ticks of the frame, as the arcade's eyes keep going through the pause)
+          if (!(g.freezeLeft > 0)) for (let tick = 0, ticks = exact() ? 2 : 1; tick < ticks; tick++) {
+            if (exact()) g.exactTick = tick;
+            for (const name of charKeys()) {
+              const c = g.chars[name];
+              if (c.dead && !c.hidden) updateCharacterMovement(c);
+            }
           }
         }
 
