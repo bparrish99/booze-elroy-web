@@ -477,6 +477,10 @@
         if (found && !g.sounds.dead.isPlaying() && !g.sounds.scared.isPlaying()) { stopSiren(); playSiren(); }
         for (const v of cm.fruitTriggers) if (g.dots.length === v) { g.fruitTimer = 9 * 60 + rand(0, 60); break; }
         g.starvation = 0;
+        handlers.countPellet();
+      },
+      // a pellet for the house's counters (the shared one after a death, else the first ghost waiting's own)
+      countPellet() {
         const leaving = [];
         for (const name of charKeys()) { const c = g.chars[name]; if (c.housing && c.leavingPreference != null) leaving.push(c); }
         leaving.sort((a, b) => a.leavingPreference - b.leavingPreference);
@@ -487,7 +491,7 @@
       },
       handlePowerEaten() {
         if (g.wakka) { g.sounds.wakka2.play(); g.wakka = false; } else { g.sounds.wakka1.play(); g.wakka = true; }
-        if (exact()) g.starvation = 0; // EXACT: an energizer restarts the no-dot timer too, as the arcade's
+        if (exact()) { g.starvation = 0; handlers.countPellet(); } // EXACT: an energizer restarts the no-dot timer and counts for the house, as the arcade's
         rechargeAbilities();
         handlers.activateFrightenedMode();
         if (g.config.afterDark === 4) g.fadeTimer = g.fadeLength();
@@ -1011,7 +1015,7 @@
         if (T(g.frightened) && c.speed === L.pacFrightenedSpeed) return "pacFright";
         return c.speed === L.pacSpeed ? "pac" : null;
       }
-      if (c.dead && c.target && !c.entering && c.speed === 1.6) return "eyes"; // (eyes: a pixel every tick, as the arcade's)
+      if (c.dead && c.target && c.speed === 1.6) return "eyes"; // (eyes, through the door too: a pixel every tick, as the arcade's)
       if (!c.target || c.housing || c.leaving || c.entering || c.dead || T(c.stunned)) return null;
       return c.speed === L.tunnelSpeed ? "tunnel" : c.speed === L.frightenedSpeed ? "ghostFright" : c.speed === L.elroy2Speed && c.elroy ? "elroy2"
         : c.speed === L.elroy1Speed && c.elroy ? "elroy1" : c.speed === L.ghostSpeed ? "ghost" : null;
@@ -1090,7 +1094,8 @@
             if (c.dead && newY === c.houseY - 3 && newX === hc.x && newXOff === 0) {
               c.dir = 1; c.facing = 1; c.iDir = false; c.entering = true; c.speed = logic.getGhostSpeed(c);
             }
-            if (c.entering && newY === c.houseY && newX === c.houseX && newXOff === 0) {
+            // (EXACT: the arcade's eyes come home 4 pixels below the house's middle, then go to their spot at that height)
+            if (c.entering && (exact() ? newY === c.houseY + 1 && newYOff === 0 : newY === c.houseY) && newX === c.houseX && newXOff === 0) {
               c.dir = 3; c.facing = 3; c.iDir = false; c.dead = false;
               let anyDead = false, anyFrightened = false;
               for (const name of charKeys()) {
@@ -1103,8 +1108,10 @@
                 if (anyFrightened) g.sounds.scared.play(); else playSiren();
               }
               c.entering = false;
-              if (!T(c.leavingPreference)) c.leaving = true; else c.housing = true;
+              // (EXACT: an eaten ghost back home leaves again at once, whatever its dot counter: those only hold ghosts starting a life in the house)
+              if (!T(c.leavingPreference) || exact()) c.leaving = true; else c.housing = true;
               c.speed = logic.getGhostSpeed(c);
+              if (exact()) logic.turn(c); // EXACT: revived, it sets off the right way at once (as a released ghost does)
             }
             if (c.leaving && newY === c.houseY - 3 && newYOff === CENTER) {
               c.dir = c.leavesRight ? 0 : 2;
@@ -1192,7 +1199,7 @@
         else if (xTile > hc.x || xOff > 0) { c.dir = 2; c.facing = 2; }
         else { c.dir = 3; c.facing = 3; }
       } else if (c.entering) {
-        if (yTile === c.houseY && yOff === CENTER) {
+        if (exact() ? yTile === c.houseY + 1 && yOff === 0 : yTile === c.houseY && yOff === CENTER) {
           if (c.houseX < xTile) { c.dir = 2; c.facing = 2; }
           else if (c.houseX > xTile) { c.dir = 0; c.facing = 0; }
         }
@@ -1315,7 +1322,7 @@
               if (exact()) { // EXACT: every life starts the movement counters afresh (the house bob's rhythm restarts with it); the arcade's
                 // pause counter is 0 at every READY, so Pac-Man sits out each life's first tick
                 for (const name of charKeys()) g.chars[name].accum16 = undefined;
-                g.exactPatLevel = null; // (and the speed patterns copied in afresh, as the arcade does every life)
+                g.exactPatLevel = null; g.exactHouse = undefined; // (and the speed patterns copied in afresh, and the house pattern to 0x55, as the arcade does every life)
                 g.chars.pac.skipCounter = 1;
                 if (env.frightReset) env.frightReset(); // (and the arcade's generator back to its start)
               }
@@ -1843,7 +1850,8 @@
             const c = g.chars[name];
             // (the speed is worked out while it's still frightened, so it stays slow till its next tile: the author's game;
             // EXACT: the arcade's ghost is back to normal speed at once)
-            if (c.target && c.frightened) { if (exact()) c.frightened = false; c.speed = logic.getGhostSpeed(c); c.frightened = false; }
+            if (c.target && c.frightened && exact()) { c.frightened = false; const [ox, , oy] = getCurrentMaze().occ(c); updateGhostSpeed(c, ox, oy); } // (the tunnel still first)
+            else if (c.target && c.frightened) { c.speed = logic.getGhostSpeed(c); c.frightened = false; }
           }
         }
       }
@@ -1880,6 +1888,7 @@
 
     const updateCharacterMovement = (char) => {
       if (exact() && g.exactTick === 0 && !exactKind(char)) return; // EXACT: what doesn't move by pattern moves once a frame, after the ticks (the arcade's per-frame routines)
+      if (exact() && (char.housing || char.leaving) && !g.exactHousePass) return; // (the house: its own pass after both ticks, below)
       char.moved = false;
       if (T(char.stunned) && char.stunned > 0) {
         char.stunned -= 1;
@@ -1901,7 +1910,9 @@
         if (only === "timer") continue;
         if (T(g.globalCounter)) {
           if (g.globalCounter === char.globalCounter) {
-            forceLeave(char);
+            // (EXACT: at 32 with Clyde inside, the arcade switches the shared counter off without letting him out: the
+            // personal counters take over again)
+            if (!(exact() && g.globalCounter === 32)) forceLeave(char);
             if (g.globalCounter === 32) g.globalCounter = false;
           }
         } else if (char.dotCounter === 0) { forceLeave(char); break; }
@@ -2096,10 +2107,10 @@
               const cmx = getCurrentMaze(), [pX, , pY] = cmx.occ(g.chars.pac);
               for (const name of charKeys()) { const ch = g.chars[name]; if (ch.target) { const [gX, , gY] = cmx.occ(ch); if (handleGhostCollision(ch, pX, pY, gX, gY)) break; } }
             }
-            // EXACT: the house's own pattern (the arcade's byte at 0x4D94, its phase set at a board's start, carried across lives):
+            // EXACT: the house's own pattern (the arcade's byte at 0x4D94, set to 0x55 at every READY):
             // rotated once a frame, after the ticks (here: the last tick, once its collisions are known), unless a ghost was just
             // eaten (the arcade's pause flag stops it); ghosts in the house move on the frames a 1 rotates out
-            if (exact() && tick === 1 && modeAtStart !== "ateGhost" && g.mode !== "ateGhost") {
+            if (exact() && tick === 1 && modeAtStart !== "ateGhost" && g.mode === "normal") { // (a catch sets the arcade's pause flag too)
               const h = g.exactHouse === undefined ? 0x55 : g.exactHouse;
               g.exactHouseStep = !!(h & 0x80); g.exactHouse = ((h << 1) | (h >> 7)) & 0xff;
             }
@@ -2112,6 +2123,12 @@
             }
           }
           // EXACT: the no-dot timer stands still while Pac-Man is paused (a dot, an energizer): it counts a frame he ends unpaused
+          // EXACT: the house's ghosts move in the arcade's per-frame routine, after both ticks (one revived this frame included)
+          if (exact() && g.mode !== "caught" && g.mode !== "ateGhost") {
+            g.exactHousePass = true; g.exactTick = 1;
+            for (const name of charKeys()) { const ch = g.chars[name]; if (ch.target && (ch.housing || ch.leaving) && !(frozen && ch !== g.chars.pac)) updateCharacterMovement(ch); }
+            g.exactHousePass = false;
+          }
           if (exact() && !(g.chars.pac.skipCounter > 0)) g.starvation = (g.starvation || 0) + 1;
           if (exact()) releaseGhosts("timer");
           if (T(g.fruitTimer)) {
