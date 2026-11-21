@@ -163,11 +163,15 @@
     };
     // cheat codes: letters typed on the menu screens (they do nothing there otherwise)
     const CHEAT_SCENES = ["attract", "options", "credits", "leaderboard", "arenas"];
+    let neatOn = false; try { neatOn = localStorage.getItem("booze-elroy-neat") === "1"; } catch { /* ignore */ }
     const CHEATS = {
       mina: { scenes: CHEAT_SCENES, run() { const from = core.g.scene.name; core.setScene("mina", from); } },
       reset: { scenes: CHEAT_SCENES, run() { openReset(); } }, // admin: reset high scores (asks for the password)
       delete: { scenes: ["arena"], run() { openReset("arena"); } }, // admin: delete the arena on screen (asks for the password)
       xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // test mode: frame rate, tiles, ghost targets and paths; Pro Mode always
+      // NEAT (the author's side project, 2026-11-21): the arcade-exact game (core env.exact), remembered in this browser; its
+      // games stay off the leaderboards and arenas (silently, like test mode) until the author decides about its boards
+      neat: { scenes: [...CHEAT_SCENES, "arena"], run() { neatOn = !neatOn; try { localStorage.setItem("booze-elroy-neat", neatOn ? "1" : "0"); } catch { /* ignore */ } toast(neatOn ? "NEAT on\narcade-exact Pac-Man" : "NEAT off"); } },
     };
     // the frame-rate readout: off by default, remembered; counted in the frame loop, shown twice a second
     // test mode's training readout (the author, 2026-11-16; a new player wanted to learn the ghosts): the scatter / chase
@@ -257,14 +261,15 @@
           ...ach.filter((a) => a.mode && s >= a.points && c[a.mode.key] === a.mode.value).map((a) => a.id), // points in a mode (house of horrors, ...)
           ...ach.filter((a) => a.score && s >= a.score).map((a) => a.id), // clyde / inky / pinky / blinky: the final score
           ...ach.filter((a) => a.board && s >= a.boardScore && SK.keyFor(c) === a.board).map((a) => a.id)]); // purist / patternless: on those exact settings
-        return LB.afterGameOver(s, fpsOn); // (test mode: no leaderboards, the author, 2026-11-16)
+        return LB.afterGameOver(s, fpsOn || neatOn); // (test mode, NEAT: no leaderboards, the author, 2026-11-16 / 21)
       }, rewind: () => {
         if (!rwd) return;
         const was = rwd.active(); rwd.trigger();
         if (!was && rwd.active() && !core.g.attract && !core.g.autoplay && !(replay && replay.playing())) earned(["kind"]); // be kind (rewind)
       },
       feat: (id) => { if (!core.g.attract && !core.g.autoplay && !(replay && replay.playing())) earned([id]); }, // a single use of an ability (hoover deluxe, personal space, the power of now)
-      testMode: () => fpsOn && !(replay && replay.playing()) /* test mode (xyzzy): Pro Mode always; never in a replay (it changes the timing) */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      testMode: () => fpsOn && !(replay && replay.playing()) /* test mode (xyzzy): Pro Mode always; never in a replay (it changes the timing) */,
+      exact: () => neatOn && !(replay && replay.playing()) /* NEAT ("neat"): the arcade-exact game; never in a replay of a normal one */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => { if (!(replay && replay.playing())) LB.saveBest(s); }, // (someone else's replayed score isn't the viewer's best)
       saveConfig: (c) => { if (LB.borrowed() || (replay && replay.playing())) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
