@@ -463,7 +463,7 @@
         for (const name of charKeys()) {
           const c = g.chars[name];
           if (c.target) {
-            if (!c.housing && !c.leaving && !c.entering) { c.dir = (c.dir + 2) % 4; c.target(); }
+            if (!c.housing && !c.leaving && !c.entering) { if (exact()) c.exactReverse = true; else { c.dir = (c.dir + 2) % 4; c.target(); } } // EXACT: turns round at its tile's centre
           }
         }
       },
@@ -1037,6 +1037,8 @@
           (c.dir === 2 && xOff > CENTER) || (c.dir === 3 && yOff > CENTER) ||
           (c.dir === 0 && xOff < CENTER) || (c.dir === 1 && yOff < CENTER))) {
           logic.advance(c, xOff, yOff);
+          // EXACT: a reversal the mode change (or an energizer) asked for happens when the ghost reaches its tile's centre
+          if (c.exactReverse && c.target && exact() && mod(c.x, TILE) === CENTER && mod(c.y, TILE) === CENTER) { c.exactReverse = false; c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.target(); }
         } else if (T(c.iDir) && !cm.isBlocked(c, c.iDir)) {
           if (isPac && g.config.movement === 3) {
             if (c.speed > MAX_THRUST) {
@@ -1281,7 +1283,12 @@
               g.pauseSpent = false; g.freezeLeft = 0;                            // and the Pause's
               characters.reset();
               levels.resetLevel();
-              if (exact()) g.chars.pac.skipCounter = 1; // EXACT: the arcade's pause counter starts at 0: Pac-Man sits out play's first tick
+              if (exact()) { // EXACT: every life starts the movement counters afresh (the house bob's rhythm restarts with it); the arcade's
+                // pause counter is 0 at every READY, so Pac-Man sits out each life's first tick
+                for (const name of charKeys()) g.chars[name].accum16 = undefined;
+                g.exactPatLevel = null; // (and the speed patterns copied in afresh, as the arcade does every life)
+                g.chars.pac.skipCounter = 1;
+              }
             }
           },
           endFunc() { playSiren(); },
@@ -1817,7 +1824,7 @@
               const c = g.chars[name];
               if (c.target) {
                 if (c.housing) c.leaveRight = 2;
-                if (!c.housing && !c.leaving && !c.entering && !c.dead) { c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.target(); }
+                if (!c.housing && !c.leaving && !c.entering && !c.dead) { if (exact()) c.exactReverse = true; else { c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.target(); } } // EXACT: at its tile's centre
               }
             }
             break;
@@ -1837,6 +1844,24 @@
       }
     };
 
+    // the house: a ghost whose time has come leaves (the no-dot timer, the shared counter after a death, its own dot limit)
+    // (EXACT: the arcade checks the dot counts after Pac-Man's step each tick, "dots", and the no-dot timer at the frame's
+    // end, after the house ghosts' move, "timer"; otherwise both at once)
+    const releaseGhosts = (only) => {
+      const leavingChars = [];
+      for (const name of charKeys()) { const c = g.chars[name]; if (c.housing && c.leavingPreference != null) leavingChars.push(c); }
+      leavingChars.sort((a, b) => a.leavingPreference - b.leavingPreference);
+      for (const char of leavingChars) {
+        if (only !== "dots" && g.starvation >= g.level.starvation) { forceLeave(char); g.starvation = 0; break; }
+        if (only === "timer") continue;
+        if (T(g.globalCounter)) {
+          if (g.globalCounter === char.globalCounter) {
+            forceLeave(char);
+            if (g.globalCounter === 32) g.globalCounter = false;
+          }
+        } else if (char.dotCounter === 0) { forceLeave(char); break; }
+      }
+    };
     const forceLeave = (char) => {
       char.leaving = true; char.housing = false; char.speed = logic.getGhostSpeed(char);
       if (exact()) logic.turn(char); // EXACT: a released ghost heads for the door at once (not one more step of its bob)
@@ -2000,18 +2025,8 @@
           }
           if (g.fadeTimer > 0) g.fadeTimer -= 1;
 
-          const leavingChars = [];
-          for (const name of charKeys()) { const c = g.chars[name]; if (c.housing && c.leavingPreference != null) leavingChars.push(c); }
-          leavingChars.sort((a, b) => a.leavingPreference - b.leavingPreference);
-          for (const char of leavingChars) {
-            if (g.starvation >= g.level.starvation) { forceLeave(char); g.starvation = 0; break; }
-            if (T(g.globalCounter)) {
-              if (g.globalCounter === char.globalCounter) {
-                forceLeave(char);
-                if (g.globalCounter === 32) g.globalCounter = false;
-              }
-            } else if (char.dotCounter === 0) { forceLeave(char); break; }
-          }
+          // EXACT: the arcade checks the house after Pac-Man's step, every tick (a dot that frees a ghost frees it that frame)
+          if (!exact()) releaseGhosts();
 
           updateFrightenedState();
           handleModeSwitching();
@@ -2027,8 +2042,10 @@
               const char = g.chars[name];
               if (frozen && char !== g.chars.pac) { char.moved = false; continue; }
               if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
+              if (exact() && char === g.chars.pac) releaseGhosts("dots");
             }
           }
+          if (exact()) releaseGhosts("timer");
           if (T(g.fruitTimer)) {
             g.fruitTimer -= 1;
             if (g.fruitTimer === 0) g.fruitTimer = false;
