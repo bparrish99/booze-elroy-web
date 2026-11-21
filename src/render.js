@@ -542,6 +542,7 @@
     function drawHeader() {
       print("1up", 3, 0); print("high score", 9, 0);
       print(core.formatScore(g.score || 0), 0, 1, 0);
+      if (g.neatOn) print("neat", 24, 1, 6); // NEAT (the "neat" cheat): its sticker, where 2UP's score would be
       drawHighScore();
       drawAccount();
     }

@@ -171,7 +171,7 @@
       xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // test mode: frame rate, tiles, ghost targets and paths; Pro Mode always
       // NEAT (the author's side project, 2026-11-21): the arcade-exact game (core env.exact), remembered in this browser; its
       // games stay off the leaderboards and arenas (silently, like test mode) until the author decides about its boards
-      neat: { scenes: [...CHEAT_SCENES, "arena"], run() { neatOn = !neatOn; try { localStorage.setItem("booze-elroy-neat", neatOn ? "1" : "0"); } catch { /* ignore */ } toast(neatOn ? "NEAT on\narcade-exact Pac-Man" : "NEAT off"); } },
+      neat: { scenes: [...CHEAT_SCENES, "arena"], run() { neatOn = !neatOn; core.g.neatOn = neatOn; try { localStorage.setItem("booze-elroy-neat", neatOn ? "1" : "0"); } catch { /* ignore */ } toast(neatOn ? "NEAT on\narcade-exact Pac-Man" : "NEAT off"); } },
     };
     // the frame-rate readout: off by default, remembered; counted in the frame loop, shown twice a second
     // test mode's training readout (the author, 2026-11-16; a new player wanted to learn the ghosts): the scatter / chase
@@ -269,7 +269,7 @@
       },
       feat: (id) => { if (!core.g.attract && !core.g.autoplay && !(replay && replay.playing())) earned([id]); }, // a single use of an ability (hoover deluxe, personal space, the power of now)
       testMode: () => fpsOn && !(replay && replay.playing()) /* test mode (xyzzy): Pro Mode always; never in a replay (it changes the timing) */,
-      exact: () => neatOn && !(replay && replay.playing()) /* NEAT ("neat"): the arcade-exact game; never in a replay of a normal one */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      exact: () => (core.g.neatOn = neatOn) && !(replay && replay.playing()) /* NEAT ("neat"): the arcade-exact game; never in a replay of a normal one (g.neatOn: render's sticker) */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => { if (!(replay && replay.playing())) LB.saveBest(s); }, // (someone else's replayed score isn't the viewer's best)
       saveConfig: (c) => { if (LB.borrowed() || (replay && replay.playing())) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
@@ -826,6 +826,7 @@
         raveLastMode = g.mode;
         rave.duck(g.scene.name === "mina" || /intermission/i.test(g.mode || "") || poppedOut || (real && !live), real);
       }
+      core.g.neatOn = neatOn; // (NEAT's sticker in the header, render.js)
       R.draw(); P.present();
       if (fpsOn) {
         fpsFrames += 1;
