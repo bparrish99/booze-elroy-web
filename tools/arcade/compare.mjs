@@ -4,7 +4,7 @@
 // joystick plan is per life too.
 //   node tools/arcade/compare.mjs "<life 1 plan> | <life 2 plan> | ..." [frames per life] [actors]
 //   EXACT=1 ... (the core with NEAT's switch on), CORE=path (another core.js), LEVEL=n (both games start at level n: the
-//   core by its starting level, the ROM by its RAM as the game is set up)
+//   core by its starting level, the ROM by its RAM as the game is set up), HARD=1 (both on Hard: the arcade's DIP switch)
 // a plan: "left:60,up:40,..." (a direction held that many frames; the last holds; "-" = nothing)
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -173,7 +173,8 @@ if (process.argv[1] && process.argv[1].endsWith("compare.mjs") && process.argv[2
   // node tools/arcade/compare.mjs bot [frames per life] [lives]: the bot plays the core, the arcade replays its stick
   // (lives 5: both games start with 5, the arcade by its DIP switch, so the bot gets further)
   const frames = +(process.argv[3] || 3000), lives = +(process.argv[4] || 3), bot = { rec: [] };
-  const cfg = { ...(lives > 3 ? { startingLives: 5 } : {}), startingLevel: LEVEL }, dips = lives > 3 ? { lives: 5 } : {};
+  // (HARD=1: the arcade's Difficulty DIP switch on Hard, the core on its Hard difficulty)
+  const cfg = { ...(lives > 3 ? { startingLives: 5 } : {}), startingLevel: LEVEL, ...(process.env.HARD ? { difficulty: 1 } : {}) }, dips = { ...(lives > 3 ? { lives: 5 } : {}), ...(process.env.HARD ? { hard: true } : {}) };
   coreTrace(null, frames, { lives, bot, cfg }); // (the bot plays, its stick recorded)
   const joy = fromRecording(bot.rec), A = arcadeTrace(joy, frames, { lives, dips, level: LEVEL, maxFrames: 150000 }); // (room for five whole lives)
   const B = coreTrace(joy, frames, { lives, cfg, divAt: A.map((l) => l.sync) }); // (the same stick again, the ROM's counters)
