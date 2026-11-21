@@ -36,7 +36,7 @@ export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames
   if (onMachine) onMachine(m); // (a look inside, for digging: the machine before it runs)
   const coinAt = game === "pacplus" ? 800 : 300;
   const pat = (base) => { const b = [0, 1, 2, 3].map((i) => m.peek(base + i)); return (((b[1] << 24) | (b[0] << 16) | (b[3] << 8) | b[2]) >>> 0).toString(16).padStart(8, "0"); };
-  const snap = () => { const o = { rs: m.peek(0x4dc9) | (m.peek(0x4dca) << 8), tiles: Array.from({ length: 10 }, (_, i) => m.peek(0x4d31 + i)).join(","), dots: m.peek(0x4e0e), bpat: pat(0x4d56) + "/" + pat(0x4d5a), epat: pat(0x4d4e) + "/" + pat(0x4d52) + " tun " + pat(0x4d5e), crel: [0x4da0, 0x4da1, 0x4da2, 0x4da3, 0x4db6, 0x4db7].map((x) => m.peek(x)).join(","), gc: m.peek(0x4e0f) + "," + m.peek(0x4e10) + "," + m.peek(0x4e11) + " g" + m.peek(0x4e12) + " gcount " + m.peek(0x4d9f), eat: m.peek(0x4da4), div: m.peek(0x4c86) & 0x0f, fc: m.peek(0x4c84), ptun: pat(0x4d6a), ptile: m.peek(0x4d35) + "," + m.peek(0x4d34), house: m.peek(0x4d94), pc: [0x4e0f, 0x4e10, 0x4e11, 0x4e12].map((a) => m.peek(a)).join(","), level: m.peek(0x4e13), mt: m.peek(0x4dc2) | (m.peek(0x4dc3) << 8), fr: m.peek(0x4dcb) | (m.peek(0x4dcc) << 8), starv: m.peek(0x4d97), score: [0x4e82, 0x4e81, 0x4e80].map((a) => m.peek(a).toString(16).padStart(2, "0")).join("") * 1 }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
+  const snap = () => { const o = { fp: m.peek(0x4dd2) !== 0, fruit: [0x4dd2, 0x4dd3, 0x4dd4].map((x) => m.peek(x)).join(","), rs: m.peek(0x4dc9) | (m.peek(0x4dca) << 8), tiles: Array.from({ length: 10 }, (_, i) => m.peek(0x4d31 + i)).join(","), dots: m.peek(0x4e0e), bpat: pat(0x4d56) + "/" + pat(0x4d5a), epat: pat(0x4d4e) + "/" + pat(0x4d52) + " tun " + pat(0x4d5e), crel: [0x4da0, 0x4da1, 0x4da2, 0x4da3, 0x4db6, 0x4db7].map((x) => m.peek(x)).join(","), gc: m.peek(0x4e0f) + "," + m.peek(0x4e10) + "," + m.peek(0x4e11) + " g" + m.peek(0x4e12) + " gcount " + m.peek(0x4d9f), eat: m.peek(0x4da4), div: m.peek(0x4c86) & 0x0f, tn: m.peek(0x4c86) >> 4, fc: m.peek(0x4c84), ptun: pat(0x4d6a), ptile: m.peek(0x4d35) + "," + m.peek(0x4d34), house: m.peek(0x4d94), pc: [0x4e0f, 0x4e10, 0x4e11, 0x4e12].map((a) => m.peek(a)).join(","), level: m.peek(0x4e13), mt: m.peek(0x4dc2) | (m.peek(0x4dc3) << 8), fr: m.peek(0x4dcb) | (m.peek(0x4dcc) << 8), starv: m.peek(0x4d97), score: [0x4e82, 0x4e81, 0x4e80].map((a) => m.peek(a).toString(16).padStart(2, "0")).join("") * 1 }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
   let f = 0;
   for (; f < coinAt + 140; f++) {
     if (f === coinAt) m.setInputs({ coin: true }); else if (f === coinAt + 6) m.setInputs({}); else if (f === coinAt + 100) { m.startLevel(level); m.setInputs({ start: true }); } else if (f === coinAt + 106) m.setInputs({});
@@ -54,11 +54,11 @@ export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames
     if (!cur) {
       if (atStart(s)) { ready = true; pacFirst = null; m.startLevel(1); } // (the starting level set: later boards count on from it)
       // (the counters on the frame Pac-Man first steps: the anchor the core's are set from, in the harness)
-      if (ready && !pacFirst && (s.pac.x !== 128 || s.pac.y !== 196)) pacFirst = { div: s.div, fc: s.fc };
+      if (ready && !pacFirst && (s.pac.x !== 128 || s.pac.y !== 196)) pacFirst = { div: s.div, fc: s.fc, tn: s.tn };
       if (ready && atStart(prev) && s.blinky.x !== prev.blinky.x) { ready = false; life++; if (life >= lives) break; cur = [s]; cur.sync = pacFirst; cur.pre = recent.slice(0, -1); out.push(cur); }
     } else {
       // (from level 2 Pac-Man's pattern can have him step after Blinky: the anchor is his first step all the same)
-      if (!cur.sync && (s.pac.x !== 128 || s.pac.y !== 196)) cur.sync = { div: s.div, fc: s.fc };
+      if (!cur.sync && (s.pac.x !== 128 || s.pac.y !== 196)) cur.sync = { div: s.div, fc: s.fc, tn: s.tn };
       cur.push(s);
       if (cur.length >= frames || (s.pac.x === 0 && s.pac.y === 0)) cur = null; // (enough, or died: the sprites hidden)
     }
@@ -91,19 +91,19 @@ export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000,
     const P = g.exactPat && g.exactPat.blinky, h = (v) => v.toString(16).padStart(8, "0");
     const pk = g.chars.pinky, cmz = core.getCurrentMaze ? core.getCurrentMaze() : null;
     const bl = g.chars.blinky, cm = core.getCurrentMaze ? core.getCurrentMaze() : null;
-    const o = { rs: seed, bdbg: bl && cm ? `fr ${bl.frightened} dead ${bl.dead} occ ${cm.occ(bl)} pocc ${cm.occ(g.chars.pac)}` : "", dots: 244 - g.dots.length - g.powers.length, mode: g.mode, bpat: P ? h(P.ghost) + "/" + h(P.ghostFright) : "", epat: P ? h(P.elroy2) + "/" + h(P.elroy1) + " tun " + h(P.tunnel) : "", crel: g.chars.clyde ? `h ${g.chars.clyde.housing} l ${g.chars.clyde.leaving} gc ${g.globalCounter} starv ${g.starvation}` : "", elroy: g.chars.blinky ? `susp ${g.suspendElroy} spd ${g.chars.blinky.speed}` : "",
+    const o = { fp: !!g.fruitTimer, fruit: `t ${g.fruitTimer} st ${g.fruitScoreTimer}`, rs: seed, bdbg: bl && cm ? `fr ${bl.frightened} dead ${bl.dead} occ ${cm.occ(bl)} pocc ${cm.occ(g.chars.pac)}` : "", dots: 244 - g.dots.length - g.powers.length, mode: g.mode, bpat: P ? h(P.ghost) + "/" + h(P.ghostFright) : "", epat: P ? h(P.elroy2) + "/" + h(P.elroy1) + " tun " + h(P.tunnel) : "", crel: g.chars.clyde ? `h ${g.chars.clyde.housing} l ${g.chars.clyde.leaving} gc ${g.globalCounter} starv ${g.starvation}` : "", elroy: g.chars.blinky ? `susp ${g.suspendElroy} spd ${g.chars.blinky.speed}` : "",
       level: g.levelNumber - 1, mt: g.level.timer, ft: g.exactFrightTicks, div: g.exactDiv, fc: g.exactF, fr: g.frightened, starv: g.starvation, score: g.score, house: g.exactHouse, pc: ["pinky", "inky", "clyde"].map((n) => g.chars[n] ? g.chars[n].dotCounter : "-").join(",") + " gc " + g.globalCounter, pdbg: pk && cmz ? `spd ${pk.speed} occ ${cmz.occ(pk)[0]},${cmz.occ(pk)[2]} tun ${cmz.isTunnel(cmz.occ(pk)[0], cmz.occ(pk)[2])} fr ${pk.frightened} dead ${pk.dead}` : "" };
     for (const a of ACTORS) { const c = g.chars[a]; o[a] = c ? { x: base.x - c.x, y: c.y + base.y, dir: c.dir, idir: c.iDir, dead: c.dead, fr: c.frightened } : null; }
     return o;
   };
   const out = [];
   out.starts = [];
-  const sync = (L) => { if (divAt && divAt[L]) { g.exactDiv = divAt[L].div; g.exactF = divAt[L].fc; } };
+  const sync = (L) => { if (divAt && divAt[L]) { g.exactDiv = divAt[L].div; g.exactF = divAt[L].fc; g.exactTenths = divAt[L].tn; } };
   let cur = null, life = -1, armed = false, prevBx = null, pacAt = null;
   for (let i = 0; i < maxFrames && g.scene.name === "game"; i++) {
     // (synced just before the update in which Pac-Man first steps, to the arcade's values on its frame of that)
     if (bot) {
-      held = botKeyForStats(core) || held;
+      held = (process.env.FRUITBOT && fruitKey(core)) || botKeyForStats(core) || held;
       const L = cur ? life : life + 1, k = cur ? cur.length : 0;
       (bot.rec[L] = bot.rec[L] || [])[k] = held; // (before READY goes: frame 0's entry, held through it as the arcade's)
     } else held = cur ? joy(life, cur.length) : joy(life + 1, 0);
@@ -127,6 +127,24 @@ export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000,
   return out;
 }
 
+// (FRUITBOT=1: while the fruit is up the bot heads for it, a shortest path over open tiles, so fruit gets eaten too)
+function fruitKey(core) {
+  const g = core.g, pac = g.chars && g.chars.pac;
+  if (!pac || !g.fruitTimer) return null;
+  const cm = core.getCurrentMaze(), D = core.constants.DELTAS, fl = cm.fruitLoc, goal = [Math.floor(fl.x / 8), Math.floor(fl.y / 8)];
+  const [px, , py] = cm.getLoc(pac), key = (x, y) => x + "," + y, from = new Map([[key(px, py), null]]), q = [[px, py]];
+  while (q.length) {
+    const [x, y] = q.shift();
+    if (x === goal[0] && y === goal[1]) {
+      let k = key(x, y), step = null;
+      while (from.get(k)) { step = from.get(k); if (step.prev === key(px, py)) return ["right", "down", "left", "up"][step.d]; k = step.prev; }
+      return null;
+    }
+    for (let d = 0; d < 4; d++) { const nx = x + D[d].x, ny = y + D[d].y; if (nx < 0 || ny < 0 || nx >= cm.w || ny >= cm.h || cm.isWall(nx, ny) || from.has(key(nx, ny))) continue; from.set(key(nx, ny), { prev: key(x, y), d }); q.push([nx, ny]); }
+  }
+  return null;
+}
+
 /** first differences, life by life */
 export function compare(A, B, who = ACTORS, show = 12) {
   const lines = [];
@@ -137,6 +155,7 @@ export function compare(A, B, who = ACTORS, show = 12) {
       const d = [];
       for (const n of who) { const p = a[k][n], q = b[k][n]; if (!q || (p.x === 0 && p.y === 0)) continue; if ((Math.floor(q.x) & 255) !== p.x || (Math.floor(q.y) & 255) !== p.y) d.push(`${n} ${p.x},${p.y} vs ${Math.floor(q.x)},${Math.floor(q.y)}`); }
       if (a[k].score !== undefined && b[k].score !== undefined && a[k].score !== b[k].score) d.push(`score ${a[k].score} vs ${b[k].score}`);
+      if (a[k].fp !== undefined && b[k].fp !== undefined && a[k].fp !== b[k].fp) d.push(`fruit ${a[k].fp ? "up" : "gone"} vs ${b[k].fp ? "up" : "gone"}`);
       if (d.length) { lines.push(`life ${L + 1} frame ${k}: ${d.join("; ")}`); shown++; }
     }
     lines.push(`life ${L + 1}: compared ${Math.min(a.length, b.length)} frames (arcade ${a.length}, core ${b.length})${shown ? "" : ", identical"}`);

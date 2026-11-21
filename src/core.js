@@ -326,6 +326,7 @@
         g.levelMusic = g.music[musicList[idx - 1]];
         g.level = levels.getLevel(g.levelNumber);
         g.exactPatLevel = null; g.exactHouse = undefined; // EXACT: the level's patterns copied in afresh, the house pattern afresh
+        if (exact()) { g.exactFruitShown = {}; g.exactFruitSecs = 0; g.exactFruitHeld = false; } // EXACT: each board's two fruit, once each (the arcade's 0x4E0C / 0x4E0D)
         g.fruitTimer = false; g.fruitScoreTimer = false; g.starvation = 0;
         g.level.timer = 0;
         g.radarTimer = false;
@@ -480,7 +481,7 @@
         let found = false;
         for (const v of cm.sirenTriggers) if (v === g.dots.length) { found = true; break; }
         if (found && !g.sounds.dead.isPlaying() && !g.sounds.scared.isPlaying()) { stopSiren(); playSiren(); }
-        for (const v of cm.fruitTriggers) if (g.dots.length === v) { g.fruitTimer = 9 * 60 + rand(0, 60); break; }
+        if (!exact()) for (const v of cm.fruitTriggers) if (g.dots.length === v) { g.fruitTimer = 9 * 60 + rand(0, 60); break; } // (EXACT: checked once a frame, below)
         g.starvation = 0;
         handlers.countPellet();
       },
@@ -724,7 +725,7 @@
         // EXACT: the arcade clears the reversal flags (and so every owed decision) as a life or a board starts, and the no-dot
         // timer's copy of the dot count (0x4D9E) to none eaten: a life's first frame before he moves resets the timer if any are gone
         if (exact()) {
-          g.exactQueue = []; g.exactDotsSeen = g.exactBoardTotal;
+          g.exactQueue = []; g.exactDotsSeen = g.exactBoardTotal; g.exactFruitSecs = 0; g.exactFruitHeld = false;
           for (const name of charKeys()) { const c = g.chars[name]; if (c) { c.exactReverse = false; c.exactDecide = false; c.exactFresh = false; } }
         }
         // the Lua only treats the "mspac" scatter option (2) like "random" (1) for blinky and pinky
@@ -1194,6 +1195,7 @@
         (!T(ability()) || ability() >= 2 || (!T(g.chars.pac.phased) || g.chars.pac.phased <= 0))) {
         score(g.level.fruit.score);
         g.fruitTimer = false;
+        if (exact()) g.exactFruitHeld = true; // (EXACT: its points hold the next fruit back till its 10 seconds are up)
         g.fruitScoreTimer = 120;
         g.sounds.fruit.play();
         if (g.config.plusMode) {
@@ -2104,6 +2106,10 @@
         // its interrupt does; it times the arcade's timed tasks (the eat-a-ghost pause). Its phase at a game's start is whatever
         // it is (the arcade's depends on when START was pressed); the harness can set it to the ROM's (env.exactDivSync)
         if (exact()) { g.exactDiv = ((g.exactDiv || 0) + 1) % 6; g.exactF = ((g.exactF || 0) + 1) & 255; } // (and its frame counter)
+        // EXACT: and its tenths (0x4C86's top half), and the seconds they roll over into: the fruit's timed task counts those
+        if (exact() && g.exactDiv === 0 && (g.exactTenths = ((g.exactTenths || 0) + 1) % 10) === 0 && g.exactFruitSecs > 0 && --g.exactFruitSecs === 0) {
+          g.fruitTimer = false; g.exactFruitHeld = false; // (gone, or after it was eaten, out of the way of the next)
+        }
         // EXACT: the no-dot timer keeps counting through the pause after eating a ghost (in play: counted after the ticks, below)
         if (exact() && g.scene.name === "game" && g.mode === "ateGhost") { g.starvation = (g.starvation || 0) + 1; releaseGhosts("timer"); } // (its limit too: a ghost can be let out in the pause)
         if (g.vacuumFx > 0) g.vacuumFx -= 1; // the Vacuum's swirl (render.js)
@@ -2216,9 +2222,15 @@
           if (exact()) handleModeSwitching();
           if (exact()) exactDecisions(); // (the frame's queued decisions, last of all)
           if (exact()) g.chars.pac.moved = pacMovedAny;
-          if (T(g.fruitTimer)) {
+          if (T(g.fruitTimer) && !exact()) {
             g.fruitTimer -= 1;
             if (g.fruitTimer === 0) g.fruitTimer = false;
+          }
+          // EXACT: the fruit comes once a frame's check finds 70 or 170 eaten, energizers counted (the arcade's 0x0EBD), unless a
+          // fruit or its points are still up; it stays 10 of the arcade's seconds (9-10 real ones, by the counter's phase)
+          if (exact() && !T(g.fruitTimer) && !g.exactFruitHeld && g.exactFruitShown) {
+            const eaten = g.exactBoardTotal - g.dots.length - g.powers.length, k = eaten === 70 ? 1 : eaten === 170 ? 2 : 0;
+            if (k && !g.exactFruitShown[k]) { g.exactFruitShown[k] = true; g.fruitTimer = 600; g.exactFruitSecs = 10; }
           }
           if (g.dots.length === 0 && g.powers.length === 0) mode.setMode("levelComplete");
           const b = g.chars.blinky;
