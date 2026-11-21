@@ -2100,6 +2100,7 @@
           const frozen = g.freezeLeft > 0; // the Pause ability: the ghosts stand still
           // EXACT: two ticks a frame, as the arcade's game loop (each character a pixel at most a tick, by its pattern)
           const modeAtStart = g.mode; // (EXACT: the frame began in play, or after a ghost was eaten)
+          let pacMovedAny = false; // (EXACT: he moved on either tick: his chomp and the camera go by the frame)
           g.exactHouseStep = false;
           for (let tick = 0, ticks = exact() ? 2 : 1; tick < ticks; tick++) {
             g.exactTick = tick;
@@ -2125,6 +2126,7 @@
               if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
               if (exact() && char === g.chars.pac) releaseGhosts("dots");
             }
+            if (g.chars.pac.moved) pacMovedAny = true;
           }
           // EXACT: the no-dot timer stands still while Pac-Man is paused (a dot, an energizer): it counts a frame he ends unpaused
           // EXACT: the house's ghosts move in the arcade's per-frame routine, after both ticks (one revived this frame included)
@@ -2136,6 +2138,7 @@
           // EXACT: the no-dot timer stands still while Pac-Man is paused (a dot, an energizer): it counts a frame he ends unpaused
           if (exact() && !(g.chars.pac.skipCounter > 0)) g.starvation = (g.starvation || 0) + 1;
           if (exact()) releaseGhosts("timer");
+          if (exact()) g.chars.pac.moved = pacMovedAny;
           if (T(g.fruitTimer)) {
             g.fruitTimer -= 1;
             if (g.fruitTimer === 0) g.fruitTimer = false;
