@@ -3,7 +3,8 @@
 // frame 0 = Blinky's first step after READY), since the death animations in between needn't take the same time; the
 // joystick plan is per life too.
 //   node tools/arcade/compare.mjs "<life 1 plan> | <life 2 plan> | ..." [frames per life] [actors]
-//   EXACT=1 ... (the core with NEAT's switch on), CORE=path (another core.js)
+//   EXACT=1 ... (the core with NEAT's switch on), CORE=path (another core.js), LEVEL=n (both games start at level n: the
+//   core by its starting level, the ROM by its RAM as the game is set up)
 // a plan: "left:60,up:40,..." (a direction held that many frames; the last holds; "-" = nothing)
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -30,14 +31,15 @@ export function plans(script) {
 }
 
 /** the arcade: [life][frame] = { pac: {x, y, dir}, ..., dots } from Blinky's first step, in arcade coordinates */
-export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames = 40000, dips = {} } = {}) {
+export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames = 40000, dips = {}, level = 1, onMachine = null } = {}) {
   const m = new PacmanMachine(loadProgram(game), dips);
+  if (onMachine) onMachine(m); // (a look inside, for digging: the machine before it runs)
   const coinAt = game === "pacplus" ? 800 : 300;
   const pat = (base) => { const b = [0, 1, 2, 3].map((i) => m.peek(base + i)); return (((b[1] << 24) | (b[0] << 16) | (b[3] << 8) | b[2]) >>> 0).toString(16).padStart(8, "0"); };
-  const snap = () => { const o = { dots: m.peek(0x4e0e), bpat: pat(0x4d56) + "/" + pat(0x4d5a), eat: m.peek(0x4da4), div: m.peek(0x4c86) & 0x0f, fc: m.peek(0x4c84), ptun: pat(0x4d6a), ptile: m.peek(0x4d35) + "," + m.peek(0x4d34), house: m.peek(0x4d94), pc: [0x4e0f, 0x4e10, 0x4e11, 0x4e12].map((a) => m.peek(a)).join(","), level: m.peek(0x4e13), starv: m.peek(0x4d97), score: [0x4e82, 0x4e81, 0x4e80].map((a) => m.peek(a).toString(16).padStart(2, "0")).join("") * 1 }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
+  const snap = () => { const o = { dots: m.peek(0x4e0e), bpat: pat(0x4d56) + "/" + pat(0x4d5a), epat: pat(0x4d4e) + "/" + pat(0x4d52) + " tun " + pat(0x4d5e), crel: [0x4da0, 0x4da1, 0x4da2, 0x4da3, 0x4db6, 0x4db7].map((x) => m.peek(x)).join(","), gc: m.peek(0x4e0f) + "," + m.peek(0x4e10) + "," + m.peek(0x4e11) + " g" + m.peek(0x4e12) + " gcount " + m.peek(0x4d9f), eat: m.peek(0x4da4), div: m.peek(0x4c86) & 0x0f, fc: m.peek(0x4c84), ptun: pat(0x4d6a), ptile: m.peek(0x4d35) + "," + m.peek(0x4d34), house: m.peek(0x4d94), pc: [0x4e0f, 0x4e10, 0x4e11, 0x4e12].map((a) => m.peek(a)).join(","), level: m.peek(0x4e13), mt: m.peek(0x4dc2) | (m.peek(0x4dc3) << 8), fr: m.peek(0x4dcb) | (m.peek(0x4dcc) << 8), starv: m.peek(0x4d97), score: [0x4e82, 0x4e81, 0x4e80].map((a) => m.peek(a).toString(16).padStart(2, "0")).join("") * 1 }; for (const a of ACTORS) o[a] = { y: m.peek(POS[a]), x: m.peek(POS[a] + 1), dir: m.peek(DIR[a]) }; return o; };
   let f = 0;
   for (; f < coinAt + 140; f++) {
-    if (f === coinAt) m.setInputs({ coin: true }); else if (f === coinAt + 6) m.setInputs({}); else if (f === coinAt + 100) m.setInputs({ start: true }); else if (f === coinAt + 106) m.setInputs({});
+    if (f === coinAt) m.setInputs({ coin: true }); else if (f === coinAt + 6) m.setInputs({}); else if (f === coinAt + 100) { m.startLevel(level); m.setInputs({ start: true }); } else if (f === coinAt + 106) m.setInputs({});
     m.runFrame();
   }
   const out = [];
@@ -50,11 +52,13 @@ export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames
     const s = snap();
     recent.push(s); if (recent.length > 6) recent.shift();
     if (!cur) {
-      if (atStart(s)) { ready = true; pacFirst = null; }
+      if (atStart(s)) { ready = true; pacFirst = null; m.startLevel(1); } // (the starting level set: later boards count on from it)
       // (the counters on the frame Pac-Man first steps: the anchor the core's are set from, in the harness)
       if (ready && !pacFirst && (s.pac.x !== 128 || s.pac.y !== 196)) pacFirst = { div: s.div, fc: s.fc };
       if (ready && atStart(prev) && s.blinky.x !== prev.blinky.x) { ready = false; life++; if (life >= lives) break; cur = [s]; cur.sync = pacFirst; cur.pre = recent.slice(0, -1); out.push(cur); }
     } else {
+      // (from level 2 Pac-Man's pattern can have him step after Blinky: the anchor is his first step all the same)
+      if (!cur.sync && (s.pac.x !== 128 || s.pac.y !== 196)) cur.sync = { div: s.div, fc: s.fc };
       cur.push(s);
       if (cur.length >= frames || (s.pac.x === 0 && s.pac.y === 0)) cur = null; // (enough, or died: the sprites hidden)
     }
@@ -66,9 +70,10 @@ export function arcadeTrace(joy, frames, { game = "pacman", lives = 3, maxFrames
 /** the author's core the same way: [life][frame] from Blinky's first step after READY */
 // (bot: the golden test's pathfinding bot plays instead of a plan, its stick recorded per life in bot.rec, to replay into
 // the arcade: the same inputs, so the same game if the two match)
-// (divAt: the arcade's divider and frame counter at each life's frame 0, so the core's timed tasks and house bob line up with
-// the ROM's, set just before that frame: at the update count `starts` (from an earlier run of the same game) recorded; test only)
-export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000, bot = null, divAt = null, starts = null } = {}) {
+// (divAt: the arcade's divider and frame counter just after each life's first Pac-Man step, so the core's timed tasks and house
+// bob line up with the ROM's: set just after the core's update in which he first steps, found as it runs (an update count from
+// an earlier run went wrong: syncing a life changes its eat pauses, so the later lives start at other counts); test only)
+export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000, bot = null, divAt = null } = {}) {
   const create = loadCore(process.env.CORE || join(ROOT, "src/core.js"));
   let held = null, s = 1;
   const rng = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
@@ -85,18 +90,18 @@ export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000,
   const snap = () => {
     const P = g.exactPat && g.exactPat.blinky, h = (v) => v.toString(16).padStart(8, "0");
     const pk = g.chars.pinky, cmz = core.getCurrentMaze ? core.getCurrentMaze() : null;
-    const o = { dots: 244 - g.dots.length - g.powers.length, mode: g.mode, bpat: P ? h(P.ghost) + "/" + h(P.ghostFright) : "",
-      level: g.levelNumber - 1, starv: g.starvation, score: g.score, house: g.exactHouse, pc: ["pinky", "inky", "clyde"].map((n) => g.chars[n] ? g.chars[n].dotCounter : "-").join(",") + " gc " + g.globalCounter, pdbg: pk && cmz ? `spd ${pk.speed} occ ${cmz.occ(pk)[0]},${cmz.occ(pk)[2]} tun ${cmz.isTunnel(cmz.occ(pk)[0], cmz.occ(pk)[2])} fr ${pk.frightened} dead ${pk.dead}` : "" };
+    const bl = g.chars.blinky, cm = core.getCurrentMaze ? core.getCurrentMaze() : null;
+    const o = { bdbg: bl && cm ? `fr ${bl.frightened} dead ${bl.dead} occ ${cm.occ(bl)} pocc ${cm.occ(g.chars.pac)}` : "", dots: 244 - g.dots.length - g.powers.length, mode: g.mode, bpat: P ? h(P.ghost) + "/" + h(P.ghostFright) : "", epat: P ? h(P.elroy2) + "/" + h(P.elroy1) + " tun " + h(P.tunnel) : "", crel: g.chars.clyde ? `h ${g.chars.clyde.housing} l ${g.chars.clyde.leaving} gc ${g.globalCounter} starv ${g.starvation}` : "", elroy: g.chars.blinky ? `susp ${g.suspendElroy} spd ${g.chars.blinky.speed}` : "",
+      level: g.levelNumber - 1, mt: g.level.timer, ft: g.exactFrightTicks, div: g.exactDiv, fc: g.exactF, fr: g.frightened, starv: g.starvation, score: g.score, house: g.exactHouse, pc: ["pinky", "inky", "clyde"].map((n) => g.chars[n] ? g.chars[n].dotCounter : "-").join(",") + " gc " + g.globalCounter, pdbg: pk && cmz ? `spd ${pk.speed} occ ${cmz.occ(pk)[0]},${cmz.occ(pk)[2]} tun ${cmz.isTunnel(cmz.occ(pk)[0], cmz.occ(pk)[2])} fr ${pk.frightened} dead ${pk.dead}` : "" };
     for (const a of ACTORS) { const c = g.chars[a]; o[a] = c ? { x: base.x - c.x, y: c.y + base.y, dir: c.dir } : null; }
     return o;
   };
   const out = [];
   out.starts = [];
+  const sync = (L) => { if (divAt && divAt[L]) { g.exactDiv = divAt[L].div; g.exactF = divAt[L].fc; } };
   let cur = null, life = -1, armed = false, prevBx = null, pacAt = null;
   for (let i = 0; i < maxFrames && g.scene.name === "game"; i++) {
     // (synced just before the update in which Pac-Man first steps, to the arcade's values on its frame of that)
-    const L = starts ? starts.findIndex((st) => st.pac === i) : -1;
-    if (L >= 0 && divAt && divAt[L]) { g.exactDiv = (divAt[L].div + 5) % 6; g.exactF = (divAt[L].fc + 255) & 255; }
     if (bot) {
       held = botKeyForStats(core) || held;
       const L = cur ? life : life + 1, k = cur ? cur.length : 0;
@@ -107,12 +112,14 @@ export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000,
     if (!cur) {
       if (g.mode === "ready") { armed = true; pacAt = null; }
       const pc = g.chars.pac;
-      if (armed && pacAt === null && pc && (Math.floor(base.x - pc.x) !== 128 || Math.floor(pc.y + base.y) !== 196)) pacAt = i;
+      if (armed && pacAt === null && pc && (Math.floor(base.x - pc.x) !== 128 || Math.floor(pc.y + base.y) !== 196)) { pacAt = i; sync(life + 1); }
       const bx = g.chars.blinky ? g.chars.blinky.x : null;
       if (armed && live && prevBx !== null && Math.floor(bx) !== Math.floor(prevBx)) { armed = false; life++; if (life >= lives) break; cur = []; out.push(cur); out.starts.push({ pac: pacAt, first: i }); }
       prevBx = bx;
     }
     if (cur) {
+      const pc = g.chars.pac, st = out.starts[life];
+      if (st.pac === null && pc && (Math.floor(base.x - pc.x) !== 128 || Math.floor(pc.y + base.y) !== 196)) { st.pac = i; sync(life); } // (his first step after Blinky's)
       cur.push(snap());
       if (cur.length >= frames || g.mode === "caught" || g.mode === "dying") { cur = null; prevBx = null; }
     }
@@ -141,18 +148,20 @@ export function compare(A, B, who = ACTORS, show = 12) {
 /** a recorded bot game as a joy(life, frame) */
 export const fromRecording = (rec) => (life, k) => { const r = rec[life] || []; for (let i = Math.min(k, r.length - 1); i >= 0; i--) if (r[i] !== undefined) return r[i]; return null; };
 
+const LEVEL = +(process.env.LEVEL || 1);
 if (process.argv[1] && process.argv[1].endsWith("compare.mjs") && process.argv[2] === "bot") {
   // node tools/arcade/compare.mjs bot [frames per life] [lives]: the bot plays the core, the arcade replays its stick
   // (lives 5: both games start with 5, the arcade by its DIP switch, so the bot gets further)
   const frames = +(process.argv[3] || 3000), lives = +(process.argv[4] || 3), bot = { rec: [] };
-  const cfg = lives > 3 ? { startingLives: 5 } : {}, dips = lives > 3 ? { lives: 5 } : {};
-  const B0 = coreTrace(null, frames, { lives, bot, cfg });
-  const joy = fromRecording(bot.rec), A = arcadeTrace(joy, frames, { lives, dips });
-  const B = coreTrace(joy, frames, { lives, cfg, starts: B0.starts, divAt: A.map((l) => l.sync) }); // (the same stick again, the ROM's counters)
+  const cfg = { ...(lives > 3 ? { startingLives: 5 } : {}), startingLevel: LEVEL }, dips = lives > 3 ? { lives: 5 } : {};
+  coreTrace(null, frames, { lives, bot, cfg }); // (the bot plays, its stick recorded)
+  const joy = fromRecording(bot.rec), A = arcadeTrace(joy, frames, { lives, dips, level: LEVEL });
+  const B = coreTrace(joy, frames, { lives, cfg, divAt: A.map((l) => l.sync) }); // (the same stick again, the ROM's counters)
   console.log(compare(A, B).join("\n"));
 } else if (process.argv[1] && process.argv[1].endsWith("compare.mjs")) {
   const joy = plans(process.argv[2] || "left:40,up:200");
   const frames = +(process.argv[3] || 600), who = process.argv[4] ? process.argv[4].split(",") : ACTORS;
-  const A = arcadeTrace(joy, frames), B0 = coreTrace(joy, frames), B = coreTrace(joy, frames, { starts: B0.starts, divAt: A.map((l) => l.sync) });
+  const cfg = { startingLevel: LEVEL };
+  const A = arcadeTrace(joy, frames, { level: LEVEL }), B = coreTrace(joy, frames, { cfg, divAt: A.map((l) => l.sync) });
   console.log(compare(A, B, who).join("\n"));
 }

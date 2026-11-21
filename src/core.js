@@ -439,6 +439,9 @@
         byFruit = byFruit || false;
         if (!byFruit) { g.fruitFrightened = false; g.mazeFrightened = false; }
         g.frightened = byFruit ? g.level.fruitFrightenedDuration : g.level.frightened;
+        // EXACT: the arcade's "no fright" is 1 tick (its table holds 1, not 0): the ghosts are blue for that tick (a step at the
+        // fright pace; they could even be eaten)
+        if (exact() && g.frightened === 0) g.frightened = 0.5;
         if (g.frightened === 0) g.frightened = false;
         else {
           if (exact()) g.exactFrightTicks = g.frightened * 2; // EXACT: the arcade counts it in ticks, from the tick it began
@@ -943,7 +946,7 @@
           ghost.speed = logic.getGhostSpeed(ghost);
           ghost.target();
           ghost.hidden = true;
-          if (exact()) g.exactEatFrames = 59 - (g.exactDiv || 0);
+          if (exact()) g.exactEatFrames = 55 + ((10 - (g.exactDiv || 0)) % 6); // (55-60 frames: the divider at 4 the shortest, at 5 the longest)
           mode.setMode("ateGhost");
           g.sounds.thrust.stop();
           g.sounds.ateGhost.play();
@@ -1024,6 +1027,9 @@
     logic.move = (c) => {
       const isPac = c === g.chars.pac;
       if (exact()) { // EXACT: a pattern's bit a tick for what the arcade moves by pattern; everything else once a frame
+        // (a ghost in the maze: its pattern picked every tick from how things stand, as the arcade's: tunnel, blue, Elroy,
+        // normal; the speed used to wait for its next tile, so Elroy coming back as Clyde left, say, came a tile late)
+        if (c.target && !isPac && !c.dead && !c.housing && !c.leaving && !c.entering && !T(c.leaveRight)) { const [ox, , oy] = getCurrentMaze().occ(c); updateGhostSpeed(c, ox, oy); }
         const kind = exactKind(c);
         if (!kind && g.exactTick === 0) return;
         if (!kind && (c.housing || c.leaving)) { // the house (and the way out): a pixel on the frames the house pattern says
@@ -1207,7 +1213,10 @@
           else if (c.houseX > xTile) { c.dir = 0; c.facing = 0; }
         }
       } else if (T(c.iDir)) {
-        if (Math.abs(c.dir - c.iDir) === 2) {
+        // EXACT: the arcade takes the stick's way, reversing too, only if the tile that way from his own (its tiles) is open:
+        // heading out of a dead end, he can't turn back into it until he's left its tile
+        const exactBlocked = () => { if (!(exact() && isPac && g.config.movement === 0)) return false; const [ox, , oy] = cm.occ(c); return cm.isWall(ox + DELTAS[c.iDir].x, oy + DELTAS[c.iDir].y); };
+        if (Math.abs(c.dir - c.iDir) === 2 && !exactBlocked()) {
           c.facing = c.iDir;
           if (isPac && g.config.movement === 3) {
             if (g.playerInput) {
@@ -1834,8 +1843,11 @@
     const updateFrightenedState = (tick) => {
       if (exact() && !tick) return; // (EXACT: counted a tick at a time, in the tick loop)
       if (T(g.frightened) && tick) { // EXACT: a tick's worth; it ends on the very tick (the frame count follows, for the flashing)
+        // (and at once, count or not, when no ghost is left blue: the arcade's 0x137F, every blue one eaten)
+        let blue = false;
+        for (const name of charKeys()) { const c = g.chars[name]; if (c.target && c.frightened) { blue = true; break; } }
         g.exactFrightTicks -= 1;
-        if (g.exactFrightTicks > 0) { g.frightened = Math.ceil(g.exactFrightTicks / 2); return; }
+        if (blue && g.exactFrightTicks > 0) { g.frightened = Math.ceil(g.exactFrightTicks / 2); return; }
         g.frightened = 1;
       }
       if (T(g.frightened)) {
@@ -2093,11 +2105,11 @@
           }
           if (g.fadeTimer > 0) g.fadeTimer -= 1;
 
-          // EXACT: the arcade checks the house after Pac-Man's step, every tick (a dot that frees a ghost frees it that frame)
+          // EXACT: the arcade checks the house at each tick's end (a dot that frees a ghost frees it that frame)
           if (!exact()) releaseGhosts();
 
           updateFrightenedState();
-          handleModeSwitching();
+          if (!exact()) handleModeSwitching(); // (EXACT: at the frame's end, below)
           if (env.playStep) env.playStep(); // web edition: a step of play, about to read the controls (replays count these)
           handlePlayerInput();
           g.ghostEatenThisFrame = false;
@@ -2108,7 +2120,6 @@
           g.exactHouseStep = false;
           for (let tick = 0, ticks = exact() ? 2 : 1; tick < ticks; tick++) {
             g.exactTick = tick;
-            if (exact()) updateFrightenedState(true);
             if (exact() && tick === 0 && g.exactResumeTick) { g.exactResumeTick = false; continue; } // (play back on the second tick)
             // EXACT: the arcade checks Pac-Man against the ghosts once, at each tick's start, by tile (before anyone moves): a ghost
             // reaching him mid-tick isn't caught till the next tick, and two swapping tiles within a tick pass right through
@@ -2128,9 +2139,13 @@
               const char = g.chars[name];
               if (frozen && char !== g.chars.pac) { char.moved = false; continue; }
               if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
-              if (exact() && char === g.chars.pac) releaseGhosts("dots");
             }
             if (g.chars.pac.moved) pacMovedAny = true;
+            // EXACT: the fright counts down at the tick's end, after everyone has moved (the arcade's 0x1376): what looks at it
+            // at the frame's end (the scatter / chase clock) sees it already over on the tick it ran out; then the house's dot
+            // counts (0x20C9 and its neighbours): a ghost freed here, and Blinky's Elroy back with Clyde's release, count for the
+            // ghosts from the next tick. Only on a tick that's played: a ghost caught at its start stops the rest of it
+            if (exact() && g.mode === "normal") { updateFrightenedState(true); releaseGhosts("dots"); }
           }
           // EXACT: the no-dot timer stands still while Pac-Man is paused (a dot, an energizer): it counts a frame he ends unpaused
           // EXACT: the house's ghosts move in the arcade's per-frame routine, after both ticks (one revived this frame included)
@@ -2142,6 +2157,9 @@
           // EXACT: the no-dot timer stands still while Pac-Man is paused (a dot, an energizer): it counts a frame he ends unpaused
           if (exact() && !(g.chars.pac.skipCounter > 0)) g.starvation = (g.starvation || 0) + 1;
           if (exact()) releaseGhosts("timer");
+          // EXACT: the scatter / chase clock ticks at the frame's end, after everyone has moved (the arcade's 0x0E3B): a switch
+          // flags the reversals for the next frame, so a ghost standing on a tile centre as the frame began goes on to the next
+          if (exact()) handleModeSwitching();
           if (exact()) g.chars.pac.moved = pacMovedAny;
           if (T(g.fruitTimer)) {
             g.fruitTimer -= 1;

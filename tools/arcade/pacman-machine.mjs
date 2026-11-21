@@ -64,11 +64,20 @@ export class PacmanMachine {
   }
   write(a, v) {
     a &= 0x7fff;
+    // (test only: while startLevel(n) is armed, every write of the level byte (0x4E13, cleared twice as a game is set up)
+    // becomes level n's, so the ROM plays a game from a later level, as the core's starting level does (the arcade has no
+    // such option); the caller disarms it at the first READY, startLevel(1), before any board is cleared)
+    // and the pointer into the per-level difficulty list (0x4E0A, a list of set numbers at 0x0068, moved on a step a board
+    // until its last entry, 0x14; both lists, normal and hard, sit in page 0) moves on as many steps
+    if (a === 0x4e13 && this.levelAt !== undefined) v = this.levelAt;
+    if (a === 0x4e0a && this.levelAt !== undefined) { let p = v; for (let i = 0; i < this.levelAt && this.rom[p] !== 0x14; i++) p++; v = p & 0xff; }
     if (a >= 0x4000 && a < 0x5000) { if ((a & 0xfff) < 0x800 || a >= 0x4c00) this.ram[a - 0x4000] = v; return; }
     if (a >= 0x5000 && a < 0x5100) { this.io[a - 0x5000] = v; if (a === 0x5000 && !(v & 1)) this.irq = false; }
   }
   input() { return 0xff; }
   output(port, v) { if ((port & 0xff) === 0) this.vector = v; }
+  /** the next game starts at level n (1 = the first board): see write() */
+  startLevel(n) { this.levelAt = n > 1 ? n - 1 : undefined; }
   /** peek at the game's memory (0x4000-0x4fff) */
   peek(a) { return this.ram[a - 0x4000]; }
   /** the controls for the frames that follow: joy is "up" | "down" | "left" | "right" | null; coin / start pressed */
