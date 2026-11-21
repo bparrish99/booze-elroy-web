@@ -92,13 +92,14 @@ export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000,
     const pk = g.chars.pinky, cmz = core.getCurrentMaze ? core.getCurrentMaze() : null;
     const bl = g.chars.blinky, cm = core.getCurrentMaze ? core.getCurrentMaze() : null;
     const o = { fp: !!g.fruitTimer, fruit: `t ${g.fruitTimer} st ${g.fruitScoreTimer}`, rs: seed, bdbg: bl && cm ? `fr ${bl.frightened} dead ${bl.dead} occ ${cm.occ(bl)} pocc ${cm.occ(g.chars.pac)}` : "", dots: 244 - g.dots.length - g.powers.length, mode: g.mode, bpat: P ? h(P.ghost) + "/" + h(P.ghostFright) : "", epat: P ? h(P.elroy2) + "/" + h(P.elroy1) + " tun " + h(P.tunnel) : "", crel: g.chars.clyde ? `h ${g.chars.clyde.housing} l ${g.chars.clyde.leaving} gc ${g.globalCounter} starv ${g.starvation}` : "", elroy: g.chars.blinky ? `susp ${g.suspendElroy} spd ${g.chars.blinky.speed}` : "",
-      level: g.levelNumber - 1, mt: g.level.timer, ft: g.exactFrightTicks, div: g.exactDiv, fc: g.exactF, fr: g.frightened, starv: g.starvation, score: g.score, house: g.exactHouse, pc: ["pinky", "inky", "clyde"].map((n) => g.chars[n] ? g.chars[n].dotCounter : "-").join(",") + " gc " + g.globalCounter, pdbg: pk && cmz ? `spd ${pk.speed} occ ${cmz.occ(pk)[0]},${cmz.occ(pk)[2]} tun ${cmz.isTunnel(cmz.occ(pk)[0], cmz.occ(pk)[2])} fr ${pk.frightened} dead ${pk.dead}` : "" };
+      level: g.levelNumber - 1, mt: g.level.timer, ft: g.exactFrightTicks, tn: g.exactTenths, div: g.exactDiv, fc: g.exactF, fr: g.frightened, starv: g.starvation, score: g.score, house: g.exactHouse, pc: ["pinky", "inky", "clyde"].map((n) => g.chars[n] ? g.chars[n].dotCounter : "-").join(",") + " gc " + g.globalCounter, pdbg: pk && cmz ? `spd ${pk.speed} occ ${cmz.occ(pk)[0]},${cmz.occ(pk)[2]} tun ${cmz.isTunnel(cmz.occ(pk)[0], cmz.occ(pk)[2])} fr ${pk.frightened} dead ${pk.dead}` : "" };
     for (const a of ACTORS) { const c = g.chars[a]; o[a] = c ? { x: base.x - c.x, y: c.y + base.y, dir: c.dir, idir: c.iDir, dead: c.dead, fr: c.frightened } : null; }
     return o;
   };
   const out = [];
   out.starts = [];
-  const sync = (L) => { if (divAt && divAt[L]) { g.exactDiv = divAt[L].div; g.exactF = divAt[L].fc; g.exactTenths = divAt[L].tn; } };
+  // (NOSYNC=1: only the first life's, so a whole game must keep in step through deaths, board ends and intermissions)
+  const sync = (L) => { if (process.env.NOSYNC && L > 0) return; if (divAt && divAt[L]) { g.exactDiv = divAt[L].div; g.exactF = divAt[L].fc; g.exactTenths = divAt[L].tn; } };
   let cur = null, life = -1, armed = false, prevBx = null, pacAt = null;
   for (let i = 0; i < maxFrames && g.scene.name === "game"; i++) {
     // (synced just before the update in which Pac-Man first steps, to the arcade's values on its frame of that)

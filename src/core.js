@@ -1328,6 +1328,10 @@
             if (g.config.ability === RANDOM && ((g.newLevel && !g.randomFresh) || !g.randomAbility)) pickRandomAbility(); // Random: a new board's pick
             g.randomFresh = false;
             const died = !g.newLevel;
+            // EXACT: READY after a death is the arcade's timed task of 20 tenths (set two frames after the sprites go): 115-120 frames,
+            // by the divider's phase
+            if (exact() && died && !pro()) { const d = ((g.exactDiv || 0) + 2) % 6; g.modeTimer = 117 + ((6 - d) % 6 || 6); }
+            if (exact() && !died && g.exactInterCore != null) { if (!pro()) g.modeTimer += ((g.exactInterRom - g.exactInterCore) % 60 + 60) % 60; g.exactInterCore = null; }
             if (g.newLevel) g.newLevel = false; else g.lives = g.lives - 1;
             if (g.lives < 0) mode.setMode("gameover");
             // web edition (the author, 2026-11-20): caught on the step that cleared the board (a Suck taking the last dots
@@ -1413,7 +1417,8 @@
         },
         dying: {
           state: { running: false, showPac: false, showGhosts: false }, frames: 210, nextMode: "ready",
-          startFunc() { g.diedSoundPlayed = false; },
+          // (EXACT: the arcade's death runs 440 ticks from the catch, 220 frames: its 60 frozen, then 160 of this)
+          startFunc() { g.diedSoundPlayed = false; if (exact()) g.modeTimer = 160; },
           endFunc() {
             if (g.attract) {
               g.config.volume = g.originalVolume; g.attract = false; g.originalVolume = null;
@@ -1431,6 +1436,9 @@
           startFunc() {
             g.fadeTimer = g.fadeLength(); g.particles = []; stopSiren(); g.sounds.dead.stop(); g.sounds.scared.stop(); g.sounds.thrust.stop();
             if (pro()) g.modeTimer = PRO_BOARD_DONE;
+            // EXACT: the arcade's board end starts with a timed task of 20 tenths, so it runs 1-6 frames longer by the divider's phase
+            // (the flashing and the rest are whole tenths after it): the pause here takes it up, so the next board starts on its frame
+            else if (exact()) g.modeTimer = 124 + ((6 - (g.exactDiv || 0)) % 6 || 6);
           },
           nextMode: "levelAnimation",
           // web edition: Pro Mode: a brief pause, then the next board (no flashing maze, so no intermissions either)
@@ -1461,6 +1469,10 @@
           startFunc() { g.fruitTimer = false; g.fruitScoreTimer = false; },
           endFunc() {
             const n = g.levelNumber;
+            // EXACT: the intermission's own length is the author's (their films, Mina's included); the arcade's free-running counter
+            // only matters modulo 60 frames, so READY after it makes up the difference to the arcade's (cutscene 1 after board 2:
+            // 636 frames, 2 after board 5: 510, 3 after 9, 13 and 17: 522)
+            if (exact()) { g.exactInterStart = g.exactClock; g.exactInterRom = n === 2 ? 636 : n === 5 ? 510 : n === 9 || n === 13 || n === 17 ? 522 : 0; }
             if (n === 2 || n === 13) mode.setMode("intermission1");
             else if (n === 5 || n === 17) mode.setMode("intermission2");
             else if (n === 9) mode.setMode("intermission3");
@@ -1469,6 +1481,8 @@
         },
         pause: {
           state: { hideMaze: true, running: false, showPac: false, showGhosts: false }, frames: 20, nextMode: "ready",
+          startFunc() { if (exact() && g.exactInterStart != null) { // (the intermission's frames: the start to here, less the one frame it takes without one)
+            g.exactInterCore = g.exactClock - g.exactInterStart - 1; g.exactInterStart = null; } },
           endFunc() {
             g.levelNumber += 1;
             levels.startLevel(g.levelNumber);
@@ -1858,9 +1872,10 @@
     const updateFrightenedState = (tick) => {
       if (exact() && !tick) return; // (EXACT: counted a tick at a time, in the tick loop)
       if (T(g.frightened) && tick) { // EXACT: a tick's worth; it ends on the very tick (the frame count follows, for the flashing)
-        // (and at once, count or not, when no ghost is left blue: the arcade's 0x137F, every blue one eaten)
+        // (and at once, count or not, when no ghost's flag is left: the arcade's 0x137F; an eaten ghost's flag stays while its eyes
+        // go home, cleared as it revives, so every blue one eaten and home)
         let blue = false;
-        for (const name of charKeys()) { const c = g.chars[name]; if (c.target && c.frightened) { blue = true; break; } }
+        for (const name of charKeys()) { const c = g.chars[name]; if (c.target && (c.frightened || c.dead)) { blue = true; break; } }
         g.exactFrightTicks -= 1;
         if (blue && g.exactFrightTicks > 0) { g.frightened = Math.ceil(g.exactFrightTicks / 2); return; }
         g.frightened = 1;
@@ -2105,7 +2120,7 @@
         // EXACT: the arcade's free-running divider (frames mod 6: a tenth of a second rolls over at 0), ticking every frame as
         // its interrupt does; it times the arcade's timed tasks (the eat-a-ghost pause). Its phase at a game's start is whatever
         // it is (the arcade's depends on when START was pressed); the harness can set it to the ROM's (env.exactDivSync)
-        if (exact()) { g.exactDiv = ((g.exactDiv || 0) + 1) % 6; g.exactF = ((g.exactF || 0) + 1) & 255; } // (and its frame counter)
+        if (exact()) { g.exactDiv = ((g.exactDiv || 0) + 1) % 6; g.exactF = ((g.exactF || 0) + 1) & 255; g.exactClock = (g.exactClock || 0) + 1; } // (and its frame counter; and a plain count, for timing the intermissions)
         // EXACT: and its tenths (0x4C86's top half), and the seconds they roll over into: the fruit's timed task counts those
         if (exact() && g.exactDiv === 0 && (g.exactTenths = ((g.exactTenths || 0) + 1) % 10) === 0 && g.exactFruitSecs > 0 && --g.exactFruitSecs === 0) {
           g.fruitTimer = false; g.exactFruitHeld = false; // (gone, or after it was eaten, out of the way of the next)
