@@ -267,6 +267,7 @@
         g.powers = []; g.dots = [];
         for (const p of self.getPowers()) g.powers.push({ x: p.x, y: p.y, score: 50, skipCounter: 3, action: handlers.handlePowerEaten, animator: () => animations.power });
         for (const d of self.getDots()) g.dots.push({ x: d.x, y: d.y, score: 10, skipCounter: 1, action: handlers.handleDotEaten, animator: () => animations.dot });
+        g.exactBoardTotal = g.dots.length + g.powers.length; // (EXACT: the no-dot timer's copy starts each life at none eaten)
       };
       return self;
     }
@@ -671,7 +672,8 @@
         }, makeTarget((self, cm2) => {
           if (g.level.chase) {
             const [px, , py] = cm2.occ(g.chars.pac);
-            const [bx, , by] = cm2.occ(g.chars.blinky);
+            // (EXACT: Blinky's tile as the arcade keeps it, 0x4D0A: the one he's heading into once he's a pixel past a centre)
+            const bl = g.chars.blinky, bd = DELTAS[bl.dir], [bx, , by] = exact() ? cm2.occ({ x: bl.x + 4 * bd.x, y: bl.y + 4 * bd.y }) : cm2.occ(bl);
             const d = DELTAS[g.chars.pac.dir];
             let midX = px + d.x * 2; const midY = py + d.y * 2;
             if (g.config.pinkyBug && g.chars.pac.dir === 3) midX = px - 2;
@@ -719,6 +721,12 @@
         const cm = getCurrentMaze();
         const hc = cm.houseCenter;
         const N = g.config.ghostCount;
+        // EXACT: the arcade clears the reversal flags (and so every owed decision) as a life or a board starts, and the no-dot
+        // timer's copy of the dot count (0x4D9E) to none eaten: a life's first frame before he moves resets the timer if any are gone
+        if (exact()) {
+          g.exactQueue = []; g.exactDotsSeen = g.exactBoardTotal;
+          for (const name of charKeys()) { const c = g.chars[name]; if (c) { c.exactReverse = false; c.exactDecide = false; c.exactFresh = false; } }
+        }
         // the Lua only treats the "mspac" scatter option (2) like "random" (1) for blinky and pinky
         const randomScatter = (c, allowMs) => {
           if (g.config.scatterOption === 1 || (allowMs && g.config.scatterOption === 2)) {
@@ -1063,6 +1071,9 @@
         // EXACT: a reversal the mode change (or an energizer) asked for happens at the ghost's tile centre (already there, or
         // the next it reaches): it turns round and steps off the other way; no new decision till the next tile
         if (c.exactReverse && c.target && exact() && !c.housing && !c.leaving && !c.entering && xOff === CENTER && yOff === CENTER) { c.exactReverse = false; c.dir = (c.dir + 2) % 4; c.facing = c.dir; c.iDir = c.dir; }
+        // EXACT: a ghost in the maze takes its planned turn as it steps off a centre, not on arriving there (so a reversal asked
+        // for meanwhile turns it back the way it came, the plan forgotten, as the arcade's)
+        else if (exact() && c.target && !isPac && !c.housing && !c.leaving && !c.entering) logic.turn(c);
         const exactPac = isPac && exact() && exactKind(c); // EXACT: his walls and centres by the arcade's tiles
         const ex = exactPac ? cm.occ(c) : null, ecx = ex && ex[0] * TILE + CENTER, ecy = ex && ex[2] * TILE + CENTER;
         if (exactPac ? (!cm.isWall(ex[0] + DELTAS[c.dir].x, ex[2] + DELTAS[c.dir].y) || (c.dir === 2 && c.x > ecx) || (c.dir === 3 && c.y > ecy) ||
@@ -1152,7 +1163,7 @@
             }
           }
 
-          if (!exactPac) logic.turn(c); // (EXACT: the arcade reads his stick once, before the step, not again after it)
+          if (!exactPac && !(exact() && c.target && !c.housing && !c.leaving && !c.entering)) logic.turn(c); // (EXACT: the arcade reads his stick once, before the step, not again after it; a maze ghost turns as it steps off, above)
           eatFruit();
         } else if (isPac && g.config.movement === 3) {
           if (g.chars.pac.speed > MAX_THRUST) {
@@ -2094,7 +2105,7 @@
         // it is (the arcade's depends on when START was pressed); the harness can set it to the ROM's (env.exactDivSync)
         if (exact()) { g.exactDiv = ((g.exactDiv || 0) + 1) % 6; g.exactF = ((g.exactF || 0) + 1) & 255; } // (and its frame counter)
         // EXACT: the no-dot timer keeps counting through the pause after eating a ghost (in play: counted after the ticks, below)
-        if (exact() && g.scene.name === "game" && g.mode === "ateGhost") g.starvation = (g.starvation || 0) + 1;
+        if (exact() && g.scene.name === "game" && g.mode === "ateGhost") { g.starvation = (g.starvation || 0) + 1; releaseGhosts("timer"); } // (its limit too: a ghost can be let out in the pause)
         if (g.vacuumFx > 0) g.vacuumFx -= 1; // the Vacuum's swirl (render.js)
         if (g.pushFx > 0) g.pushFx -= 1;     // the Push's rings
         mode.handle();
@@ -2150,6 +2161,9 @@
               for (const name of charKeys()) g.chars[name].exactFresh = false;
               continue;
             }
+            // EXACT: the eyes move first in the arcade's tick (0x1066-0x10B4), before the collision check: a catch or a ghost eaten on
+            // this tick doesn't stop them
+            if (exact() && (g.mode === "normal" || g.mode === "ateGhost") && !frozen) for (const name of charKeys()) { const ch = g.chars[name]; if (ch.target && ch.dead && !ch.hidden) updateCharacterMovement(ch); }
             // EXACT: the arcade checks Pac-Man against the ghosts once, at each tick's start, by tile (before anyone moves): a ghost
             // reaching him mid-tick isn't caught till the next tick, and two swapping tiles within a tick pass right through
             if (exact() && g.mode === "normal") {
@@ -2178,8 +2192,8 @@
             for (const name of charKeys()) {
               const char = g.chars[name];
               if (frozen && char !== g.chars.pac) { char.moved = false; continue; }
+              if (exact() && char.dead && char.target) continue; // (EXACT: the eyes moved at the tick's start)
               if (g.mode !== "caught" && g.mode !== "ateGhost") updateCharacterMovement(char);
-              else if (exact() && g.mode === "ateGhost" && char.dead && !char.hidden) updateCharacterMovement(char); // (EXACT: eyes already heading home keep going on the tick a ghost is caught)
             }
             if (g.chars.pac.moved) pacMovedAny = true;
             // EXACT: the fright counts down at the tick's end, after everyone has moved (the arcade's 0x1376): what looks at it

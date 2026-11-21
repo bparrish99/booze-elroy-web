@@ -121,7 +121,7 @@ export function coreTrace(joy, frames, { cfg = {}, lives = 3, maxFrames = 40000,
       const pc = g.chars.pac, st = out.starts[life];
       if (st.pac === null && pc && (Math.floor(base.x - pc.x) !== 128 || Math.floor(pc.y + base.y) !== 196)) { st.pac = i; sync(life); } // (his first step after Blinky's)
       cur.push(snap());
-      if (cur.length >= frames || g.mode === "caught" || g.mode === "dying") { cur = null; prevBx = null; }
+      if (cur.length >= frames || g.mode === "caught" || g.mode === "dying" || g.mode === "levelComplete") { cur = null; prevBx = null; } // (a board cleared ends it too, as the arcade's sprites go)
     }
   }
   return out;
@@ -155,7 +155,7 @@ if (process.argv[1] && process.argv[1].endsWith("compare.mjs") && process.argv[2
   const frames = +(process.argv[3] || 3000), lives = +(process.argv[4] || 3), bot = { rec: [] };
   const cfg = { ...(lives > 3 ? { startingLives: 5 } : {}), startingLevel: LEVEL }, dips = lives > 3 ? { lives: 5 } : {};
   coreTrace(null, frames, { lives, bot, cfg }); // (the bot plays, its stick recorded)
-  const joy = fromRecording(bot.rec), A = arcadeTrace(joy, frames, { lives, dips, level: LEVEL });
+  const joy = fromRecording(bot.rec), A = arcadeTrace(joy, frames, { lives, dips, level: LEVEL, maxFrames: 150000 }); // (room for five whole lives)
   const B = coreTrace(joy, frames, { lives, cfg, divAt: A.map((l) => l.sync) }); // (the same stick again, the ROM's counters)
   console.log(compare(A, B).join("\n"));
 } else if (process.argv[1] && process.argv[1].endsWith("compare.mjs")) {
