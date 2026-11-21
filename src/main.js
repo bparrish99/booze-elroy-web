@@ -63,6 +63,7 @@
       picks: { get: () => ACC.picks(), load: () => ACC.loadPicks() }, pickPlayed: () => earned(["trust"]), // Pinback's Picks (trust me)
       addFavorite: (key) => openFavorite(key),
       saveSettings: () => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(core.g.config)); } catch { /* ignore */ } },
+      neat: () => neatOn, // (NEAT: its own boards, out of everyone else's sight; read once the game runs, so after neatOn is set below)
     });
     // player accounts (src/account.js): username + password; the corner where 2UP would be logs in / shows the name
     const ACC = BoozeAccount.create({
@@ -261,7 +262,7 @@
           ...ach.filter((a) => a.mode && s >= a.points && c[a.mode.key] === a.mode.value).map((a) => a.id), // points in a mode (house of horrors, ...)
           ...ach.filter((a) => a.score && s >= a.score).map((a) => a.id), // clyde / inky / pinky / blinky: the final score
           ...ach.filter((a) => a.board && s >= a.boardScore && SK.keyFor(c) === a.board).map((a) => a.id)]); // purist / patternless: on those exact settings
-        return LB.afterGameOver(s, fpsOn || neatOn); // (test mode, NEAT: no leaderboards, the author, 2026-11-16 / 21)
+        return LB.afterGameOver(s, fpsOn); // (test mode: no leaderboards, the author, 2026-11-16; NEAT: its own boards, LB opts.neat, 2026-11-22)
       }, rewind: () => {
         if (!rwd) return;
         const was = rwd.active(); rwd.trigger();
@@ -269,7 +270,7 @@
       },
       feat: (id) => { if (!core.g.attract && !core.g.autoplay && !(replay && replay.playing())) earned([id]); }, // a single use of an ability (hoover deluxe, personal space, the power of now)
       testMode: () => fpsOn && !(replay && replay.playing()) /* test mode (xyzzy): Pro Mode always; never in a replay (it changes the timing) */,
-      exact: () => (core.g.neatOn = neatOn) && !(replay && replay.playing()) /* NEAT ("neat"): the arcade-exact game; never in a replay of a normal one (g.neatOn: render's sticker) */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      exact: () => (core.g.neatOn = replay && replay.playing() ? replay.neat() : neatOn) /* NEAT ("neat"): the arcade-exact game; a replay plays as it was recorded, NEAT or not, the viewer's setting untouched (g.neatOn: render's sticker) */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => { if (!(replay && replay.playing())) LB.saveBest(s); }, // (someone else's replayed score isn't the viewer's best)
       saveConfig: (c) => { if (LB.borrowed() || (replay && replay.playing())) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
@@ -280,7 +281,7 @@
     { // replays: every key / button reaching the core is noted while a game records; while a replay plays, the viewer's
       // own keys are its controls instead (Esc, speed, pause) and the replay's own presses are fed in step by step
       const kp = core.keypressed, gp = core.gamepadpressed;
-      replay = BoozeReplay.create(core, { keypressed: kp, gamepadpressed: gp });
+      replay = BoozeReplay.create(core, { keypressed: kp, gamepadpressed: gp, neat: () => neatOn });
       core.keypressed = (k) => { if (replay.playing()) { replay.viewerKey(k); return; } replay.note("k", k); kp(k); };
       core.gamepadpressed = (b) => { if (replay.playing()) { replay.viewerKey(b === "b" ? "escape" : b === "a" ? "space" : b === "start" ? "p" : ""); return; } replay.note("g", b); gp(b); };
       window.__replay = replay; // tests
@@ -298,6 +299,7 @@
     // (and never over Mina's film: the "mina" scene holds them too)
     const livePlay = () => (core.g.scene.name === "game" && !core.g.attract && !core.g.autoplay) || core.g.scene.name === "mina";
     function earned(ids) {
+      if (neatOn && (core.g.scene.name === "game" || core.g.scene.name === "nameEntry")) return; // (NEAT games earn nothing: the author, 2026-11-22)
       // a ghost minimum (src/achievements.js minGhosts): judged on the settings in play now, when it's earned
       ids = ids.filter((id) => { const a = BoozeAchievements.byId(id); return !(a && a.minGhosts && !(core.g.config.ghostCount >= a.minGhosts)); });
       if (!ids.length) return;
@@ -826,7 +828,7 @@
         raveLastMode = g.mode;
         rave.duck(g.scene.name === "mina" || /intermission/i.test(g.mode || "") || poppedOut || (real && !live), real);
       }
-      core.g.neatOn = neatOn; // (NEAT's sticker in the header, render.js)
+      core.g.neatOn = replay && replay.playing() ? replay.neat() : neatOn; // (NEAT's sticker in the header, render.js: a NEAT replay shows it, whatever the viewer's setting)
       R.draw(); P.present();
       if (fpsOn) {
         fpsFrames += 1;

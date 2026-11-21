@@ -38,6 +38,8 @@
       rng: () => rand(),
       recording: () => !!rec && !play,
       playing: () => !!play,
+      /** a NEAT replay is playing */
+      neat: () => !!(play && play.data.neat),
       info: () => play && { name: play.name, speed: play.speed, paused: play.paused, old: play.old },
       /** a real game is starting (core env.gameStarting): seed it, and record it (unless it's a replay starting) */
       gameStarting() {
@@ -46,6 +48,8 @@
         rand = mulberry32(seed); step = 0;
         const cfg = {}; for (const k of CFG) cfg[k] = core.g.config[k];
         rec = { v: core.REPLAY_VERSION, seed, cfg, keys: [], ev: [], mask: 0, end: 0, score: 0 };
+        // (NEAT, the author's arcade-exact game: its replays say so, and keep the player's Pro Mode, since NEAT's timings use it)
+        if (opts.neat && opts.neat()) { rec.neat = true; rec.pro = !!core.g.config.proMode; }
       },
       /** before each update (main.js): a replay's presses made after this many steps of play go in now */
       beforeStep() {
@@ -75,7 +79,7 @@
         if (!rec || !rec.done || rec.score !== score) return null;
         let prev = 0;
         const keys = rec.keys.map(([s, m]) => { const d = s - prev; prev = s; return d.toString(36) + "." + m.toString(36); }).join(",");
-        const json = JSON.stringify({ v: rec.v, seed: rec.seed, cfg: rec.cfg, keys, ev: rec.ev, end: rec.end, score: rec.score });
+        const json = JSON.stringify({ v: rec.v, seed: rec.seed, cfg: rec.cfg, keys, ev: rec.ev, end: rec.end, score: rec.score, ...(rec.neat ? { neat: true, pro: rec.pro } : {}) });
         try {
           if (typeof CompressionStream === "undefined") throw new Error("no gzip");
           const buf = await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
@@ -101,7 +105,8 @@
       start(data, name, back, rid) {
         rec = null;
         const own = {}; for (const k of CFG) own[k] = core.g.config[k];
-        const fix = data.v < 3 && OLD[rid] || null;
+        // (a NEAT replay plays NEAT with its player's Pro Mode, the viewer's back after; the viewer's own NEAT setting stays as it is)
+        const fix = data.neat ? { proMode: !!data.pro } : data.v < 3 && OLD[rid] || null;
         if (fix) for (const k of Object.keys(fix)) own[k] = core.g.config[k];
         // (the header's 1UP: the replay's while it plays, the viewer's back after; the author, 2026-11-19. The high score
         // needs nothing: the page a replay goes back to, a leaderboard or the title, sets its own)

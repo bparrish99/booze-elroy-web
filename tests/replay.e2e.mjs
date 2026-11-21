@@ -16,10 +16,10 @@ const check = (ok, msg) => { console.log((ok ? "PASS " : "FAIL ") + msg); if (!o
 const b = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });
 try {
   const errs = [];
-  async function roundTrip(label, cfg, start, pressAt, viewerPro = true, noReplay = false, viewerStyle = null) {
+  async function roundTrip(label, cfg, start, pressAt, viewerPro = true, noReplay = false, viewerStyle = null, neat = false) {
     const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
     const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
-    await p.addInitScript((c) => { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); }, { crtEffect: false, proMode: true, startingLives: 1, ...cfg });
+    await p.addInitScript(([c, n]) => { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); if (n) localStorage.setItem("booze-elroy-neat", "1"); }, [{ crtEffect: false, proMode: true, startingLives: 1, ...cfg }, neat]);
     const lives = cfg.startingLives || 1;
     await p.goto(dev.url + "/"); await p.waitForTimeout(1200);
     await start(p);
@@ -115,6 +115,26 @@ try {
   // played with Random background and maze style, watched with plain ones (a phone's replay of a PC's game went its own
   // way: the Random picks drew from the game's RNG; 2026-11-18)
   await roundTrip("RANDOM LOOKS", { ghostCount: 4, ability: 2, background: "random", mazeColor: 0 }, async (p) => { await p.keyboard.press("Enter"); }, (t) => t % 6 === 1, true, false, { background: "none", mazeColor: 99 });
+  // NEAT (the author's arcade-exact game, 2026-11-22): its replay says so and plays NEAT, with its player's Pro Mode, for a
+  // viewer who has NEAT off (opening the shared link), without switching NEAT on for them; it stays out of the olive's loop
+  {
+    const neat = await roundTrip("NEAT GAME", { ghostCount: 4, startingLives: 3 }, async (p) => { await p.keyboard.press("Enter"); }, () => false, true, false, null, true);
+    check(neat.key.startsWith("neat:"), "a NEAT game's score goes on its NEAT board: " + neat.key);
+    const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
+    const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
+    await p.addInitScript(() => { localStorage.setItem("booze-elroy-options", JSON.stringify({ crtEffect: false, proMode: false })); });
+    await p.goto(dev.url + "/?replay=" + neat.rid);
+    check(await p.waitForFunction(() => window.__replay && window.__replay.playing(), null, { timeout: 15000 }).then(() => true, () => false), "a NEAT replay's shared link plays it for a viewer without NEAT");
+    const st = await p.evaluate(() => ({ neat: window.__replay.neat(), on: window.__core.g.neatOn, pro: window.__core.g.config.proMode }));
+    check(st.neat && st.on && st.pro === true, "as NEAT, with its player's Pro Mode " + JSON.stringify(st));
+    await p.keyboard.press("Space"); await p.keyboard.press("Space");
+    await p.waitForFunction(() => !window.__replay.playing(), null, { timeout: 240000 });
+    check(JSON.stringify(await p.evaluate(() => window.__lastGameEnd)) === JSON.stringify(neat.played), "it ends exactly as the NEAT game did " + JSON.stringify(neat.played));
+    check(await p.evaluate(() => localStorage.getItem("booze-elroy-neat") !== "1" && window.__core.g.config.proMode === false), "and the viewer is back as they were: NEAT off, their own Pro Mode");
+    const loop = await (await fetch(dev.url + "/api/scores/replays")).json();
+    check(!loop.replays.some((r) => r.rid === neat.rid), "NEAT replays stay out of the olive's loop");
+    await ctx.close();
+  }
   await roundTrip("NO THANKS", { ghostCount: 2, difficulty: 2 }, async (p) => { await p.keyboard.press("Enter"); }, () => false, true, true);
   // the author's secret: the olive in the title's martini (once the logo has settled) plays every replay, round and round
   {

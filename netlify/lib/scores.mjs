@@ -12,7 +12,7 @@
 import { createHash, timingSafeEqual, randomBytes } from "node:crypto";
 import scorekey from "../../src/scorekey.js";
 
-const { isKey, cleanName, placeOf, MAX_SCORE, BOARD_SIZE } = scorekey;
+const { isKey, isBoardKey, isNeat, cleanName, placeOf, MAX_SCORE, BOARD_SIZE } = scorekey;
 const MAX_BODY = 2048;
 export const json = (status, body) => new Response(JSON.stringify(body), {
   status, headers: { "content-type": "application/json", "cache-control": "no-store" },
@@ -116,12 +116,12 @@ export async function handle(req, store, opts = {}) {
     }
     const ridsOf = async (key) => tidy(await store.get(key, { type: "json" })).map((e) => e.rid).filter(Boolean);
     if (body.board !== undefined) {
-      if (!isKey(body.board)) return json(400, { error: "bad board" });
+      if (!isBoardKey(body.board)) return json(400, { error: "bad board" });
       await dropReplays(opts.replays, await ridsOf(body.board));
       await store.delete(body.board);
       return json(200, { reset: body.board });
     }
-    if (opts.replays) { const { blobs } = await store.list(); for (const b of blobs) if (isKey(b.key)) await dropReplays(opts.replays, await ridsOf(b.key)); }
+    if (opts.replays) { const { blobs } = await store.list(); for (const b of blobs) if (isBoardKey(b.key)) await dropReplays(opts.replays, await ridsOf(b.key)); }
     await store.deleteAll();
     return json(200, { reset: "all" });
   }
@@ -132,7 +132,7 @@ export async function handle(req, store, opts = {}) {
   if (path.endsWith("/unreplay")) {
     const body = await readBody(req);
     if (req.method !== "POST" || !body) return json(400, { error: "bad request" });
-    if (!isKey(body.board)) return json(400, { error: "bad board" });
+    if (!isBoardKey(body.board)) return json(400, { error: "bad board" });
     return unreplay(req, store, body.board, body.rid, opts);
   }
   // every replay on every board in one go: [{ rid, name }] (only the olive's endless loop asks: one request, not one a
@@ -149,8 +149,10 @@ export async function handle(req, store, opts = {}) {
 
   if (path.endsWith("/boards")) {
     if (req.method !== "GET") return json(405, { error: "method not allowed" });
+    // (?neat=1: NEAT's boards instead; the regular list never shows them)
+    const neat = new URL(req.url).searchParams.get("neat") === "1";
     const { blobs } = await store.list();
-    const keys = blobs.map((b) => b.key).filter(isKey);
+    const keys = blobs.map((b) => b.key).filter((k) => (neat ? isNeat(k) && isBoardKey(k) : isKey(k)));
     const boards = [];
     for (let i = 0; i < keys.length; i += 25) { // a few reads at a time
       const part = await Promise.all(keys.slice(i, i + 25).map(async (board) => {
@@ -164,7 +166,7 @@ export async function handle(req, store, opts = {}) {
 
   if (req.method === "GET") {
     const board = new URL(req.url).searchParams.get("board");
-    if (!isKey(board)) return json(400, { error: "bad board" });
+    if (!isBoardKey(board)) return json(400, { error: "bad board" });
     return json(200, { board, entries: shown(tidy(await store.get(board, { type: "json" }))) });
   }
 
@@ -173,7 +175,7 @@ export async function handle(req, store, opts = {}) {
     if (!body) return json(400, { error: "bad request" });
     const { board, score } = body;
     const name = cleanName(body.name);
-    if (!isKey(board)) return json(400, { error: "bad board" });
+    if (!isBoardKey(board)) return json(400, { error: "bad board" });
     if (!name) return json(400, { error: "bad name" });
     if (!Number.isInteger(score) || score < 1 || score > MAX_SCORE) return json(400, { error: "bad score" });
     if (opts.nameCheck && !(await opts.nameCheck(req, name))) return json(403, { error: "name taken" });

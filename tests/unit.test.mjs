@@ -638,3 +638,27 @@ test("replays: only the author's account can take one off a score (the score sta
   assert.ok(e && e.score === 777 && !e.rid, "the score stays, without its replay");
   assert.equal(await R.get("r/" + rid), null, "the replay itself is gone");
 });
+
+test("NEAT boards: their own (neat:<key>), never in the regular board list or the replay loop; arenas and favorites refuse them", async () => {
+  const SK = createRequire(import.meta.url)("../src/scorekey.js");
+  const B = "pac.1.t.f.f.3.1.f.0.4.t.f.f", N = SK.NEAT + B, R = blobs.replayStore;
+  assert.ok(SK.isBoardKey(N) && SK.isNeat(N) && !SK.isKey(N), "a board key, but not a plain one");
+  assert.deepEqual(SK.configFor(N), SK.configFor(B), "the same settings as its plain key");
+  assert.ok(!SK.isBoardKey("neat:nonsense") && !SK.isBoardKey("neat:" + N));
+  const call = (method, path, body) => handle(new Request("http://x" + path, { method, body: body === undefined ? undefined : JSON.stringify(body) }), blobs.store, { env, failDelay: 0, replays: R }).then(async (r) => ({ status: r.status, data: await r.json() }));
+  await call("POST", "/api/scores/reset", { password: "correct horse" });
+  await call("POST", "/api/scores", { board: B, name: "regular", score: 100, replay: "js:{\"r\":1}" });
+  const posted = await call("POST", "/api/scores", { board: N, name: "neat player", score: 999, replay: "js:{\"neat\":true}" });
+  assert.equal(posted.data.rank, 1, "a NEAT score posts to its own board");
+  assert.deepEqual((await call("GET", "/api/scores?board=" + B)).data.entries.map((e) => e.name), ["REGULAR"], "the regular board is untouched");
+  assert.deepEqual((await call("GET", "/api/scores?board=" + encodeURIComponent(N))).data.entries.map((e) => e.name), ["NEAT PLAYER"]);
+  assert.deepEqual((await call("GET", "/api/scores/boards")).data.boards.map((b) => b.board), [B], "the regular list never shows NEAT boards");
+  assert.deepEqual((await call("GET", "/api/scores/boards?neat=1")).data.boards.map((b) => b.board), [N], "NEAT's list shows only its own");
+  const loop = (await call("GET", "/api/scores/replays")).data.replays.map((r) => r.name);
+  assert.deepEqual(loop, ["REGULAR"], "the olive's replay loop leaves NEAT replays out");
+  const rid = posted.data.entries[0].rid;
+  assert.equal((await call("GET", "/api/scores/replay?id=" + rid)).data.replay, "js:{\"neat\":true}", "a shared link still plays it");
+  const arena = await handleArenas(new Request("http://x/api/arenas", { method: "POST", body: JSON.stringify({ name: "neat cup", board: N }) }), blobs.arenaStore, { env, now: () => 1 });
+  assert.equal(arena.status, 400, "no NEAT arenas");
+  await call("POST", "/api/scores/reset", { password: "correct horse" });
+});

@@ -48,6 +48,7 @@
   /** the gameplay settings a key stands for ({mazepack: "pac", ...}), or null if it isn't a well-formed key.
    *  Used by share links (?cfg=<key>). */
   function configFor(s) {
+    if (isNeat(s)) s = s.slice(NEAT.length); // (a NEAT board's settings are its plain key's)
     if (!isKey(s)) return null;
     const parts = s.split("."), c = {};
     FIELDS.forEach(([k, vals], i) => { c[k] = vals.find((v) => tok(v) === parts[i]); });
@@ -117,6 +118,12 @@
     if (s.length > 6 && fits(FIELDS.map(([key, vals]) => indexOf(vals, out[key])), s.length - 1)) return null;
     return out;
   }
+  // NEAT (the author's arcade-exact game, 2026-11-22): its own boards, the plain key with this in front. Kept apart from the
+  // regular ones everywhere: arenas, favorites, picks and accounts only take plain keys (isKey); the score boards take either
+  const NEAT = "neat:";
+  const isNeat = (s) => typeof s === "string" && s.startsWith(NEAT);
+  /** a score board's key: a plain one, or a NEAT one */
+  const isBoardKey = (s) => isKey(s) || (isNeat(s) && isKey(s.slice(NEAT.length)));
   /** true if s is a well-formed board key */
   function isKey(s) {
     if (typeof s !== "string" || s.length > 100) return false;
@@ -145,5 +152,5 @@
     return i < BOARD_SIZE ? i : -1;
   }
 
-  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
+  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, isBoardKey, isNeat, NEAT, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
 });
