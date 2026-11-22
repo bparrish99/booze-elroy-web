@@ -452,9 +452,10 @@ test("accounts: the activity log (signups, logins, achievements, every game with
   assert.equal((await acct("POST", "placed", { arena: "X", rank: 11, score: 5 }, a.token)).status, 400);
   // a NEAT board: logged (its settings start "NEAT"), never counted as a board placed on
   assert.deepEqual((await acct("POST", "placed", { board: "neat:" + BOARD, rank: 1, score: 9990, settings: "NEAT  classic Pac-Man" }, a.token)).data, { count: null });
+  assert.deepEqual((await acct("POST", "placed", { board: "elroids", rank: 2, score: 4410 }, a.token)).data, { count: null }); // (Elroids: logged too, never counted)
   const r2 = await acct("GET", "activity", undefined, null, { "x-admin-key": "correct horse" });
   const scores = r2.data.events.filter((e) => e.name === "LOGGED ONE" && /score/.test(e.type)).map((e) => [e.type, JSON.parse(e.detail)]);
-  assert.deepEqual(scores.sort(), [["arenascore", [1, 8200, "FRIDAY FIGHT"]], ["score", [1, 9990, "NEAT  classic Pac-Man"]], ["score", [3, 12340, "default settings"]]]);
+  assert.deepEqual(scores.sort(), [["arenascore", [1, 8200, "FRIDAY FIGHT"]], ["score", [1, 9990, "NEAT  classic Pac-Man"]], ["score", [2, 4410, "ELROIDS"]], ["score", [3, 12340, "default settings"]]]);
   assert.deepEqual((await acct("POST", "placed", { board: BOARD }, a.token)).data, { count: 1 }); // (only BOARD: the NEAT one left out)
   for (let i = 1; i < r.data.events.length; i++) assert.ok(r.data.events[i - 1].at >= r.data.events[i].at, "newest first");
 });
@@ -640,6 +641,26 @@ test("replays: only the author's account can take one off a score (the score sta
   const e = done.data.entries.find((x) => x.name === "KEEPER");
   assert.ok(e && e.score === 777 && !e.rid, "the score stays, without its replay");
   assert.equal(await R.get("r/" + rid), null, "the replay itself is gone");
+});
+
+test("Elroids: one board of its own, out of the board list and the replay loop; arenas refuse it", async () => {
+  const SK = createRequire(import.meta.url)("../src/scorekey.js");
+  const B = "pac.1.t.f.f.3.1.f.0.4.t.f.f", E = SK.ELROIDS;
+  assert.ok(SK.isBoardKey(E) && !SK.isKey(E) && !SK.isNeat(E) && SK.configFor(E) === null);
+  const call = (method, path, body) => handle(new Request("http://x" + path, { method, body: body === undefined ? undefined : JSON.stringify(body) }), blobs.store, { env, failDelay: 0, replays: blobs.replayStore }).then(async (r) => ({ status: r.status, data: await r.json() }));
+  await call("POST", "/api/scores/reset", { password: "correct horse" });
+  await call("POST", "/api/scores", { board: B, name: "regular", score: 100 });
+  for (const [name, score] of [["rock star", 4200], ["martini", 9100]]) await call("POST", "/api/scores", { board: E, name, score, settings: "ELROIDS" });
+  assert.deepEqual((await call("GET", "/api/scores?board=elroids")).data.entries.map((e) => [e.name, e.score]), [["MARTINI", 9100], ["ROCK STAR", 4200]]);
+  assert.deepEqual((await call("GET", "/api/scores/boards")).data.boards.map((b) => b.board), [B], "not on the Leaderboards page");
+  assert.deepEqual((await call("GET", "/api/scores/boards?neat=1")).data.boards, [], "nor NEAT's");
+  assert.ok(SK.isBoardKey(SK.INVADERS) && !SK.isKey(SK.INVADERS), "Booze Invaders: a board of its own too");
+  await call("POST", "/api/scores", { board: SK.INVADERS, name: "invader", score: 777, settings: "INVADERS" });
+  assert.deepEqual((await call("GET", "/api/scores?board=invaders")).data.entries.map((e) => e.name), ["INVADER"]);
+  assert.deepEqual((await call("GET", "/api/scores/boards")).data.boards.map((b) => b.board), [B], "neither on the Leaderboards page");
+  const arena = await handleArenas(new Request("http://x/api/arenas", { method: "POST", body: JSON.stringify({ name: "rock cup", board: E }) }), blobs.arenaStore, { env, now: () => 1 });
+  assert.equal(arena.status, 400, "no Elroids arenas");
+  await call("POST", "/api/scores/reset", { password: "correct horse" });
 });
 
 test("NEAT boards: their own (neat:<key>), never in the regular board list or the replay loop; arenas and favorites refuse them", async () => {

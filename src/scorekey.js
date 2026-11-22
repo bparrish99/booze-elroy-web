@@ -122,8 +122,11 @@
   // regular ones everywhere: arenas, favorites, picks and accounts only take plain keys (isKey); the score boards take either
   const NEAT = "neat:";
   const isNeat = (s) => typeof s === "string" && s.startsWith(NEAT);
-  /** a score board's key: a plain one, or a NEAT one */
-  const isBoardKey = (s) => isKey(s) || (isNeat(s) && isKey(s.slice(NEAT.length)));
+  // ELROIDS (the space background's easter egg, 2026-11-22): one board of its own, kept out of every list like NEAT's
+  // (and BOOZE INVADERS, the second hidden game, 2026-11-22: the same)
+  const ELROIDS = "elroids", INVADERS = "invaders", MINI_BOARDS = [ELROIDS, INVADERS];
+  /** a score board's key: a plain one, a NEAT one, or a hidden game's */
+  const isBoardKey = (s) => isKey(s) || (isNeat(s) && isKey(s.slice(NEAT.length))) || MINI_BOARDS.includes(s);
   /** true if s is a well-formed board key */
   function isKey(s) {
     if (typeof s !== "string" || s.length > 100) return false;
@@ -152,5 +155,5 @@
     return i < BOARD_SIZE ? i : -1;
   }
 
-  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, isBoardKey, isNeat, NEAT, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
+  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, isBoardKey, isNeat, NEAT, ELROIDS, INVADERS, MINI_BOARDS, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
 });

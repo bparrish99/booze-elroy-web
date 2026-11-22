@@ -64,6 +64,7 @@
       picks: { get: () => ACC.picks(), load: () => ACC.loadPicks() }, pickPlayed: () => earned(["trust"]), // Pinback's Picks (trust me)
       addFavorite: (key) => openFavorite(key),
       saveSettings: () => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(core.g.config)); } catch { /* ignore */ } },
+      miniPlaced: (board, rank, score) => ACC.placedOn(board, rank, score, board.toUpperCase()), // (the hidden games' boards: logged in, the activity page)
       neat: () => neatOn, // (NEAT: its own boards, out of everyone else's sight; read once the game runs, so after neatOn is set below)
     });
     // player accounts (src/account.js): username + password; the corner where 2UP would be logs in / shows the name
@@ -387,6 +388,74 @@
     window.__rave = rave; // tests: darkstar's music clock
     const canvas = document.getElementById("screen");
     const P = BoozeRender.createPresenter(canvas, R.screen, () => core.g.config, () => R.filmOn(), R.textMask, () => R.backdrop());
+    // THE HIDDEN GAMES (the author, 2026-11-22): ELROIDS (src/elroids.js: click the flying saucer crossing the space
+    // background) and BOOZE INVADERS (src/invaders.js: how it's reached is the author's call; ?invaders for now). One host
+    // for both: everything stands still meanwhile (no steps of the game, its sounds paused), anywhere but a replay; Esc
+    // comes back to where it was, a real game on its own pause, to go on when ready. EL is whichever is playing.
+    // Their leaderboards: a board each ("elroids", "invaders": scorekey MINI_BOARDS), out of every list; the top 10 on their
+    // game over. A score that places: the game's own name-entry screen (LB nameEntry, mode "mini"; the author: "just like
+    // the Pac-Man one"), put in front for the moment and taken away again without restarting what was there (a Pac-Man
+    // game paused underneath stays exactly as it was). Its keys go to it directly, never through core.keypressed, where a
+    // recording game's replay would note them (elNaming)
+    const EL_API = /^https?:$/.test(location.protocol) && !testMaze ? "/api/scores" : null;
+    let elNaming = null;
+    const miniBoard = (board, title) => ({
+      online: !!EL_API,
+      async load() {
+        if (!EL_API) return null;
+        try { const r = await fetch(EL_API + "?board=" + board, { cache: "no-store" }); return r.ok ? (await r.json()).entries || [] : null; } catch { return null; }
+      },
+      /** -> { entries, rank } once it's up, or null (skipped, or it failed) */
+      submit(score, place, top) {
+        return new Promise((resolve) => {
+          for (const k in down) down[k] = false;
+          elNaming = { prev: core.g.scene };
+          core.setScene("nameEntry", { mode: "mini", board, title, score, place, top, onDone: (r) => {
+            const n = elNaming; elNaming = null; core.g.scene = n.prev; // (straight back: no start(), nothing restarted)
+            for (const k in down) down[k] = false;
+            resolve(r);
+          } });
+        });
+      },
+    });
+    const miniVolume = () => ((core.g.attract && core.g.originalVolume != null ? core.g.originalVolume : core.g.config.volume) || 0) / 10; // (the attract demo mutes the game: the real volume, like the OY egg)
+    const MINI = {
+      elroids: BoozeElroids.create({ audio, ghostColor: (n) => R.ghostColor(n), board: miniBoard(SK.ELROIDS, "elroids"), volume: miniVolume }),
+      invaders: BoozeInvaders.create({ audio, ghostColor: (n) => R.ghostColor(n), board: miniBoard(SK.INVADERS, "invaders"), volume: miniVolume }),
+    };
+    let curMini = null;
+    const EL = { // (the one playing)
+      active: () => !!(curMini && curMini.active()), key: (k, d) => curMini && curMini.key(k, d), touch: (...a) => curMini && curMini.touch(...a),
+      exit: () => curMini && curMini.exit(), step: () => curMini && curMini.step(), draw: (...a) => curMini && curMini.draw(...a),
+    };
+    let elHeld = [];
+    function startMini(name) {
+      if (EL.active() || replay.playing() || dialogOpen() || !MINI[name]) return;
+      const g = core.g;
+      for (const k in down) down[k] = false;
+      touches.clear(); touchDir = null; twoFinger = false; hideTip();
+      elHeld = Object.values(g.sounds || {}).filter((s) => s.isPlaying()); for (const s of elHeld) s.pause();
+      audio.unlock(); R.quietSaucer(true); canvas.style.cursor = "default";
+      curMini = MINI[name];
+      curMini.start(() => {
+        for (const s of elHeld) s.play(); elHeld = [];
+        for (const k in down) down[k] = false;
+        R.quietSaucer(false); last = performance.now(); acc = 0;
+        const gg = core.g;
+        if (gg.scene.name === "game" && !gg.attract && !gg.autoplay && !gg.paused) { core.keypressed("p"); toast(touchOnly ? "paused\ntwo-finger tap to go on" : "paused\npress p to go on"); }
+      });
+    }
+    const startElroids = () => startMini("elroids");
+    let touchOnly = false; // (the last pointer was a finger: the way back says so)
+    const saucerAt = (e) => { const S = R.saucer(); if (!S) return false; const p = toGame(e); return Math.abs(p.x - S.x) < 14 && Math.abs(p.y - S.y) < 10; };
+    window.__elroids = { active: () => EL.active(), open: startElroids, saucer: () => R.saucer(), test: MINI.elroids.test }; // tests
+    window.__invaders = { active: () => EL.active(), open: () => startMini("invaders"), test: MINI.invaders.test };
+    R.setLarry(() => startMini("invaders")); // (DJ LARRY on the credits: BOOZE INVADERS is his favourite game, the author)
+    // ?elroids / ?invaders: straight in (the author's shortcuts for trying them; Esc lands on the title)
+    for (const name of Object.keys(MINI)) if (new URLSearchParams(location.search).has(name)) {
+      try { history.replaceState(null, "", location.pathname + location.hash); } catch { /* ignore */ }
+      setTimeout(() => startMini(name), 0);
+    }
     // CRT on (WebGL): the bezel fills the window. The live canvas is only the screen plus a margin wide enough for the rim
     // reflections to fade out; the rest of the bezel is a static image on #bezel behind it, drawn once per resize.
     // scr = the screen's rect inside the canvas, in css px
@@ -548,6 +617,11 @@
 
     window.addEventListener("keydown", (e) => {
       if (dialogOpen()) return;
+      if (EL.active() && elNaming) { // Elroids' name entry: straight to the screen (typed characters as they are, like the game's)
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); core.g.scene.keypressed(e.key); return; }
+        const k = KEYMAP[e.code]; if (k) { e.preventDefault(); if (!down[k]) { down[k] = true; core.g.scene.keypressed(k); } } return;
+      }
+      if (EL.active()) { const k = KEYMAP[e.code]; if (k) { e.preventDefault(); audio.unlock(); if (!down[k]) { down[k] = true; EL.key(k, true); } } return; }
       cheatKey(e);
       // name entry takes typed characters as they are (shifted symbols included)
       if (core.g.scene.name === "nameEntry" && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -560,7 +634,7 @@
       e.preventDefault(); audio.unlock(); primeVideo(); primeVideo();
       if (!down[k]) { down[k] = true; core.keypressed(k); }
     });
-    window.addEventListener("keyup", (e) => { const k = KEYMAP[e.code]; if (k) { down[k] = false; e.preventDefault(); } });
+    window.addEventListener("keyup", (e) => { const k = KEYMAP[e.code]; if (k) { down[k] = false; e.preventDefault(); if (EL.active()) EL.key(k, false); } });
     // mouse / touch for the menus (pointer position is mapped back through the CRT barrel distortion)
     function toGame(e) {
       const rc = canvas.getBoundingClientRect();
@@ -591,6 +665,7 @@
       return R.menuLayout().find((r) => p.x >= r.x0 && p.x < r.x1 && p.y >= r.y0 && p.y < r.y1) || null;
     }
     canvas.addEventListener("pointermove", (e) => {
+      if (EL.active() && !elNaming) { const p = toGame(e); EL.touch("move", e.pointerId, p.x, p.y); return; }
       const row = rowAt(e);
       tipRow = row && row.menu === core.optMenu ? row.index : null;
       const acc = accountAt(e); R.setAccountHot(!!acc); accTip = acc ? (acc.name ? "Your profile" : "Log in or create an account") : "";
@@ -603,6 +678,10 @@
     // easter egg: tapping the "OY" block on the maze plays oy.mp3 (doesn't swallow the tap); the attract demo mutes the game, so use the real volume
     const oySnd = audio.makeSound("oy");
     canvas.addEventListener("pointerdown", (e) => {
+      touchOnly = e.pointerType !== "mouse";
+      if (EL.active() && elNaming) { const row = rowAt(e); if (row) { e.preventDefault(); row.menu.selectedItem = row.index; core.g.scene.keypressed("return"); } return; } // (its grid, clicked / tapped)
+      if (EL.active()) { e.preventDefault(); try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } const p = toGame(e); EL.touch("down", e.pointerId, p.x, p.y); return; }
+      if (saucerAt(e)) { e.preventDefault(); startElroids(); return; } // (a quiet link: no pointer cursor, it's a secret)
       let oyHit = false;
       { const B = R.oyBlock(), p = toGame(e);
         if (B && p.x >= B.x0 && p.x < B.x1 && p.y >= B.y0 && p.y < B.y1) { oyHit = true; earned(["neil"]); audio.unlock(); oySnd.stop(); oySnd.setVolume((core.g.attract && core.g.originalVolume != null ? core.g.originalVolume : core.g.config.volume) / 10); oySnd.play(); } }
@@ -631,13 +710,14 @@
     }, { passive: false });
     let pendingShareTap = null, pendingShareLink = null;
     canvas.addEventListener("pointerup", (e) => {
+      if (EL.active()) { if (!elNaming) EL.touch("up", e.pointerId); return; }
       if (pendingShareLink && pendingShareLink.id === e.pointerId) { const L = pendingShareLink.L; pendingShareLink = null; L.action(); return; }
       if (pendingShareTap !== e.pointerId) return;
       pendingShareTap = null;
       const row = rowAt(e);
       if (row && row.menu[row.index - 1].share) core.keypressed("return");
     });
-    canvas.addEventListener("pointercancel", () => { pendingShareTap = null; pendingShareLink = null; });
+    canvas.addEventListener("pointercancel", (e) => { pendingShareTap = null; pendingShareLink = null; if (EL.active()) EL.touch("up", e.pointerId); });
     canvas.addEventListener("pointerleave", (e) => { R.setAccountHot(false); accTip = ""; if (e.pointerType === "mouse") hideTip(); });
     // description popup (the profile's achievement names, link.tip): plain HTML text by the pointer, styled like the dialogs
     const tipEl = document.getElementById("tip");
@@ -666,6 +746,7 @@
       return true;
     }
     function gestureMove(e) {
+      if (EL.active()) return;
       const t = touches.get(e.pointerId); if (!t) return;
       const dx = e.clientX - t.x, dy = e.clientY - t.y, TH = 18;
       if (Math.abs(dx) < TH && Math.abs(dy) < TH) return;
@@ -673,6 +754,7 @@
       t.x = e.clientX; t.y = e.clientY; t.moved = true;
     }
     function gestureEnd(e) {
+      if (EL.active()) { touches.delete(e.pointerId); return; }
       const t = touches.get(e.pointerId); if (!t) return;
       touches.delete(e.pointerId);
       if (touches.size === 0) {
@@ -810,7 +892,7 @@
     // touch devices have no Esc key: a small button leaves the game / autoplay / sub-screens
     const escBtn = document.getElementById("esc");
     escBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); }, true);
-    escBtn.addEventListener("click", (e) => { e.preventDefault(); core.keypressed("escape"); });
+    escBtn.addEventListener("click", (e) => { e.preventDefault(); if (elNaming) core.g.scene.keypressed("escape"); else if (EL.active()) EL.exit(); else core.keypressed("escape"); });
     window.addEventListener("blur", () => { for (const k in down) down[k] = false; });
     window.addEventListener("pointerdown", () => { audio.unlock(); primeVideo(); });
 
@@ -827,11 +909,17 @@
         const ax = p.axes[0] || 0, ay = p.axes[1] || 0;
         if (ax < -0.5) held.left = true; if (ax > 0.5) held.right = true; if (ay < -0.5) held.up = true; if (ay > 0.5) held.down = true;
         const names = { 0: "a", 1: "b", 9: "start" };
-        for (const i in names) { const pr = b[i] && b[i].pressed; if (pr && !padPrev[i]) core.gamepadpressed(names[i]); padPrev[i] = pr; }
+        for (const i in names) {
+          const pr = b[i] && b[i].pressed;
+          if (elNaming) { if (pr && !padPrev[i]) core.g.scene.gamepadpressed(names[i]); }
+          else if (EL.active()) { const k = { a: "space", b: "escape", start: "p" }[names[i]]; if (pr && !padPrev[i]) EL.key(k, true); else if (!pr && padPrev[i]) EL.key(k, false); }
+          else if (pr && !padPrev[i]) core.gamepadpressed(names[i]);
+          padPrev[i] = pr;
+        }
       }
       for (const d in held) {
-        if (held[d] && !down[d]) { down[d] = true; padDown[d] = true; core.keypressed(d); }
-        else if (!held[d] && padDown[d]) { down[d] = false; padDown[d] = false; }
+        if (held[d] && !down[d]) { down[d] = true; padDown[d] = true; if (elNaming) core.g.scene.keypressed(d); else if (EL.active()) EL.key(d, true); else core.keypressed(d); }
+        else if (!held[d] && padDown[d]) { down[d] = false; padDown[d] = false; if (EL.active() && !elNaming) EL.key(d, false); }
       }
     }
 
@@ -847,6 +935,15 @@
       const step = core.FIXED_DT;
       if (touchDir && ["playerUp", "ready", "dying", "caught", "gameover", "levelAnimation", "intermission1", "intermission2", "intermission3", "destroyed"].includes(core.g.mode)) setTouchDir(null);
       if (!dialogOpen()) pollPad();
+      if (EL.active()) { // Elroids: the game stands still (no steps), only Elroids moves (or its name entry: that scene alone)
+        if (elNaming) { while (acc >= step) { core.update(); acc -= step; } } else while (acc >= step) { EL.step(); acc -= step; }
+        if (wantsFullBezel() !== fullBezel || (core.g.config && core.g.config.crtEffect) !== fitLook) fit();
+        rave.duck(true, false);
+        if (elNaming) R.draw(); else R.drawWith(EL.draw);
+        P.present();
+        escBtn.classList.add("on");
+        requestAnimationFrame(frame); return;
+      }
       // (a replay: its keys and presses fed in step by step, at 1x / 2x / 4x or paused)
       if (replay.playing()) acc = acc * replay.speed();
       while (acc >= step) { replay.beforeStep(); if (!rwd.update()) core.update(); rwd.record(); replay.afterStep(); acc -= step; } // a rewind playing back takes the frame

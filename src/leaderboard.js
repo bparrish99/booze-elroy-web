@@ -51,6 +51,7 @@
     // (a player asked, 2026-11-16: people who post under a fun name want it again, not their login), kept per account
     const loginName = () => (opts.playerName && opts.playerName()) || null;
     const nameKey = () => (loginName() ? NAME + "/" + loginName() : NAME);
+    const ELNAME = "booze-elroy-elroids-name", elNameKey = () => (loginName() ? ELNAME + "/" + loginName() : ELNAME); // (the hidden games' own, shared)
 
     // ---------------------------------------------------------------- boards (cache + network)
     const boards = new Map(); // key -> { status: "loading" | "ok" | "error", entries, at }
@@ -752,14 +753,24 @@
           const last = store.get(nameKey(), "");
           this.entry = (typeof last === "string" && SK.cleanName(last)) || player; neMenu.selectedItem = END + 1;
         }
+        // the hidden games (Elroids, Booze Invaders): this same screen for their boards (the author: "just like the Pac-Man
+        // one"), opened over the game by main.js, which hands its keys straight here (never through a recording game's
+        // replay); done(result) goes back to it. Their own remembered name, else the account's
+        if (this.mode === "mini") {
+          this.onDone = o.onDone; this.top = o.top || o.score; this.board = o.board; this.title = o.title;
+          const last = store.get(elNameKey(), "");
+          this.entry = (typeof last === "string" && SK.cleanName(last)) || SK.cleanName((opts.playerName && opts.playerName()) || "") || "";
+          neMenu.selectedItem = (this.entry ? END : 0) + 1;
+        }
       },
+      finish(r) { const f = this.onDone; this.onDone = null; if (f) f(r); },
       update() {
         this.fc += 1;
-        if (this.sending || this.mode !== "score") return;
+        if (this.sending || this.mode === "createArena") return;
         this.timer -= 1;
         if (this.timer <= 0) { if (this.entry.trim()) this.submit(); else this.leave(); }
       },
-      leave() { core.setScene(this.mode === "createArena" ? this.from || "arenas" : quitGameTo() || "attract"); },
+      leave() { if (this.mode === "mini") { this.finish(null); return; } core.setScene(this.mode === "createArena" ? this.from || "arenas" : quitGameTo() || "attract"); },
       summary(width) { return summary(width); },
       summaryParts(width) { return summaryParts(width); },
       add(ch) {
@@ -814,6 +825,7 @@
         if (!name) return;
         this.sending = true; this.message = null; sfx("coindrop");
         if (this.mode === "createArena") return this.createArena(name);
+        if (this.mode === "mini") return this.submitMini(name);
         store.set(nameKey(), name); // remembered for next time (logged in: for this account)
         if (this.arenaId) return this.submitArena(name);
         let res = null;
@@ -828,6 +840,20 @@
           placed(this.key, res.data.rank, res.data.entries || [], this.score);
           core.setScene("leaderboard", { fresh: true, highlight: res.data.rank, message: res.data.rank ? null : "not in the top 10" });
         } else core.setScene("leaderboard", { message: "score could not be saved" });
+      },
+      async submitMini(name) {
+        store.set(elNameKey(), name);
+        let res = null;
+        try { res = await post("", { board: this.board, name, score: this.score, settings: this.board.toUpperCase() }); } catch { res = null; }
+        if (taken(res)) { // an account's name: pick another, the clock started over
+          if (store.get(elNameKey(), "") === name) store.set(elNameKey(), "");
+          this.sending = false; this.message = "that name is taken"; this.entry = ""; this.timer = ENTRY_FRAMES; neMenu.selectedItem = 1; return;
+        }
+        if (res && res.ok && res.data) {
+          if (res.data.rank && opts.miniPlaced) opts.miniPlaced(this.board, res.data.rank, this.score); // (logged in: the activity page)
+          this.finish({ entries: res.data.entries || [], rank: res.data.rank || null }); return;
+        }
+        this.finish(null);
       },
       async createArena(name) {
         let res = null;

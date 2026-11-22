@@ -88,7 +88,12 @@
       x.fillStyle = `rgba(255,255,255,${0.9 * k})`; x.fillRect(px - 0.5, py - 0.5, 1, 1);
       x.globalCompositeOperation = "source-over";
     };
-    return { canvas: c, paint(t, dt) {
+    let noUfo = false; // (while Elroids plays: no saucer, it's the way in)
+    return { canvas: c,
+      // the saucer's middle on the screen, while one is crossing (clicking it opens Elroids: main.js)
+      saucer: () => (ufo && !noUfo && ufo.x > 4 && ufo.x < W - 4 ? { x: ufo.x, y: ufo.y - 1 } : null),
+      quietSaucer(q) { noUfo = !!q; if (q) ufo = null; else nextUfo = rnd(15, 30); },
+      paint(t, dt) {
       x.globalCompositeOperation = "source-over"; x.globalAlpha = 1;
       x.fillStyle = sky; x.fillRect(0, 0, W, H);
       // nebulae: two layers turning slowly against each other, each breathing in its own time
@@ -156,7 +161,7 @@
       }
       // a flying saucer, every half minute or so (the author, 2026-11-22: a nod to the arcade's vector saucers): white strokes,
       // across the screen, now and then jinking off on a diagonal and back
-      if ((nextUfo -= dt) <= 0 && !ufo) { const ltr = Math.random() < 0.5; ufo = { x: ltr ? -14 : W + 14, y: rnd(30, H - 30), vx: (ltr ? 1 : -1) * rnd(28, 38), vy: 0, turn: rnd(0.8, 1.8) }; }
+      if ((nextUfo -= dt) <= 0 && !ufo && !noUfo) { const ltr = Math.random() < 0.5; ufo = { x: ltr ? -14 : W + 14, y: rnd(30, H - 30), vx: (ltr ? 1 : -1) * rnd(28, 38), vy: 0, turn: rnd(0.8, 1.8) }; }
       if (ufo) {
         if ((ufo.turn -= dt) <= 0) { ufo.turn = rnd(0.8, 1.8); ufo.vy = [0, 22, -22][Math.floor(rnd(0, 3))]; }
         ufo.x += ufo.vx * dt; ufo.y += ufo.vy * dt;

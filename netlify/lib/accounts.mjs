@@ -40,7 +40,7 @@ import scorekey from "../../src/scorekey.js";
 import achievements from "../../src/achievements.js";
 import { json, sleep, readBody, updateJSON, sha } from "./scores.mjs";
 
-const { cleanName, isKey, isNeat, isBoardKey, configFor, MAX_SCORE } = scorekey;
+const { cleanName, isKey, isNeat, isBoardKey, MINI_BOARDS, configFor, MAX_SCORE } = scorekey;
 const scryptP = promisify(scrypt);
 export const PW_MIN = 4, PW_MAX = 128;
 const hex = (name) => Buffer.from(name).toString("hex");
@@ -277,6 +277,10 @@ export async function handleAccounts(req, store, opts = {}) {
     }
     if (isNeat(body.board) && isBoardKey(body.board)) { // a NEAT board (the author's arcade-exact game): only logged, never counted
       if (scored) await logEvent(store, "score", s.name, JSON.stringify([body.rank, body.score, "NEAT  " + (text(body.settings, 160).replace(/^NEAT {2}/, "") || body.board)]));
+      return json(200, { count: null });
+    }
+    if (MINI_BOARDS.includes(body.board)) { // a hidden game's (Elroids, Booze Invaders): only logged, never counted as a board placed on
+      if (scored) await logEvent(store, "score", s.name, JSON.stringify([body.rank, body.score, body.board.toUpperCase()]));
       return json(200, { count: null });
     }
     if (!isKey(body.board)) return json(400, { error: "bad board" });
