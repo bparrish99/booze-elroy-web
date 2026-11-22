@@ -10,7 +10,7 @@ export default [
       sourceType: "script",
       globals: {
         ...globals.browser, ...globals.node,
-        BoozeCore: "readonly", BoozeAudio: "readonly", BoozeRave: "readonly", BoozeLiving: "readonly", BoozeElroids: "readonly", BoozeInvaders: "readonly", BoozeReplay: "readonly", BoozeRender: "readonly", BoozeScoreKey: "readonly", BoozeLeaderboard: "readonly", BoozeRewind: "readonly", BoozeTips: "readonly", BoozeAccount: "readonly", BoozeAchievements: "readonly",
+        BoozeCore: "readonly", BoozeAudio: "readonly", BoozeRave: "readonly", BoozeLiving: "readonly", BoozeElroids: "readonly", BoozeInvaders: "readonly", BoozeLastCall: "readonly", BoozeReplay: "readonly", BoozeRender: "readonly", BoozeScoreKey: "readonly", BoozeLeaderboard: "readonly", BoozeRewind: "readonly", BoozeTips: "readonly", BoozeAccount: "readonly", BoozeAchievements: "readonly",
       },
     },
   },

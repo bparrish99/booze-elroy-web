@@ -136,15 +136,16 @@ try {
     await ctx.close();
   }
   await roundTrip("NO THANKS", { ghostCount: 2, difficulty: 2 }, async (p) => { await p.keyboard.press("Enter"); }, () => false, true, true);
-  // the author's secret: the olive in the title's martini (once the logo has settled) plays every replay, round and round
+  // the author's secret: every replay, round and round (once the olive in the title's martini; for now only window.__replayLoop)
   {
     const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
     const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
     await p.addInitScript(() => { localStorage.setItem("booze-elroy-options", JSON.stringify({ crtEffect: false, proMode: true })); });
     await p.goto(dev.url + "/");
-    check(await p.waitForFunction(() => window.__R.creditsLinks().some((l) => l.quiet), null, { timeout: 20000 }).then(() => true, () => false), "the olive: a quiet link once the logo has settled");
-    await p.evaluate(() => window.__R.creditsLinks().find((l) => l.quiet).action());
-    check(await p.waitForFunction(() => window.__replay.playing(), null, { timeout: 15000 }).then(() => true, () => false), "clicking it plays a replay");
+    // (unhooked from the olive 2026-11-22, when the martini became LAST CALL's door: started through its hook until the author places it again)
+    await p.waitForFunction(() => window.__replayLoop, null, { timeout: 20000 });
+    await p.evaluate(() => window.__replayLoop());
+    check(await p.waitForFunction(() => window.__replay.playing(), null, { timeout: 15000 }).then(() => true, () => false), "the replay loop plays a replay");
     await p.keyboard.press("Space"); await p.keyboard.press("Space");
     await p.evaluate(() => { window.__lastGameEnd = null; });
     await p.waitForFunction(() => window.__lastGameEnd, null, { timeout: 240000 });

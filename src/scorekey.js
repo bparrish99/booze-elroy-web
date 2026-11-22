@@ -124,7 +124,7 @@
   const isNeat = (s) => typeof s === "string" && s.startsWith(NEAT);
   // ELROIDS (the space background's easter egg, 2026-11-22): one board of its own, kept out of every list like NEAT's
   // (and BOOZE INVADERS, the second hidden game, 2026-11-22: the same)
-  const ELROIDS = "elroids", INVADERS = "invaders", MINI_BOARDS = [ELROIDS, INVADERS];
+  const ELROIDS = "elroids", INVADERS = "invaders", LASTCALL = "lastcall", MINI_BOARDS = [ELROIDS, INVADERS, LASTCALL];
   /** a score board's key: a plain one, a NEAT one, or a hidden game's */
   const isBoardKey = (s) => isKey(s) || (isNeat(s) && isKey(s.slice(NEAT.length))) || MINI_BOARDS.includes(s);
   /** true if s is a well-formed board key */
@@ -155,5 +155,5 @@
     return i < BOARD_SIZE ? i : -1;
   }
 
-  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, isBoardKey, isNeat, NEAT, ELROIDS, INVADERS, MINI_BOARDS, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
+  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, isBoardKey, isNeat, NEAT, ELROIDS, INVADERS, LASTCALL, MINI_BOARDS, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
 });

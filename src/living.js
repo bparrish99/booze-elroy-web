@@ -286,6 +286,141 @@
     } };
   }
 
-  const MAKERS = { space, ocean };
+
+  // ---------------------------------------------------------------- bar
+  // LAST CALL's own (the author, 2026-11-22: "Cheers colours, brown / mahogany bar wood"; not in the Options list): a dark
+  // mahogany-panelled wall, a back bar of bottles on two shelves with the odd glint, three brass pendant lamps swaying a
+  // little in warm pools of light, a neon martini sign humming (it only ever dims, never flashes), dust in the lamplight
+  function bar() {
+    const c = canvas(), x = c.getContext("2d");
+    // the wall, baked once: planks of mahogany with grain, darker toward the edges
+    const wall = canvas(), w = wall.getContext("2d");
+    for (let px = 0, k = 0; px < W; k++) {
+      const pw = 18 + Math.floor(rnd(0, 10)), base = [52 + rnd(-6, 6), 22 + rnd(-4, 4), 12 + rnd(-3, 3)];
+      const gr = w.createLinearGradient(px, 0, px + pw, 0);
+      gr.addColorStop(0, `rgb(${base[0] * 0.8},${base[1] * 0.8},${base[2] * 0.8})`); gr.addColorStop(0.5, `rgb(${base[0]},${base[1]},${base[2]})`); gr.addColorStop(1, `rgb(${base[0] * 0.75},${base[1] * 0.75},${base[2] * 0.75})`);
+      w.fillStyle = gr; w.fillRect(px, 0, pw, H);
+      w.fillStyle = "rgba(10,3,1,0.8)"; w.fillRect(px + pw - 1, 0, 1, H); // the seam
+      for (let i = 0; i < 22; i++) { // grain: long wavy streaks
+        const gx = px + rnd(1, pw - 2), a = rnd(0.05, 0.16), dark = Math.random() < 0.6;
+        w.strokeStyle = dark ? `rgba(20,6,2,${a})` : `rgba(120,60,30,${a * 0.6})`; w.lineWidth = rnd(0.4, 1.1); w.beginPath();
+        for (let y = 0; y <= H; y += 12) { const ox = gx + Math.sin(y * 0.02 + i) * rnd(0.3, 1.5); if (y) w.lineTo(ox, y); else w.moveTo(ox, y); }
+        w.stroke();
+      }
+      px += pw;
+    }
+    // a wainscot rail across the middle and a darker lower wall, and the back bar's two shelves at the top
+    w.fillStyle = "rgba(0,0,0,0.25)"; w.fillRect(0, 150, W, H - 150);
+    w.fillStyle = "rgba(150,90,40,0.25)"; w.fillRect(0, 148, W, 2);
+    const shelves = [44, 74];
+    const bottles = [];
+    for (const sy of shelves) {
+      w.fillStyle = "#2a1006"; w.fillRect(0, sy, W, 3); w.fillStyle = "rgba(170,110,60,0.35)"; w.fillRect(0, sy, W, 1);
+      for (let bx = 4; bx < W - 6;) { // bottles: muted ambers, greens, clears and reds, all sorts of shapes
+        const bw = Math.floor(rnd(5, 9)), bh = Math.floor(rnd(14, 24)), neck = Math.floor(rnd(4, 9)), col = [[90, 50, 18], [40, 70, 34], [70, 80, 82], [96, 26, 22], [110, 80, 30]][Math.floor(rnd(0, 5))];
+        w.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},0.85)`;
+        w.fillRect(bx, sy - bh + neck, bw, bh - neck); w.fillRect(bx + Math.floor(bw / 2) - 1, sy - bh, 2, neck); // body and neck
+        w.fillStyle = "rgba(255,240,200,0.12)"; w.fillRect(bx + 1, sy - bh + neck + 1, 1, bh - neck - 3); // a sheen down one side
+        bottles.push({ x: bx + 1, y: sy - bh + neck + 2 + Math.floor(rnd(0, 4)) });
+        bx += bw + Math.floor(rnd(1, 4));
+      }
+    }
+    // edges darker
+    const vg = w.createRadialGradient(W / 2, H * 0.45, 40, W / 2, H * 0.45, H * 0.75);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,0.6)"); w.fillStyle = vg; w.fillRect(0, 0, W, H);
+    const lamps = [{ x: 40, p: 0 }, { x: 112, p: 2.1 }, { x: 184, p: 4.2 }];
+    const glints = [];
+    const motes = Array.from({ length: 40 }, () => ({ x: rnd(0, W), y: rnd(20, H), v: rnd(1, 3), p: rnd(0, 7), a: rnd(0.15, 0.4) }));
+    let neonDim = 0, nextDim = rnd(4, 9);
+    // the neon martini: a few strokes (pink glass, teal olive), the light round it drawn soft
+    const neon = (k) => {
+      const nx = 186, ny = 108;
+      x.save(); x.globalCompositeOperation = "lighter"; x.lineJoin = "round"; x.lineCap = "round";
+      const strokes = () => { x.beginPath(); x.moveTo(nx - 12, ny - 10); x.lineTo(nx + 12, ny - 10); x.lineTo(nx, ny + 2); x.closePath(); x.moveTo(nx, ny + 2); x.lineTo(nx, ny + 12); x.moveTo(nx - 6, ny + 12); x.lineTo(nx + 6, ny + 12); };
+      for (const [lw, a] of [[5, 0.12], [2.5, 0.25], [1, 0.8]]) { x.strokeStyle = `rgba(255,90,200,${a * k})`; x.lineWidth = lw; strokes(); x.stroke(); }
+      for (const [r, a] of [[4, 0.15], [2, 0.8]]) { x.fillStyle = `rgba(60,255,210,${a * k})`; x.beginPath(); x.arc(nx + 4, ny - 6, r, 0, Math.PI * 2); x.fill(); }
+      x.restore();
+    };
+    // a painted sign on the wall, BOOZE ELROY in gold leaf, with the game's flourishes under it: a row of dots, an energizer
+    // at each end, Pac-Man chomping along from the left and Blinky waiting at the right (the author; an arcade cabinet came
+    // first and didn't fit); a gold glint sweeps the letters now and then
+    const SX = 70, SY = 95, SW = 84, SH = 25;
+    const F5 = { B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"], O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+      Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"], E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+      L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"], R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+      Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"] };
+    const letters = (col) => { // the words, in one colour, on a sign-sized canvas
+      const cv = document.createElement("canvas"); cv.width = SW; cv.height = SH; const q = cv.getContext("2d"); q.fillStyle = col;
+      let lx = Math.round((SW - 11 * 6 + 1) / 2);
+      for (const ch of "BOOZE ELROY") { if (F5[ch]) F5[ch].forEach((row, ry) => { for (let rx = 0; rx < 5; rx++) if (row[rx] === "1") q.fillRect(lx + rx, 3 + ry, 1, 1); }); lx += 6; }
+      return cv;
+    };
+    const sign = document.createElement("canvas"); sign.width = SW; sign.height = SH;
+    { const q = sign.getContext("2d"), art = (rows, ax, ay, pal) => rows.forEach((row, ry) => { for (let rx = 0; rx < row.length; rx++) if (pal[row[rx]]) { q.fillStyle = pal[row[rx]]; q.fillRect(ax + rx, ay + ry, 1, 1); } });
+      q.fillStyle = "#1c0a04"; q.fillRect(0, 0, SW, SH); // the board
+      for (let i = 0; i < 6; i++) { q.fillStyle = `rgba(90,40,16,${rnd(0.15, 0.35)})`; q.fillRect(1, Math.floor(rnd(1, SH - 1)), SW - 2, 1); } // its grain
+      q.strokeStyle = "#b8862e"; q.lineWidth = 1; q.strokeRect(0.5, 0.5, SW - 1, SH - 1); // a gold frame
+      q.fillStyle = "rgba(255,220,140,0.35)"; q.fillRect(1, 1, SW - 2, 1);
+      q.drawImage(letters("#3a1804"), 1, 1); q.drawImage(letters("#e8b040"), 0, 0); // gold leaf, a shadow under it
+      const dy = 16; // the flourishes: dots, an energizer at each end, Pac-Man and Blinky
+      for (let dx = 20; dx <= SW - 22; dx += 4) { q.fillStyle = "#ffb8ae"; q.fillRect(dx, dy + 3, 1, 1); }
+      for (const ex of [14, SW - 17]) { q.fillStyle = "#ffb8ae"; q.fillRect(ex, dy + 2, 3, 3); q.clearRect(ex, dy + 2, 1, 1); q.clearRect(ex + 2, dy + 2, 1, 1); q.clearRect(ex, dy + 4, 1, 1); q.clearRect(ex + 2, dy + 4, 1, 1); q.fillStyle = "#ffb8ae"; q.fillRect(ex + 1, dy + 2, 1, 3); q.fillRect(ex, dy + 3, 3, 1); }
+      art(["..YYY..", ".YYYYY.", "YYYY...", "YYY....", "YYYY...", ".YYYYY.", "..YYY.."], 4, dy, { Y: "#ffff00" });
+      art(["..RRR..", ".RRRRR.", "RWBRWBR", "RRRRRRR", "RRRRRRR", "RRRRRRR", "R.R.R.R"], SW - 11, dy, { R: "#ff0000", W: "#ffffff", B: "#2121ff" });
+    }
+    const signShine = letters("#fff4c8");
+    let shineAt = rnd(3, 6), shineT = -1;
+    function drawSign(t, dt) {
+      x.fillStyle = "rgba(0,0,0,0.45)"; x.fillRect(SX + 2, SY + 2, SW, SH); // its shadow on the wall
+      x.drawImage(sign, SX, SY);
+      x.fillStyle = "#c8a050"; for (const [a, b] of [[2, 2], [SW - 3, 2], [2, SH - 3], [SW - 3, SH - 3]]) x.fillRect(SX + a, SY + b, 1, 1); // brass screws
+      if (shineT < 0 && (shineAt -= dt) <= 0) shineT = 0;
+      if (shineT >= 0) { // the glint, sweeping left to right across the letters
+        shineT += dt; const sx = -8 + shineT * 90;
+        if (sx > SW + 8) { shineT = -1; shineAt = rnd(5, 9); } else { x.save(); x.beginPath(); x.rect(SX + sx, SY, 5, SH); x.clip(); x.drawImage(signShine, SX, SY); x.restore(); }
+      }
+    }
+    return { canvas: c, paint(t, dt) {
+      x.globalCompositeOperation = "source-over"; x.globalAlpha = 1;
+      x.drawImage(wall, 0, 0);
+      drawSign(t, dt);
+      // the lamps: swaying a little on their cords, warm pools of light breathing
+      x.globalCompositeOperation = "lighter";
+      for (const L of lamps) {
+        const sway = Math.sin(t * 0.7 + L.p) * 3, lx = L.x + sway, ly = 22, br = 0.85 + 0.15 * Math.sin(t * 1.3 + L.p * 2);
+        const pool = x.createRadialGradient(lx, ly + 30, 4, lx, ly + 60, 90);
+        pool.addColorStop(0, `rgba(255,170,80,${0.2 * br})`); pool.addColorStop(1, "rgba(255,140,60,0)");
+        x.fillStyle = pool; x.fillRect(lx - 100, ly, 200, 170);
+        const bulb = x.createRadialGradient(lx, ly + 3, 0, lx, ly + 3, 10); bulb.addColorStop(0, `rgba(255,230,170,${0.8 * br})`); bulb.addColorStop(1, "rgba(255,180,90,0)");
+        x.fillStyle = bulb; x.fillRect(lx - 10, ly - 7, 20, 20);
+      }
+      x.globalCompositeOperation = "source-over";
+      for (const L of lamps) { // their cords and brass shades
+        const sway = Math.sin(t * 0.7 + L.p) * 3, lx = L.x + sway;
+        x.strokeStyle = "rgba(20,10,4,0.9)"; x.lineWidth = 1; x.beginPath(); x.moveTo(L.x, 0); x.lineTo(lx, 18); x.stroke();
+        x.fillStyle = "#6a4a1a"; x.beginPath(); x.moveTo(lx - 7, 24); x.lineTo(lx + 7, 24); x.lineTo(lx + 3, 17); x.lineTo(lx - 3, 17); x.closePath(); x.fill();
+        x.fillStyle = "rgba(220,170,80,0.6)"; x.fillRect(lx - 7, 23, 14, 1);
+      }
+      // glints on the bottles, now and then
+      if (Math.random() < dt * 1.2) { const b = bottles[Math.floor(rnd(0, bottles.length))]; glints.push({ x: b.x, y: b.y, life: 0, len: rnd(0.5, 1.1) }); }
+      for (let i = glints.length - 1; i >= 0; i--) {
+        const g = glints[i]; g.life += dt; if (g.life >= g.len) { glints.splice(i, 1); continue; }
+        const k = Math.sin(Math.PI * g.life / g.len); x.fillStyle = `rgba(255,245,215,${0.7 * k})`; x.fillRect(g.x, g.y, 1, 2);
+        if (k > 0.6) { x.fillStyle = `rgba(255,245,215,${0.35 * k})`; x.fillRect(g.x - 1, g.y + 0.5, 3, 1); }
+      }
+      // the neon sign: humming, and now and then stuttering dim (only ever dimmer, never a flash)
+      if ((nextDim -= dt) <= 0) { neonDim = rnd(0.25, 0.6); nextDim = rnd(5, 11); }
+      const stutter = neonDim > 0 ? 0.45 + 0.25 * Math.sin(neonDim * 40) : 1; if (neonDim > 0) neonDim -= dt;
+      neon((0.82 + 0.08 * Math.sin(t * 2.3)) * stutter);
+      // dust drifting in the lamplight
+      for (const m of motes) {
+        m.y -= m.v * dt * 0.6; m.x += Math.sin(t * 0.5 + m.p) * dt * 1.5; if (m.y < 18) { m.y = H; m.x = rnd(0, W); }
+        const near = Math.min(...lamps.map((L) => Math.abs(m.x - L.x))), lit = Math.max(0, 1 - near / 60);
+        if (lit > 0.05) { x.fillStyle = `rgba(255,220,160,${m.a * lit})`; x.fillRect(Math.floor(m.x), Math.floor(m.y), 1, 1); }
+      }
+    } };
+  }
+
+  const MAKERS = { space, ocean, bar };
   root.BoozeLiving = { NAMES: Object.keys(MAKERS), create: (name) => MAKERS[name]() };
 })(typeof self !== "undefined" ? self : this);

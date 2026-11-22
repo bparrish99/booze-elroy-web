@@ -490,7 +490,7 @@
     }
     // (tests: a look inside, and Elroy shot on demand)
     const test = { state: () => ({ phase, score, lives, wave, rage, waveT, ghost, board, myRank, asking, rocks: rocks && rocks.length, drinks: drinks && drinks.length }), shootElroy: () => { if (ghost && !ghost.eyes) eatGhost(); }, endGame: (s) => { score = s; lives = 0; if (ship.alive) killShip(); }, enrage: () => { waveT = RAGE_AFTER; }, immortal: () => { ship.safe = 1e9; } };
-    return { active: () => on, start, exit, step, key, touch, draw, test };
+    return { active: () => on, start, exit, step, key, touch, draw, test, onBoard: () => on && phase === "over" && !asking, refreshBoard: () => { board = []; myRank = null; loadBoard(); } };
   }
   root.BoozeElroids = { create };
 })(typeof self !== "undefined" ? self : this);

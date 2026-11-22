@@ -962,6 +962,11 @@
       }
       return res;
     }
+    // a hidden game's board (typing "delete" on its game-over leaderboard: main.js)
+    async function resetBoard(password, key) {
+      if (!api || !SK.isBoardKey(key)) return { ok: false, status: 0 };
+      try { return await post("/reset", { password, board: key }); } catch { return { ok: false, status: 0 }; }
+    }
     async function reset(password, allBoards) {
       if (!api) return { ok: false, status: 0 };
       const key = currentKey();
@@ -994,7 +999,7 @@
     async function fetchReplay(it) {
       try { const r = await fetchFn(it.url + "/replay?id=" + encodeURIComponent(it.rid), { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)); return r && r.replay; } catch { return null; }
     }
-    return { allReplays, fetchReplay, summaryParts, attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene, favorites: favoritesScene, favorite: favoriteScene, picks: picksScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
+    return { allReplays, fetchReplay, summaryParts, attach, scenes: { leaderboard, nameEntry, arenas, arena: arenaScene, favorites: favoritesScene, favorite: favoriteScene, picks: picksScene }, tick, wakka, inArena, borrowed, ownSettings, quitGameTo, createArena, leaveArena, loadArenas, arenaList, deleteArena, resetBoard, openArena, currentArena: () => arena, saveBest, afterGameOver, reset, load, boards, summary, BOARD_SIZE };
   }
 
   root.BoozeLeaderboard = { create };

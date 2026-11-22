@@ -640,9 +640,9 @@
         for (const name of ["blinky", "pinky", "inky", "clyde", "punky", "gunky", "gronky"]) { const c = g.ghosts[name]; if (c) drawChar(c, c.x, c.y); }
         const bump = raveOn() ? 1 + 0.06 * raveBeat().kick : 1, bw = assets.banner.width * bump, bh = assets.banner.height * bump; // darkstar: it bumps on the beat
         const bx = g.modeTimer > 135 ? g.ghosts.blinky.x - 100 : 12, by = g.modeTimer > 135 ? g.ghosts.blinky.y + 7 : 97;
-        // the olive (the author's secret: every replay, round and round), clickable once the logo has come to rest: it sits
-        // at 183-187, 8-12 in the banner, a few pixels' slack round it (the intro is drawn a tile higher: -8)
-        if (oliveAction && Math.abs(bx - 12) < 0.5 && Math.abs(by - 97) < 0.5) oliveBox = { x0: 12 + 180, y0: 97 - 8 + 5, x1: 12 + 191, y1: 97 - 8 + 16, action: oliveAction, quiet: true }; // (quiet: no pointer cursor to give it away)
+        // the martini (the author, 2026-11-22: LAST CALL, the third hidden game; the olive's replay loop was here until then),
+        // clickable once the logo has come to rest: the glass sits at 162-190, 6-35 in the banner (the intro is drawn a tile higher: -8)
+        if (martiniAction && Math.abs(bx - 12) < 0.5 && Math.abs(by - 97) < 0.5) martiniBox = { x0: 12 + 162, y0: 97 - 8 + 6, x1: 12 + 190, y1: 97 - 8 + 35, action: martiniAction, quiet: true }; // (quiet: no pointer cursor to give it away)
         ctx.drawImage(assets.banner, bx - (bw - assets.banner.width) / 2, by - (bh - assets.banner.height) / 2, bw, bh);
         unclip();
         if (g.modeTimer < 560 && g.attractPac) {
@@ -978,8 +978,8 @@
     // web edition: "credits" on the title opens the credits; "pinback's picks" (the sign right of the menu) opens the picks
     const TITLE_LINKS = [{ x0: 76, y0: 276, x1: 148, y1: 288, scene: "credits" }];
     const creditsLinks = () => (g.scene.name === "credits" ? LINKS : g.scene.name === "attract" && g.state && g.state.showHelperText
-      ? [...TITLE_LINKS, ...(picksBox ? [picksBox] : []), ...(neatBox ? [neatBox] : []), ...(oliveBox ? [oliveBox] : [])] : g.scene.links || []);
-    let oliveBox = null, oliveAction = null; // (the olive in the title's martini: see drawAttract)
+      ? [...TITLE_LINKS, ...(picksBox ? [picksBox] : []), ...(neatBox ? [neatBox] : []), ...(martiniBox ? [martiniBox] : [])] : g.scene.links || []);
+    let martiniBox = null, martiniAction = null; // (the martini in the title's banner: see drawAttract)
     let neatBox = null, neatAction = null; // (the "neat!" sticker, lower left of the title: see drawNeat)
 
     // "PINBACK'S PICKS" (the author, 2026-11-15; the one place the font leaves the grid): the game font, smaller, on a
@@ -1179,7 +1179,8 @@
       const sc = g.scene;
       begin(true);
       if (sc.mode === "mini") { // (a hidden game's own header: its score and its best, its name where the ability goes)
-        print("1up", 3, 0); print("high score", 9, 0); print(core.formatScore(sc.score || 0), 0, 1, 0); print(core.formatScore(sc.top || 0), 10, 1); print(sc.title, 28 - sc.title.length, 0, 6);
+        print("1up", 3, 0); print("high score", 9, 0); print(core.formatScore(sc.score || 0), 0, 1, 0); print(core.formatScore(sc.top || 0), 10, 1);
+        for (let i = 0; i < sc.title.length; i++) if (sc.title[i] !== " ") print(sc.title[i], 28 - sc.title.length + i, 0, 6); // (spaces skipped: not blank in every colour)
       } else drawHeader();
       if (sc.mode === "createArena") {
         center("create arena", 3, 3);
@@ -1361,7 +1362,7 @@
     let drawCount = 0; const SHAKE_EVERY = 2, SHAKE_PX = 0.5; // (a new offset every other frame, half a pixel at most: the author tried 1, 2 and 3 frames and a whole pixel)
     function draw() {
       drawCount += 1;
-      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; neatBox = null; oliveBox = null; film = false; backdrop = null;
+      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; neatBox = null; martiniBox = null; film = false; backdrop = null;
       if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
       masking = g.config.crtEffect === "vector";
       const scene = g.scene.name;
@@ -1452,13 +1453,13 @@
 
     // Elroids (src/elroids.js; the space background's saucer opens it): drawn on this same screen over the space background,
     // with the game's font, so every look takes it
-    function drawWith(paint) {
+    function drawWith(paint, bgName) {
       drawCount += 1;
-      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; neatBox = null; oliveBox = null; film = false; backdrop = null;
+      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; neatBox = null; martiniBox = null; film = false; backdrop = null;
       if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
       masking = g.config.crtEffect === "vector";
       clearScreen();
-      const bg = livingBackground("space");
+      const bg = livingBackground(bgName || "space"); // (each hidden game's own: space, or Last Call's bar)
       if (bg && g.config.crtEffect === "vector") backdrop = bg; else if (bg) ctx.drawImage(bg, 0, 0, GW, GH);
       setColor(1, 1, 1);
       paint(ctx, print, core.formatScore, (pts, x, y) => { const i = GHOST_SCORES[pts]; if (i) drawSprite("spr16", i, Math.round(x) - 8, Math.round(y) - 8); }, miniGfx); // (the arcade's own ghost scores)
@@ -1468,7 +1469,7 @@
     // what a mini game may draw with besides lines: the game's own sprites and its fruit-score pictures (BOOZE INVADERS)
     const recolorCache = new Map();
     const miniGfx = {
-      animations: core.animations,
+      animations: core.animations, fruits: core.fruits,
       sprite: (sheet, idx, x, y) => { setColor(1, 1, 1); drawSprite(sheet, idx, Math.round(x), Math.round(y)); },
       // turned about its middle (cx, cy), smoothed so the tilted pixel art doesn't break up (Booze Elroy rocking)
       spriteTurned: (sheet, idx, cx, cy, angle) => {
@@ -1493,7 +1494,7 @@
     };
     function saucer() { const L = living.space; return L && L.drawn === drawCount ? L.saucer() : null; }
     const quietSaucer = (q) => { saucerQuiet = !!q; };
-    return { screen, textMask, draw, drawWith, saucer, quietSaucer, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, setRave: (r) => { rave = r; }, setReplay: (f) => { replayInfo = f; }, setOlive: (f) => { oliveAction = f; }, setNeat: (f) => { neatAction = f; }, setLarry: (f) => { larryAction = f; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
+    return { screen, textMask, draw, drawWith, saucer, quietSaucer, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, setRave: (r) => { rave = r; }, setReplay: (f) => { replayInfo = f; }, setMartini: (f) => { martiniAction = f; }, setNeat: (f) => { neatAction = f; }, setLarry: (f) => { larryAction = f; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
       // account corner: fn() -> the logged-in name or null (fn.online false: no corner); hot = under the mouse
       setAccount(fn, online) { accountName = fn; accountOnline = !!online; }, accountBox: () => accountBox, setAccountHot(h) { accountHot = !!h; } };
   }

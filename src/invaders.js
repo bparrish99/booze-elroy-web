@@ -102,7 +102,7 @@
     function startWave() {
       ghosts = [];
       for (let r = 0; r < ROWS.length; r++) for (let c = 0; c < COLS; c++) ghosts.push({ name: ROWS[r], r, c, alive: true });
-      fx = Math.round((W - ((COLS - 1) * CELL_X + 16)) / 2); fy = TOP_Y + Math.min(wave - 1, 6) * 6; dir = 1; stepWait = 30; stepCount = 0; dropping = false;
+      fx = Math.round((W - ((COLS - 1) * CELL_X + 16)) / 2); fy = TOP_Y + Math.min(wave - 1, 5) * 16; dir = 1; stepWait = 30; stepCount = 0; dropping = false; // (16 px lower a wave, to 80 from wave 6, the bottom row then ~20 px over the houses; 6, then 12 a wave were too easy: the author)
       shot = null; boos = []; drinks = []; energizers = []; blue = 0; elroy = null; elroyAt = rnd(900, 1500); booWait = 90;
     }
     function newGame() {
@@ -223,8 +223,10 @@
       // their boos: from the bottom ghost of a column, often the one over him (none while they're blue)
       const rage = enraged();
       if (!blue && (booWait -= 1) <= 0 && live.length) {
-        booWait = rage ? rnd(8, 18) : Math.max(14, rnd(30, 70) - wave * 3);
-        if (boos.length < (rage ? 5 : Math.min(5, 3 + Math.floor(wave / 3)))) {
+        // (more every wave, the author: the gap 20% shorter a wave, down to 8 frames (15% from 28-60 was still too easy); one
+        // more boo on screen a wave, 3 to 8)
+        booWait = rage ? rnd(8, 18) : Math.max(8, rnd(24, 52) * Math.pow(0.8, wave - 1));
+        if (boos.length < (rage ? Math.max(5, Math.min(8, 2 + wave)) : Math.min(8, 2 + wave))) {
           const cols = [...new Set(live.map((gh) => gh.c))];
           const over = cols.reduce((a, c) => (Math.abs(fx + c * CELL_X + 8 - pac.x) < Math.abs(fx + a * CELL_X + 8 - pac.x) ? c : a), cols[0]);
           const c = Math.random() < 0.45 ? over : pick(cols);
@@ -436,7 +438,7 @@
     const test = { state: () => ({ phase, score, lives, wave, board, myRank, asking, left: ghosts ? alive().length : 0, blue, elroy, houses: houses && houses.map((h) => h.cells.filter(Boolean).length) }),
       endGame: (s) => { score = s; lives = 1; killPac(); }, clearWave: () => { for (const gh of ghosts) gh.alive = false; phase = "clear"; t = 0; },
       elroyNow: () => { elroyAt = 1; }, leave: (k) => { let n = 0; for (const gh of ghosts) if (gh.alive && ++n > k) gh.alive = false; }, fx: () => fx, shootRow: (r) => { const gh = ghosts.find((g2) => g2.alive && g2.r === r); if (gh) shootGhost(gh); }, energize: () => { blue = 360; }, enraged: () => enraged() };
-    return { active: () => on, start, exit, step, key, touch, draw, test };
+    return { active: () => on, start, exit, step, key, touch, draw, test, onBoard: () => on && phase === "over" && !asking, refreshBoard: () => { board = []; myRank = null; loadBoard(); } };
   }
   root.BoozeInvaders = { create };
 })(typeof self !== "undefined" ? self : this);

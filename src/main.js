@@ -363,7 +363,7 @@
       };
       next();
     }
-    R.setOlive(replayLoop);
+    window.__replayLoop = replayLoop; // (the olive's loop: unhooked 2026-11-22, when the martini became LAST CALL's door; the author will place it again)
     // the NEAT page (the author, 2026-11-22): the title's "neat!" sticker opens it; what NEAT is, and its switch
     const nt = document.getElementById("neat"), ntForm = nt.querySelector("form");
     const syncNeatPage = () => {
@@ -422,8 +422,10 @@
     const MINI = {
       elroids: BoozeElroids.create({ audio, ghostColor: (n) => R.ghostColor(n), board: miniBoard(SK.ELROIDS, "elroids"), volume: miniVolume }),
       invaders: BoozeInvaders.create({ audio, ghostColor: (n) => R.ghostColor(n), board: miniBoard(SK.INVADERS, "invaders"), volume: miniVolume }),
+      lastcall: BoozeLastCall.create({ audio, board: miniBoard(SK.LASTCALL, "last call"), volume: miniVolume, fruits: () => core.fruits }),
     };
-    let curMini = null;
+    let curMini = null, curMiniName = null;
+    const MINI_META = { elroids: { board: SK.ELROIDS, title: "ELROIDS" }, invaders: { board: SK.INVADERS, title: "BOOZE INVADERS" }, lastcall: { board: SK.LASTCALL, title: "LAST CALL" } };
     const EL = { // (the one playing)
       active: () => !!(curMini && curMini.active()), key: (k, d) => curMini && curMini.key(k, d), touch: (...a) => curMini && curMini.touch(...a),
       exit: () => curMini && curMini.exit(), step: () => curMini && curMini.step(), draw: (...a) => curMini && curMini.draw(...a),
@@ -436,7 +438,7 @@
       touches.clear(); touchDir = null; twoFinger = false; hideTip();
       elHeld = Object.values(g.sounds || {}).filter((s) => s.isPlaying()); for (const s of elHeld) s.pause();
       audio.unlock(); R.quietSaucer(true); canvas.style.cursor = "default";
-      curMini = MINI[name];
+      curMini = MINI[name]; curMiniName = name;
       curMini.start(() => {
         for (const s of elHeld) s.play(); elHeld = [];
         for (const k in down) down[k] = false;
@@ -451,6 +453,8 @@
     window.__elroids = { active: () => EL.active(), open: startElroids, saucer: () => R.saucer(), test: MINI.elroids.test }; // tests
     window.__invaders = { active: () => EL.active(), open: () => startMini("invaders"), test: MINI.invaders.test };
     R.setLarry(() => startMini("invaders")); // (DJ LARRY on the credits: BOOZE INVADERS is his favourite game, the author)
+    window.__lastcall = { active: () => EL.active(), open: () => startMini("lastcall"), test: MINI.lastcall.test };
+    R.setMartini(() => startMini("lastcall")); // (the martini in the title's banner: LAST CALL, the author)
     // ?elroids / ?invaders: straight in (the author's shortcuts for trying them; Esc lands on the title)
     for (const name of Object.keys(MINI)) if (new URLSearchParams(location.search).has(name)) {
       try { history.replaceState(null, "", location.pathname + location.hash); } catch { /* ignore */ }
@@ -528,12 +532,14 @@
     function openReset(mode) {
       if (typeof rs.showModal !== "function") return;
       for (const k in down) down[k] = false;
-      rsMode = mode === "arena" ? "arena" : "reset";
+      rsMode = mode === "arena" ? "arena" : mode === "mini" ? "mini" : "reset";
       const arena = rsMode === "arena" ? LB.currentArena() : null;
       if (rsMode === "arena" && !arena) return;
-      rs.querySelector("h2").textContent = arena ? "DELETE ARENA" : "RESET HIGH SCORES";
-      const what = rs.querySelector(".what"); what.hidden = !arena; what.textContent = arena ? arena.name : "";
-      for (const l of rs.querySelectorAll(".scope")) l.hidden = !!arena;
+      const mini = rsMode === "mini" ? MINI_META[curMiniName] : null; // (a hidden game's board)
+      if (rsMode === "mini" && !mini) return;
+      rs.querySelector("h2").textContent = arena ? "DELETE ARENA" : mini ? "RESET LEADERBOARD" : "RESET HIGH SCORES";
+      const what = rs.querySelector(".what"); what.hidden = !arena && !mini; what.textContent = arena ? arena.name : mini ? mini.title : "";
+      for (const l of rs.querySelectorAll(".scope")) l.hidden = !!(arena || mini);
       rs.querySelector("button[value=reset]").textContent = arena ? "Delete" : "Reset";
       rsMsg.textContent = ""; rsForm.reset();
       rs.showModal();
@@ -544,8 +550,8 @@
       const pw = rsForm.elements.password.value;
       if (!pw) { rsMsg.textContent = "Enter the password."; return; }
       rsMsg.textContent = rsMode === "arena" ? "Deleting…" : "Resetting…";
-      const res = rsMode === "arena" ? await LB.deleteArena(pw) : await LB.reset(pw, rsForm.elements.scope.value === "all");
-      if (res.ok) { rsMsg.textContent = "Done."; setTimeout(() => rs.close(), 900); }
+      const res = rsMode === "arena" ? await LB.deleteArena(pw) : rsMode === "mini" ? await LB.resetBoard(pw, MINI_META[curMiniName].board) : await LB.reset(pw, rsForm.elements.scope.value === "all");
+      if (res.ok) { rsMsg.textContent = "Done."; if (rsMode === "mini" && curMini && curMini.refreshBoard) curMini.refreshBoard(); setTimeout(() => rs.close(), 900); }
       else rsMsg.textContent = res.status === 403 ? "Wrong password." : res.status === 503 ? "Reset isn't set up on the server." : res.status === 0 ? "Can't reach the leaderboard server." : "Reset failed (" + res.status + ").";
     });
     rs.addEventListener("close", () => canvas.focus && canvas.focus());
@@ -621,7 +627,14 @@
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); core.g.scene.keypressed(e.key); return; }
         const k = KEYMAP[e.code]; if (k) { e.preventDefault(); if (!down[k]) { down[k] = true; core.g.scene.keypressed(k); } } return;
       }
-      if (EL.active()) { const k = KEYMAP[e.code]; if (k) { e.preventDefault(); audio.unlock(); if (!down[k]) { down[k] = true; EL.key(k, true); } } return; }
+      if (EL.active()) {
+        // admin: "delete" typed on a hidden game's game-over leaderboard wipes that board (asks for the password; the author)
+        if (curMini && curMini.onBoard && curMini.onBoard() && /^[a-z]$/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          typed = (typed + e.key.toLowerCase()).slice(-16);
+          if (typed.endsWith("delete")) { typed = ""; e.preventDefault(); openReset("mini"); return; }
+        }
+        const k = KEYMAP[e.code]; if (k) { e.preventDefault(); audio.unlock(); if (!down[k]) { down[k] = true; EL.key(k, true); } } return;
+      }
       cheatKey(e);
       // name entry takes typed characters as they are (shifted symbols included)
       if (core.g.scene.name === "nameEntry" && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -939,7 +952,7 @@
         if (elNaming) { while (acc >= step) { core.update(); acc -= step; } } else while (acc >= step) { EL.step(); acc -= step; }
         if (wantsFullBezel() !== fullBezel || (core.g.config && core.g.config.crtEffect) !== fitLook) fit();
         rave.duck(true, false);
-        if (elNaming) R.draw(); else R.drawWith(EL.draw);
+        if (elNaming) R.draw(); else R.drawWith(EL.draw, curMini && curMini.background);
         P.present();
         escBtn.classList.add("on");
         requestAnimationFrame(frame); return;
