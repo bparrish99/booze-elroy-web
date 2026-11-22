@@ -38,3 +38,40 @@ test("exact: the switch never changes the shared tables (a copy)", () => {
   assert.equal(DATA.levels.normal["1"].switch[6], 5040);
   assert.equal(level(1, 2, false).elroy1, DATA.levels.plus["1"].elroy1);
 });
+
+// NEAT with Boost (the author, 2026-11-22): a boosted Pac-Man (off his speed pattern) used to check walls by this game's
+// tiles while turning by the arcade's, so a corner cut while boosting stuck him there till the Boost ran out; and his dot
+// pause counted down once a frame instead of every tick, so each dot cost him two frames
+function boostGame(exact, held) {
+  const keys = { held: "left" };
+  const core = create(DATA, { rng: Math.random, isDown: (k) => k === keys.held, noAutoplay: true, exact: () => exact });
+  core.init(); Object.assign(core.g.config, { ability: 2, ghostCount: 0 });
+  core.g.autoplay = false; core.g.attract = false; core.setScene("game");
+  for (let f = 0; core.g.mode !== "normal" && f < 2000; f++) core.update();
+  return { core, keys };
+}
+test("NEAT: a corner cut while boosting goes round the corner", () => {
+  for (const k of [4, 5, 6, 7]) {
+    const { core, keys } = boostGame(true);
+    const g = core.g, p = g.chars.pac, open = (x, y) => !core.getCurrentMaze().isWall(x, y);
+    for (let f = 0; f < 600; f++) {
+      core.update();
+      const tx = Math.floor(p.x / 8), ty = Math.floor(p.y / 8);
+      if (tx > 2 && open(tx - 1, ty - 1) && p.x - ((tx - 1) * 8 + 4) === k) break;
+    }
+    core.keypressed("space"); keys.held = "up";
+    const y0 = p.y;
+    for (let f = 0; f < 20; f++) core.update();
+    assert.ok(y0 - p.y >= 16, "boosted " + k + " px before the corner: went up " + (y0 - p.y) + " px in 20 frames");
+  }
+});
+test("NEAT: Boost is as fast as in the regular game (the dot pause counted every tick)", () => {
+  const run = (exact) => {
+    const { core } = boostGame(exact), p = core.g.chars.pac;
+    for (let i = 0; i < 3; i++) core.update();
+    const x0 = p.x; core.keypressed("space");
+    for (let i = 0; i < 30; i++) core.update();
+    return x0 - p.x;
+  };
+  assert.equal(run(true), run(false));
+});

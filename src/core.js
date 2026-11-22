@@ -100,10 +100,11 @@
     const rng = env.rng || Math.random;
     // web edition: leaderboard replays (src/replay.js) re-run a game from its seed and inputs; bump this whenever gameplay
     // changes (anything the golden replay would catch, or a fix to a mode it doesn't cover), so older replays are marked
-    const REPLAY_VERSION = 6; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19);
+    const REPLAY_VERSION = 7; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19);
     // 4: a death on the step that clears the board goes straight to the board done (2026-11-20); 5: a new game's first maze
     // picked fresh, not "anything but the last one on screen" (2026-11-21); 6: level 1's last scatter / chase switch at 5040,
-    // not 4200 (2026-11-22)
+    // not 4200 (2026-11-22); 7: NEAT, Pac-Man off his speed pattern (a Boost, the other movement modes): his walls by the
+    // arcade's tiles, and his dot pause counted every tick (2026-11-22)
     // the Random background / maze style picks (looks only): the game's own RNG unless the web edition hands in another
     // (env.styleRand, 2026-11-18: a viewer's Random styles drew from the game's RNG and threw replays out of step, a
     // phone's replay of a PC's game went its own way); without it, as in the original
@@ -1091,9 +1092,13 @@
         // EXACT: a ghost in the maze takes its planned turn as it steps off a centre, not on arriving there (so a reversal asked
         // for meanwhile turns it back the way it came, the plan forgotten, as the arcade's)
         else if (exact() && c.target && !isPac && !c.housing && !c.leaving && !c.entering) logic.turn(c);
-        const exactPac = isPac && exact() && exactKind(c); // EXACT: his walls and centres by the arcade's tiles
-        const ex = exactPac ? cm.occ(c) : null, ecx = ex && ex[0] * TILE + CENTER, ecy = ex && ex[2] * TILE + CENTER;
-        if (exactPac ? (!cm.isWall(ex[0] + DELTAS[c.dir].x, ex[2] + DELTAS[c.dir].y) || (c.dir === 2 && c.x > ecx) || (c.dir === 3 && c.y > ecy) ||
+        const exactPac = isPac && exact() && exactKind(c);
+        // EXACT: his walls and centres by the arcade's tiles, as his turns are (logic.turn), on his pattern or not: a Boost
+        // (no pattern) used to check them by this game's tiles, a pixel apart, so a corner cut turned him the arcade's way
+        // into a wall by this game's: stuck there till the Boost ran out (the author, 2026-11-22)
+        const exactWalls = isPac && exact() && g.config.movement === 0 && (exactPac || !(env.oldNeatBoost && env.oldNeatBoost()));
+        const ex = exactWalls ? cm.occ(c) : null, ecx = ex && ex[0] * TILE + CENTER, ecy = ex && ex[2] * TILE + CENTER;
+        if (exactWalls ? (!cm.isWall(ex[0] + DELTAS[c.dir].x, ex[2] + DELTAS[c.dir].y) || (c.dir === 2 && c.x > ecx) || (c.dir === 3 && c.y > ecy) ||
           (c.dir === 0 && c.x < ecx) || (c.dir === 1 && c.y < ecy)) :
           (c.housing || c.leaving || c.entering || !cm.isBlocked(c, c.dir) ||
           (c.dir === 2 && xOff > CENTER) || (c.dir === 3 && yOff > CENTER) ||
@@ -1109,7 +1114,7 @@
           // EXACT: a ghost decides one pixel past a tile's centre, for the next tile (the arcade's one tile ahead)
           // (queued, made at the frame's end in the order queued: exactDecisions)
           if (exact() && c.target && !c.housing && !c.leaving && !c.entering && !T(c.leaveRight) && (c.dir % 2 === 0 ? xOff === CENTER : yOff === CENTER)) { if (!c.exactDecide) (g.exactQueue = g.exactQueue || []).push(c); c.exactDecide = true; c.exactDecideBlue = !!c.frightened; }
-        } else if (T(c.iDir) && (exactPac ? !cm.isWall(ex[0] + DELTAS[c.iDir].x, ex[2] + DELTAS[c.iDir].y) : !cm.isBlocked(c, c.iDir))) { // (EXACT: his way out by the arcade's tiles too)
+        } else if (T(c.iDir) && (exactWalls ? !cm.isWall(ex[0] + DELTAS[c.iDir].x, ex[2] + DELTAS[c.iDir].y) : !cm.isBlocked(c, c.iDir))) { // (EXACT: his way out by the arcade's tiles too)
           if (isPac && g.config.movement === 3) {
             if (c.speed > MAX_THRUST) {
               mode.setMode("destroyed");
@@ -1978,7 +1983,12 @@
       }
     };
     const updateCharacterMovement = (char) => {
-      if (exact() && g.exactTick === 0 && !exactKind(char)) return; // EXACT: what doesn't move by pattern moves once a frame, after the ticks (the arcade's per-frame routines)
+      if (exact() && g.exactTick === 0 && !exactKind(char)) { // EXACT: what doesn't move by pattern moves once a frame, after the ticks (the arcade's per-frame routines)
+        // (but his dot pause is in ticks, as the arcade's: off his pattern too (a Boost, the other movement modes) it counts down on
+        // this tick as well, or each dot cost him two frames: the author, 2026-11-22)
+        if (char === g.chars.pac && char.skipCounter > 0 && !(env.oldNeatBoost && env.oldNeatBoost())) char.skipCounter -= 1;
+        return;
+      }
       if (exact() && (char.housing || char.leaving) && !g.exactHousePass) return; // (the house: its own pass after both ticks, below)
       char.moved = false;
       if (T(char.stunned) && char.stunned > 0) {
