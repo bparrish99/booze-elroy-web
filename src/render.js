@@ -361,7 +361,7 @@
       // (not in the picture in the vector look, where the beam would trace it and it would hide dim lines like maze style
       // 9's dark grey; there it's handed to the presenter instead as a backdrop behind the glass: R.backdrop)
       if (bg && g.config.crtEffect === "vector") backdrop = bg;
-      else if (bg) ctx.drawImage(bg, 0, 0, GW, GH);   // already dimmed to 40% at build time
+      else if (bg) ctx.drawImage(bg, 0, 0, GW, GH);   // baked at 25% (tools/prep_assets.py), the pictures brightened at load (main.js brighter)
       if (raveOn()) { // darkstar: a wash of colour from the middle on every beat
         const rb = raveBeat(), hue = HUES[rb.bar % HUES.length];
         const w = ctx.createRadialGradient(GW / 2, GH / 2, 10, GW / 2, GH / 2, 200);

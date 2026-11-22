@@ -327,7 +327,17 @@
 
     const [spr16, spr8, text8, banner] = await Promise.all(["spr16", "spr8", "text8", "banner"].map((n) => loadImg(A.images[n])));
     const backgrounds = {};
-    await Promise.all(Object.keys(A.backgrounds).map(async (n) => { backgrounds[n] = await loadImg(A.backgrounds[n]); }));
+    // the background pictures, a little brighter (the author, 2026-11-22: dark by design, but at the 25% they were baked at it
+    // was hard to see what they were): drawn once more on top as light, so BG_BOOST times as bright; the plain colours stay
+    const BG_BOOST = 1.4, SOLIDS = new Set(["tan", "aqua", "green", "blue", "purple"]);
+    function brighter(name, img) {
+      if (SOLIDS.has(name) || !img || !img.width) return img;
+      const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+      const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+      x.globalCompositeOperation = "lighter"; x.globalAlpha = BG_BOOST - 1; x.drawImage(img, 0, 0);
+      return c;
+    }
+    await Promise.all(Object.keys(A.backgrounds).map(async (n) => { backgrounds[n] = brighter(n, await loadImg(A.backgrounds[n])); }));
     await audio.ready;
 
     const R = BoozeRender.createRenderer(core, { sprites: { spr16, spr8, text8 }, banner, backgrounds, video: videoEl });
