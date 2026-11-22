@@ -173,8 +173,9 @@
       xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // test mode: frame rate, tiles, ghost targets and paths; Pro Mode always
       // NEAT (the author's side project, 2026-11-21): the arcade-exact game (core env.exact), remembered in this browser; its
       // games stay off the leaderboards and arenas (silently, like test mode) until the author decides about its boards
-      neat: { scenes: [...CHEAT_SCENES, "arena"], run() { neatOn = !neatOn; core.g.neatOn = neatOn; try { localStorage.setItem("booze-elroy-neat", neatOn ? "1" : "0"); } catch { /* ignore */ } toast(neatOn ? "NEAT on\narcade-exact Pac-Man" : "NEAT off"); } },
+      neat: { scenes: [...CHEAT_SCENES, "arena"], run() { setNeat(!neatOn); toast(neatOn ? "NEAT on\narcade-exact Pac-Man" : "NEAT off"); } },
     };
+    function setNeat(on) { neatOn = !!on; core.g.neatOn = neatOn; try { localStorage.setItem("booze-elroy-neat", neatOn ? "1" : "0"); } catch { /* ignore */ } }
     // the frame-rate readout: off by default, remembered; counted in the frame loop, shown twice a second
     // test mode's training readout (the author, 2026-11-16; a new player wanted to learn the ghosts): the scatter / chase
     // clock, the blue time, who leaves the pen next and why, and Blinky's Elroy countdown. Read-only: it only looks at g
@@ -349,6 +350,25 @@
       next();
     }
     R.setOlive(replayLoop);
+    // the NEAT page (the author, 2026-11-22): the title's "neat!" sticker opens it; what NEAT is, and its switch
+    const nt = document.getElementById("neat"), ntForm = nt.querySelector("form");
+    const syncNeatPage = () => {
+      nt.classList.toggle("on", neatOn);
+      nt.querySelector(".state").textContent = neatOn ? "NEAT is ON" : "NEAT is OFF";
+      ntForm.querySelector("button.go").textContent = neatOn ? "Turn NEAT off" : "Turn NEAT on";
+    };
+    function openNeat() {
+      if (typeof nt.showModal !== "function" || nt.open) return;
+      for (const k in down) down[k] = false;
+      syncNeatPage(); LB.wakka(); nt.showModal(); nt.scrollTop = 0; ntForm.scrollTop = 0;
+    }
+    ntForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (e.submitter && e.submitter.value === "toggle") { setNeat(!neatOn); syncNeatPage(); LB.wakka(); return; }
+      nt.close();
+    });
+    nt.addEventListener("close", () => canvas.focus && canvas.focus());
+    R.setNeat(openNeat);
     R.setRave(rave); // (on and off in the frame loop; its sound starts with the page's first click / key, like everything else)
     window.__R = R;
     window.__rave = rave; // tests: darkstar's music clock
