@@ -355,9 +355,24 @@
       const v = g.config.crtEffect && g.config.crtEffect !== "vector" ? 13 : 0; // (vector: true black, so faint fades still count)
       ctx.fillStyle = `rgb(${v},${v},${v})`; ctx.fillRect(0, 0, GW, GH);
     }
+    // the living backgrounds (web edition, 2026-11-22: "space" and "ocean", src/living.js): canvases painted afresh each
+    // frame on their own clock, which stands still while the game is paused; made the first time they're shown
+    const living = {}, clock = { t: 0, last: 0 };
+    function livingBackground(name) {
+      if (typeof BoozeLiving === "undefined" || !BoozeLiving.NAMES.includes(name)) return null;
+      const L = living[name] || (living[name] = Object.assign(BoozeLiving.create(name), { at: 0, t0: null }));
+      L.canvas.living = true; // (the vector presenter re-uploads it every frame)
+      const now = performance.now();
+      if (L.at !== now) { // (once a frame, however many times it's drawn)
+        if (clock.last !== now) { clock.t += g.paused || !clock.last ? 0 : Math.min(0.1, (now - clock.last) / 1000); clock.last = now; }
+        L.paint(clock.t, L.t0 === null ? 0 : Math.min(0.1, clock.t - L.t0)); L.t0 = clock.t; L.at = now;
+      }
+      return L.canvas;
+    }
+    const backgroundOf = (name) => assets.backgrounds[name] || livingBackground(name);
     function drawBackground() {
       if (!g.currentBackground) g.currentBackground = g.config.background;
-      const bg = assets.backgrounds[g.currentBackground];
+      const bg = backgroundOf(g.currentBackground);
       // (not in the picture in the vector look, where the beam would trace it and it would hide dim lines like maze style
       // 9's dark grey; there it's handed to the presenter instead as a backdrop behind the glass: R.backdrop)
       if (bg && g.config.crtEffect === "vector") backdrop = bg;
@@ -650,7 +665,7 @@
       clearScreen();
       const inter = g.mode === "intermission1" || g.mode === "placeholderIntermission" || g.mode === "intermission2" || g.mode === "intermission3";
       if (!inter) drawBackground();
-      if (!inter && lanternOn() && assets.backgrounds[g.currentBackground] && g.config.crtEffect !== "vector") {
+      if (!inter && lanternOn() && backgroundOf(g.currentBackground) && g.config.crtEffect !== "vector") {
         // Lantern: the background above and below the maze faded like the dark inside it (no seam); the score and lives
         // go on top at full brightness
         const v = g.config.crtEffect ? 13 : 0;
@@ -1239,7 +1254,7 @@
       dctx.globalCompositeOperation = "source-over"; dctx.clearRect(0, 0, GW, GH);
       const v = g.config.crtEffect && g.config.crtEffect !== "vector" ? 13 : 0; // (clearScreen's blank)
       dctx.fillStyle = `rgb(${v},${v},${v})`; dctx.fillRect(0, 0, GW, GH);
-      const bg = assets.backgrounds[g.currentBackground];
+      const bg = backgroundOf(g.currentBackground);
       if (bg && g.config.crtEffect !== "vector") { dctx.globalAlpha = LANTERN_BG; dctx.drawImage(bg, 0, 0, GW, GH); dctx.globalAlpha = 1; }
       dctx.globalCompositeOperation = "destination-out";
       const glow = dctx.createRadialGradient(cx, cy, LANTERN_R - LANTERN_SOFT, cx, cy, LANTERN_R);
@@ -2018,7 +2033,7 @@
             const nxt = 1 - vh, film = smoothNow(); vfilm = film;
             if (textMask) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, maskTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textMask); }
             bdImg = film ? null : getBackdrop();
-            if (bdImg && bdImg !== backImg) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, backTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bdImg); backImg = bdImg; }
+            if (bdImg && (bdImg !== backImg || bdImg.living)) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, backTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bdImg); backImg = bdImg; }
             pass(pV, VH[nxt], (p) => { gl.uniform1i(p.u("mask"), 2); gl.uniform2f(p.u("srcSize"), source.width, source.height); gl.uniform1f(p.u("decay"), film ? 0 : Math.pow(0.8, dt * 60)); gl.uniform1f(p.u("film"), film ? 1 : 0); }, srcTex, VH[vh].t, maskTex);
             vh = nxt; pic = VH[vh].t;
           } else {

@@ -53,7 +53,8 @@
   // the speed set a level of this game's own tables runs at (by its speeds)
   const exactSetOf = (l) => (l.ghostSpeed <= 0.75 ? 3 : l.ghostSpeed <= 0.85 ? 4 : l.pacSpeed >= 1 ? 5 : 6);
   const BACKGROUND_OPTIONS = ["none", "stars", "beach", "arcade", "forest", "city", "canyon", "clouds", "planets", "abstract",
-    "wave1", "wave2", "lines", "retro", "tan", "aqua", "green", "blue", "purple", "pac1", "pac2", "pac3"]; // (purple: web edition, the author, 2026-11-16)
+    "wave1", "wave2", "lines", "retro", "tan", "aqua", "green", "blue", "purple", "pac1", "pac2", "pac3",
+    "space", "ocean"]; // (purple: web edition, the author, 2026-11-16; space and ocean: the living ones, render.js / living.js, 2026-11-22)
   const SOUND_NAMES = ["thrust", "crash", "bonk", "ping", "reload", "opening", "wakka1", "wakka2", "fruit", "died", "scared", "ateGhost", "siren1", "siren2", "siren3",
     "siren4", "siren5", "dead", "extrapac", "coindrop", "phase", "intermission1"];
   const LOOPING = new Set(["scared", "siren1", "siren2", "siren3", "siren4", "siren5", "dead"]);
@@ -100,11 +101,12 @@
     const rng = env.rng || Math.random;
     // web edition: leaderboard replays (src/replay.js) re-run a game from its seed and inputs; bump this whenever gameplay
     // changes (anything the golden replay would catch, or a fix to a mode it doesn't cover), so older replays are marked
-    const REPLAY_VERSION = 7; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19);
+    const REPLAY_VERSION = 8; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19);
     // 4: a death on the step that clears the board goes straight to the board done (2026-11-20); 5: a new game's first maze
     // picked fresh, not "anything but the last one on screen" (2026-11-21); 6: level 1's last scatter / chase switch at 5040,
     // not 4200 (2026-11-22); 7: NEAT, Pac-Man off his speed pattern (a Boost, the other movement modes): his walls by the
-    // arcade's tiles, and his dot pause counted every tick (2026-11-22)
+    // arcade's tiles, and his dot pause counted every tick (2026-11-22); 8: NEAT's blue ghosts
+    // at the ROMs' exact odds (Pac-Man Plus's its own, not Pac-Man's; 2026-11-22)
     // the Random background / maze style picks (looks only): the game's own RNG unless the web edition hands in another
     // (env.styleRand, 2026-11-18: a viewer's Random styles drew from the game's RNG and threw replays out of step, a
     // phone's replay of a PC's game went its own way); without it, as in the original
@@ -528,6 +530,12 @@
       // generator from the player's ROM, to check fright frame for frame; NEAT itself keeps this game's randomness)
       if (exact() && env.frightPick) return env.frightPick() & 3;
       const r = rand();
+      // (EXACT: the odds of the program's own bytes, counted from the ROMs, of 8192: Pac-Man 2064 / 2338 / 2452 / 1338, Pac-Man
+      // Plus 1817 / 2398 / 2557 / 1420; the game's own 0.252 / 0.537 / 0.836 are Pac-Man's, rounded)
+      if (exact() && !(env.oldNeatFright && env.oldNeatFright())) {
+        const [a, b, c] = g.config.plusMode && g.config.difficulty === 2 ? [1817, 4215, 6772] : [2064, 4402, 6854];
+        return r < a / 8192 ? 0 : r < b / 8192 ? 1 : r < c / 8192 ? 2 : 3;
+      }
       if (r < 0.252) return 0;
       if (r < 0.537) return 1;
       if (r < 0.836) return 2;

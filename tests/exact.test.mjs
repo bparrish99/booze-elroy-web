@@ -42,7 +42,7 @@ test("exact: the switch never changes the shared tables (a copy)", () => {
 // NEAT with Boost (the author, 2026-11-22): a boosted Pac-Man (off his speed pattern) used to check walls by this game's
 // tiles while turning by the arcade's, so a corner cut while boosting stuck him there till the Boost ran out; and his dot
 // pause counted down once a frame instead of every tick, so each dot cost him two frames
-function boostGame(exact, held) {
+function boostGame(exact) {
   const keys = { held: "left" };
   const core = create(DATA, { rng: Math.random, isDown: (k) => k === keys.held, noAutoplay: true, exact: () => exact });
   core.init(); Object.assign(core.g.config, { ability: 2, ghostCount: 0 });
@@ -74,4 +74,32 @@ test("NEAT: Boost is as fast as in the regular game (the dot pause counted every
     return x0 - p.x;
   };
   assert.equal(run(true), run(false));
+});
+
+// NEAT's blue ghosts (the author, 2026-11-22): the arcade's first way to try is the low two bits of a byte of
+// its own program, so Plus (other code) has its own odds: right 1817, down 2398, left 2557, up 1420 of 8192 (Pac-Man's ROM:
+// 2064 / 2338 / 2452 / 1338, which the game's 0.252 / 0.537 / 0.836 round; NEAT uses the exact counts); a replay from before keeps the game's
+function blueTurn(r, plus, exact, old) {
+  const core = create(DATA, { rng: () => r, isDown: () => false, noAutoplay: true, exact: () => exact, oldNeatFright: () => !!old });
+  core.init(); Object.assign(core.g.config, plus ? { plusMode: true, difficulty: 2 } : {});
+  core.g.autoplay = false; core.g.attract = false; core.setScene("game");
+  for (let f = 0; core.g.mode !== "normal" && f < 2000; f++) core.update();
+  const cm = core.getCurrentMaze(), b = core.g.chars.blinky, open = (x, y) => !cm.isWall(x, y);
+  for (let y = 1; y < 30; y++) for (let x = 1; x < 27; x++) {
+    if (open(x, y) && open(x + 1, y) && open(x, y + 1) && open(x - 1, y)) { // came in going right: right and down both open
+      b.x = x * 8 + 4; b.y = y * 8 + 4; b.dir = 0; b.iDir = 0; b.frightened = true; b.exactNext = null;
+      b.target.call(b); return b.iDir;
+    }
+  }
+}
+test("NEAT: blue ghosts turn at the ROMs' exact odds (Pac-Man Plus's its own)", () => {
+  const r = 0.235; // under Pac-Man's 0.252 (right), over Plus's 0.2218 (down)
+  assert.equal(blueTurn(r, false, true), 0);
+  assert.equal(blueTurn(r, true, false), 0); // (NEAT off: the regular game, untouched)
+  assert.equal(blueTurn(r, true, true), 1);
+  assert.equal(blueTurn(r, true, true, true), 0); // (an older replay)
+  const s = 0.25197; // between Pac-Man's exact 2064 / 8192 (0.251953) and the game's rounded 0.252
+  assert.equal(blueTurn(s, false, false), 0); // (the regular game: right)
+  assert.equal(blueTurn(s, false, true), 1); // (NEAT: down)
+  assert.equal(blueTurn(s, false, true, true), 0); // (an older replay)
 });

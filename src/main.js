@@ -250,6 +250,7 @@
       // (the first intermission's bubbles too: Pro Mode skips it; an older replay recorded without Pro Mode drew them from
       // the game's, so it must again: replay.oldIntermissionRng)
       oldClearedDeath: () => !!(replay && replay.olderThan(4)), // (a replay from before that played it the old way)
+      oldNeatFright: () => !!(replay && replay.olderThan(8)), // (NEAT's blue ghosts at the game's own odds, in replays from before)
       oldNeatBoost: () => !!(replay && replay.olderThan(7)), // (NEAT off its speed pattern, the old way, in replays from before)
       oldLevelOneSwitch: () => !!(replay && replay.olderThan(6)), // (level 1's last switch: 4200 in replays from before the fix)
       fxRand: (m, n, gameRand) => (replay && replay.oldIntermissionRng() ? gameRand(m, n) : m === undefined ? Math.random() : (n === undefined ? 1 : m) + Math.floor(Math.random() * ((n === undefined ? m : n) - (n === undefined ? 1 : m) + 1))),
