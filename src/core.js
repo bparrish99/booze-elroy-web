@@ -100,9 +100,10 @@
     const rng = env.rng || Math.random;
     // web edition: leaderboard replays (src/replay.js) re-run a game from its seed and inputs; bump this whenever gameplay
     // changes (anything the golden replay would catch, or a fix to a mode it doesn't cover), so older replays are marked
-    const REPLAY_VERSION = 5; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19);
+    const REPLAY_VERSION = 6; // 2: style picks off the game's RNG (2026-11-18); 3: the intermission's bubbles too (2026-11-19);
     // 4: a death on the step that clears the board goes straight to the board done (2026-11-20); 5: a new game's first maze
-    // picked fresh, not "anything but the last one on screen" (2026-11-21)
+    // picked fresh, not "anything but the last one on screen" (2026-11-21); 6: level 1's last scatter / chase switch at 5040,
+    // not 4200 (2026-11-22)
     // the Random background / maze style picks (looks only): the game's own RNG unless the web edition hands in another
     // (env.styleRand, 2026-11-18: a viewer's Random styles drew from the game's RNG and threw replays out of step, a
     // phone's replay of a PC's game went its own way); without it, as in the original
@@ -297,6 +298,10 @@
           lvl = currentLevels[defaultLevel];
           lvl.fruitFrightenedDuration = FRUIT_FRIGHT[FRUIT_FRIGHT.length - 1] * 60;
         }
+        // level 1's last switch is 5040 (84 s), as in the arcade (the author, 2026-11-22: "in essence a typo"); the table said
+        // 4200, which came before 4740, so the last scatter came 9 s early and lasted 9 s instead of 5. An older replay plays
+        // it the old way (env.oldLevelOneSwitch)
+        if (lvl === LEVELS.normal[1]) lvl.switch[6] = env.oldLevelOneSwitch && env.oldLevelOneSwitch() ? 4200 : 5040;
         if (exact()) lvl = levels.exactLevel(lvl, levelNumber);
         return lvl;
       },
