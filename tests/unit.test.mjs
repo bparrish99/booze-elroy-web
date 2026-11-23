@@ -3,7 +3,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { handle, updateJSON } from "../netlify/lib/scores.mjs";
+import { handle, updateJSON, SWAP_MARK, resetSwapMemo } from "../netlify/lib/scores.mjs";
 import { handleArenas, HOUR, GRACE } from "../netlify/lib/arenas.mjs";
 import { handleAccounts, nameChecker, anonLogger, accountOf } from "../netlify/lib/accounts.mjs";
 import { startBlobs } from "./blobs.mjs";
@@ -450,13 +450,13 @@ test("accounts: the activity log (signups, logins, achievements, every game with
   await acct("POST", "placed", { board: BOARD, rank: 3, score: 12340, settings: "default settings" }, a.token);
   await acct("POST", "placed", { arena: "FRIDAY FIGHT", rank: 1, score: 8200 }, a.token);
   assert.equal((await acct("POST", "placed", { arena: "X", rank: 11, score: 5 }, a.token)).status, 400);
-  // a NEAT board: logged (its settings start "NEAT"), never counted as a board placed on
-  assert.deepEqual((await acct("POST", "placed", { board: "neat:" + BOARD, rank: 1, score: 9990, settings: "NEAT  classic Pac-Man" }, a.token)).data, { count: null });
+  // an OG board (the original game, "ogelroy"): logged (its settings start "OG"), never counted as a board placed on
+  assert.deepEqual((await acct("POST", "placed", { board: "og:" + BOARD, rank: 1, score: 9990, settings: "OG  classic Pac-Man" }, a.token)).data, { count: null });
   assert.deepEqual((await acct("POST", "placed", { board: "elroids", rank: 2, score: 4410 }, a.token)).data, { count: null }); // (Elroids: logged too, never counted)
   const r2 = await acct("GET", "activity", undefined, null, { "x-admin-key": "correct horse" });
   const scores = r2.data.events.filter((e) => e.name === "LOGGED ONE" && /score/.test(e.type)).map((e) => [e.type, JSON.parse(e.detail)]);
-  assert.deepEqual(scores.sort(), [["arenascore", [1, 8200, "FRIDAY FIGHT"]], ["score", [1, 9990, "NEAT  classic Pac-Man"]], ["score", [2, 4410, "ELROIDS"]], ["score", [3, 12340, "default settings"]]]);
-  assert.deepEqual((await acct("POST", "placed", { board: BOARD }, a.token)).data, { count: 1 }); // (only BOARD: the NEAT one left out)
+  assert.deepEqual(scores.sort(), [["arenascore", [1, 8200, "FRIDAY FIGHT"]], ["score", [1, 9990, "OG  classic Pac-Man"]], ["score", [2, 4410, "ELROIDS"]], ["score", [3, 12340, "default settings"]]]);
+  assert.deepEqual((await acct("POST", "placed", { board: BOARD }, a.token)).data, { count: 1 }); // (only BOARD: the OG one left out)
   for (let i = 1; i < r.data.events.length; i++) assert.ok(r.data.events[i - 1].at >= r.data.events[i].at, "newest first");
 });
 
@@ -653,7 +653,7 @@ test("Elroids: one board of its own, out of the board list and the replay loop; 
   for (const [name, score] of [["rock star", 4200], ["martini", 9100]]) await call("POST", "/api/scores", { board: E, name, score, settings: "ELROIDS" });
   assert.deepEqual((await call("GET", "/api/scores?board=elroids")).data.entries.map((e) => [e.name, e.score]), [["MARTINI", 9100], ["ROCK STAR", 4200]]);
   assert.deepEqual((await call("GET", "/api/scores/boards")).data.boards.map((b) => b.board), [B], "not on the Leaderboards page");
-  assert.deepEqual((await call("GET", "/api/scores/boards?neat=1")).data.boards, [], "nor NEAT's");
+  assert.deepEqual((await call("GET", "/api/scores/boards?og=1")).data.boards, [], "nor OG's");
   assert.ok(SK.isBoardKey(SK.INVADERS) && !SK.isKey(SK.INVADERS), "Booze Invaders: a board of its own too");
   await call("POST", "/api/scores", { board: SK.INVADERS, name: "invader", score: 777, settings: "INVADERS" });
   assert.deepEqual((await call("GET", "/api/scores?board=invaders")).data.entries.map((e) => e.name), ["INVADER"]);
@@ -663,26 +663,50 @@ test("Elroids: one board of its own, out of the board list and the replay loop; 
   await call("POST", "/api/scores/reset", { password: "correct horse" });
 });
 
-test("NEAT boards: their own (neat:<key>), never in the regular board list or the replay loop; arenas and favorites refuse them", async () => {
+test("OG boards: the original game's own (og:<key>), never in the regular board list or the replay loop; arenas refuse them", async () => {
   const SK = createRequire(import.meta.url)("../src/scorekey.js");
-  const B = "pac.1.t.f.f.3.1.f.0.4.t.f.f", N = SK.NEAT + B, R = blobs.replayStore;
-  assert.ok(SK.isBoardKey(N) && SK.isNeat(N) && !SK.isKey(N), "a board key, but not a plain one");
-  assert.deepEqual(SK.configFor(N), SK.configFor(B), "the same settings as its plain key");
-  assert.ok(!SK.isBoardKey("neat:nonsense") && !SK.isBoardKey("neat:" + N));
+  const B = "pac.1.t.f.f.3.1.f.0.4.t.f.f", O = SK.OG + B, R = blobs.replayStore;
+  assert.ok(SK.isBoardKey(O) && SK.isOg(O) && !SK.isKey(O), "a board key, but not a plain one");
+  assert.deepEqual(SK.configFor(O), SK.configFor(B), "the same settings as its plain key");
+  assert.ok(!SK.isBoardKey("og:nonsense") && !SK.isBoardKey("og:" + O));
   const call = (method, path, body) => handle(new Request("http://x" + path, { method, body: body === undefined ? undefined : JSON.stringify(body) }), blobs.store, { env, failDelay: 0, replays: R }).then(async (r) => ({ status: r.status, data: await r.json() }));
   await call("POST", "/api/scores/reset", { password: "correct horse" });
   await call("POST", "/api/scores", { board: B, name: "regular", score: 100, replay: "js:{\"r\":1}" });
-  const posted = await call("POST", "/api/scores", { board: N, name: "neat player", score: 999, replay: "js:{\"neat\":true}" });
-  assert.equal(posted.data.rank, 1, "a NEAT score posts to its own board");
+  const posted = await call("POST", "/api/scores", { board: O, name: "og player", score: 999, replay: "js:{\"og\":true}" });
+  assert.equal(posted.data.rank, 1, "an OG score posts to its own board");
   assert.deepEqual((await call("GET", "/api/scores?board=" + B)).data.entries.map((e) => e.name), ["REGULAR"], "the regular board is untouched");
-  assert.deepEqual((await call("GET", "/api/scores?board=" + encodeURIComponent(N))).data.entries.map((e) => e.name), ["NEAT PLAYER"]);
-  assert.deepEqual((await call("GET", "/api/scores/boards")).data.boards.map((b) => b.board), [B], "the regular list never shows NEAT boards");
-  assert.deepEqual((await call("GET", "/api/scores/boards?neat=1")).data.boards.map((b) => b.board), [N], "NEAT's list shows only its own");
+  assert.deepEqual((await call("GET", "/api/scores?board=" + encodeURIComponent(O))).data.entries.map((e) => e.name), ["OG PLAYER"]);
+  assert.deepEqual((await call("GET", "/api/scores/boards")).data.boards.map((b) => b.board), [B], "the regular list never shows OG boards");
+  assert.deepEqual((await call("GET", "/api/scores/boards?og=1")).data.boards.map((b) => b.board), [O], "OG's list shows only its own");
   const loop = (await call("GET", "/api/scores/replays")).data.replays.map((r) => r.name);
-  assert.deepEqual(loop, ["REGULAR"], "the olive's replay loop leaves NEAT replays out");
+  assert.deepEqual(loop, ["REGULAR"], "the replay loop leaves OG replays out");
   const rid = posted.data.entries[0].rid;
-  assert.equal((await call("GET", "/api/scores/replay?id=" + rid)).data.replay, "js:{\"neat\":true}", "a shared link still plays it");
-  const arena = await handleArenas(new Request("http://x/api/arenas", { method: "POST", body: JSON.stringify({ name: "neat cup", board: N }) }), blobs.arenaStore, { env, now: () => 1 });
-  assert.equal(arena.status, 400, "no NEAT arenas");
+  assert.equal((await call("GET", "/api/scores/replay?id=" + rid)).data.replay, "js:{\"og\":true}", "a shared link still plays it");
+  const arena = await handleArenas(new Request("http://x/api/arenas", { method: "POST", body: JSON.stringify({ name: "og cup", board: O }) }), blobs.arenaStore, { env, now: () => 1 });
+  assert.equal(arena.status, 400, "no OG arenas");
   await call("POST", "/api/scores/reset", { password: "correct horse" });
+});
+
+test("the swap (2026-11-23, NEAT became the default): once, the original's boards move to og:, NEAT's take the plain keys; never twice", async () => {
+  const SK = createRequire(import.meta.url)("../src/scorekey.js");
+  const B = "pac.0.f.f.f.3.1.f.0.4.t.f.f", C = "pac.1.t.f.f.3.1.f.0.4.t.f.f", st = blobs.store;
+  const call = (path) => handle(new Request("http://x" + path), st, { env, failDelay: 0 }).then((r) => r.json());
+  await handle(new Request("http://x/api/scores/reset", { method: "POST", body: JSON.stringify({ password: "correct horse" }) }), st, { env, failDelay: 0 });
+  // the store as it stood before the deploy: the original's boards plain, NEAT's under "neat:", no marker
+  await st.delete(SWAP_MARK);
+  const entry = (name, score) => [{ name, score, at: "2026-11-22T00:00:00.000Z", rid: "abcdefgh" + name.length }];
+  await st.setJSON(B, entry("ORIGINAL", 5000)); await st.setJSON(C, entry("ORIGINAL2", 300)); await st.setJSON(SK.NEAT + B, entry("NEATO", 4321));
+  resetSwapMemo();
+  const plain = await call("/api/scores?board=" + B);
+  assert.deepEqual(plain.entries.map((e) => [e.name, e.score, e.rid]), [["NEATO", 4321, "abcdefgh5"]], "NEAT's board took the plain key, replay and all");
+  assert.deepEqual((await call("/api/scores?board=" + encodeURIComponent(SK.OG + B))).entries.map((e) => e.name), ["ORIGINAL"], "the original's moved to og:");
+  assert.deepEqual((await call("/api/scores?board=" + encodeURIComponent(SK.OG + C))).entries.map((e) => e.name), ["ORIGINAL2"], "every one of them");
+  assert.equal((await call("/api/scores?board=" + C)).entries.length, 0, "a board NEAT never had starts empty: a fresh start");
+  assert.equal(await st.get(SK.NEAT + B), null, "no neat: board left");
+  // never twice: even with the memo forgotten (another instance), the marker stops it
+  resetSwapMemo();
+  await call("/api/scores/boards");
+  assert.deepEqual((await call("/api/scores?board=" + B)).entries.map((e) => e.name), ["NEATO"], "a second run moves nothing");
+  assert.equal((await st.get(SWAP_MARK, { type: "json" })).state, "done");
+  await handle(new Request("http://x/api/scores/reset", { method: "POST", body: JSON.stringify({ password: "correct horse" }) }), st, { env, failDelay: 0 });
 });

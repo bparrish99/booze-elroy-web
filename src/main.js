@@ -55,7 +55,7 @@
         // the booze dogs: top 10 on 3 / 5 / 10 / 20 different boards (counted by the server)
         ACC.placedOn(p.key, p.rank, p.score, p.settings).then((n) => { if (n) earned(BoozeAchievements.LIST.filter((a) => a.boards && n >= a.boards).map((a) => a.id)); });
       },
-      neatPlaced: (p) => ACC.placedOn(p.key, p.rank, p.score, p.settings), // (NEAT: only logged, for the activity page's NEAT log)
+      ogPlaced: (p) => ACC.placedOn(p.key, p.rank, p.score, p.settings), // (OG: only logged, for the activity page's OG log)
       auth: () => ACC.auth(), // logged in: score posts carry the login (an account's name is only its owner's)
       playerName: () => ACC.name(), // logged in: a top-10 score goes on the board under the account's name, no name entry
       // favorites (the author, 2026-11-15): the list (account.js), "Add Favorite" (asks for a name), and playing one
@@ -65,7 +65,7 @@
       addFavorite: (key) => openFavorite(key),
       saveSettings: () => { try { localStorage.setItem("booze-elroy-options", JSON.stringify(core.g.config)); } catch { /* ignore */ } },
       miniPlaced: (board, rank, score) => ACC.placedOn(board, rank, score, board.toUpperCase()), // (the hidden games' boards: logged in, the activity page)
-      neat: () => neatOn, // (NEAT: its own boards, out of everyone else's sight; read once the game runs, so after neatOn is set below)
+      og: () => ogOn, // (OG ELROY: its own boards, out of everyone else's sight; read once the game runs, so after ogOn is set below)
     });
     // player accounts (src/account.js): username + password; the corner where 2UP would be logs in / shows the name
     const ACC = BoozeAccount.create({
@@ -166,17 +166,18 @@
     };
     // cheat codes: letters typed on the menu screens (they do nothing there otherwise)
     const CHEAT_SCENES = ["attract", "options", "credits", "leaderboard", "arenas"];
-    let neatOn = false; try { neatOn = localStorage.getItem("booze-elroy-neat") === "1"; } catch { /* ignore */ }
+    // OG ELROY (2026-11-23): the default game is NEAT, the arcade-exact one (core env.exact on); the author's original engine,
+    // the hand-built one everything stands on, is behind the cheat "ogelroy", remembered in this browser. Its games go on
+    // its own hidden boards ("og:" keys), earn no achievements, post to no arena (as NEAT's didn't when it was the extra)
+    let ogOn = false; try { ogOn = localStorage.getItem("booze-elroy-og") === "1"; } catch { /* ignore */ }
     const CHEATS = {
       mina: { scenes: CHEAT_SCENES, run() { const from = core.g.scene.name; core.setScene("mina", from); } },
       reset: { scenes: CHEAT_SCENES, run() { openReset(); } }, // admin: reset high scores (asks for the password)
       delete: { scenes: ["arena"], run() { openReset("arena"); } }, // admin: delete the arena on screen (asks for the password)
       xyzzy: { scenes: [...CHEAT_SCENES, "arena"], run() { toggleFps(); } }, // test mode: frame rate, tiles, ghost targets and paths; Pro Mode always
-      // NEAT (the author's side project, 2026-11-21): the arcade-exact game (core env.exact), remembered in this browser; its
-      // games stay off the leaderboards and arenas (silently, like test mode) until the author decides about its boards
-      neat: { scenes: [...CHEAT_SCENES, "arena"], run() { setNeat(!neatOn); toast(neatOn ? "NEAT on\narcade-exact Pac-Man" : "NEAT off"); } },
+      ogelroy: { scenes: [...CHEAT_SCENES, "arena"], run() { setOg(!ogOn); toast(ogOn ? "OG ELROY on\nthe original game" : "OG ELROY off"); } },
     };
-    function setNeat(on) { neatOn = !!on; core.g.neatOn = neatOn; try { localStorage.setItem("booze-elroy-neat", neatOn ? "1" : "0"); } catch { /* ignore */ } }
+    function setOg(on) { ogOn = !!on; core.g.ogOn = ogOn; try { localStorage.setItem("booze-elroy-og", ogOn ? "1" : "0"); } catch { /* ignore */ } }
     // the frame-rate readout: off by default, remembered; counted in the frame loop, shown twice a second
     // test mode's training readout (the author, 2026-11-16; a new player wanted to learn the ghosts): the scatter / chase
     // clock, the blue time, who leaves the pen next and why, and Blinky's Elroy countdown. Read-only: it only looks at g
@@ -268,7 +269,7 @@
           ...ach.filter((a) => a.mode && s >= a.points && c[a.mode.key] === a.mode.value).map((a) => a.id), // points in a mode (house of horrors, ...)
           ...ach.filter((a) => a.score && s >= a.score).map((a) => a.id), // clyde / inky / pinky / blinky: the final score
           ...ach.filter((a) => a.board && s >= a.boardScore && SK.keyFor(c) === a.board).map((a) => a.id)]); // purist / patternless: on those exact settings
-        return LB.afterGameOver(s, fpsOn); // (test mode: no leaderboards, the author, 2026-11-16; NEAT: its own boards, LB opts.neat, 2026-11-22)
+        return LB.afterGameOver(s, fpsOn); // (test mode: no leaderboards, the author, 2026-11-16; OG ELROY: its own boards, LB opts.og)
       }, rewind: () => {
         if (!rwd) return;
         const was = rwd.active(); rwd.trigger();
@@ -276,7 +277,7 @@
       },
       feat: (id) => { if (!core.g.attract && !core.g.autoplay && !(replay && replay.playing())) earned([id]); }, // a single use of an ability (hoover deluxe, personal space, the power of now)
       testMode: () => fpsOn && !(replay && replay.playing()) /* test mode (xyzzy): Pro Mode always; never in a replay (it changes the timing) */,
-      exact: () => (core.g.neatOn = replay && replay.playing() ? replay.neat() : neatOn) /* NEAT ("neat"): the arcade-exact game; a replay plays as it was recorded, NEAT or not, the viewer's setting untouched (g.neatOn: render's sticker) */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
+      exact: () => { const on = replay && replay.playing() ? replay.neat() : !ogOn; core.g.ogOn = !on; return on; } /* the arcade-exact game (NEAT) is the default since 2026-11-23, the original behind "ogelroy"; a replay plays as it was recorded, either way, the viewer's setting untouched (g.ogOn: the header's "og") */, quitGameTo: () => LB.quitGameTo(), createArena: () => LB.createArena("options"),
       saveHighScore: (s) => { if (!(replay && replay.playing())) LB.saveBest(s); }, // (someone else's replayed score isn't the viewer's best)
       saveConfig: (c) => { if (LB.borrowed() || (replay && replay.playing())) return; try { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); } catch { /* ignore */ } },
       loadConfig: () => (sharedCfg ? Object.assign(loadSaved() || {}, sharedCfg) : loadSaved()),
@@ -287,7 +288,7 @@
     { // replays: every key / button reaching the core is noted while a game records; while a replay plays, the viewer's
       // own keys are its controls instead (Esc, speed, pause) and the replay's own presses are fed in step by step
       const kp = core.keypressed, gp = core.gamepadpressed;
-      replay = BoozeReplay.create(core, { keypressed: kp, gamepadpressed: gp, neat: () => neatOn });
+      replay = BoozeReplay.create(core, { keypressed: kp, gamepadpressed: gp, neat: () => !ogOn }); // (a replay notes the exact game, and with it the player's Pro Mode)
       core.keypressed = (k) => { if (replay.playing()) { replay.viewerKey(k); return; } replay.note("k", k); kp(k); };
       core.gamepadpressed = (b) => { if (replay.playing()) { replay.viewerKey(b === "b" ? "escape" : b === "a" ? "space" : b === "start" ? "p" : ""); return; } replay.note("g", b); gp(b); };
       window.__replay = replay; // tests
@@ -305,7 +306,7 @@
     // (and never over Mina's film: the "mina" scene holds them too)
     const livePlay = () => (core.g.scene.name === "game" && !core.g.attract && !core.g.autoplay) || core.g.scene.name === "mina";
     function earned(ids) {
-      if (neatOn && (core.g.scene.name === "game" || core.g.scene.name === "nameEntry")) return; // (NEAT games earn nothing: the author, 2026-11-22)
+      if (ogOn && (core.g.scene.name === "game" || core.g.scene.name === "nameEntry")) return; // (OG ELROY games earn nothing, as NEAT's didn't when it was the extra)
       // a ghost minimum (src/achievements.js minGhosts): judged on the settings in play now, when it's earned
       ids = ids.filter((id) => { const a = BoozeAchievements.byId(id); return !(a && a.minGhosts && !(core.g.config.ghostCount >= a.minGhosts)); });
       if (!ids.length) return;
@@ -364,25 +365,6 @@
       next();
     }
     window.__replayLoop = replayLoop; // (the olive's loop: unhooked 2026-11-22, when the martini became LAST CALL's door; the author will place it again)
-    // the NEAT page (the author, 2026-11-22): the title's "neat!" sticker opens it; what NEAT is, and its switch
-    const nt = document.getElementById("neat"), ntForm = nt.querySelector("form");
-    const syncNeatPage = () => {
-      nt.classList.toggle("on", neatOn);
-      nt.querySelector(".state").textContent = neatOn ? "NEAT is ON" : "NEAT is OFF";
-      ntForm.querySelector("button.go").textContent = neatOn ? "Turn NEAT off" : "Turn NEAT on";
-    };
-    function openNeat() {
-      if (typeof nt.showModal !== "function" || nt.open) return;
-      for (const k in down) down[k] = false;
-      syncNeatPage(); LB.wakka(); nt.showModal(); nt.scrollTop = 0; ntForm.scrollTop = 0;
-    }
-    ntForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (e.submitter && e.submitter.value === "toggle") { setNeat(!neatOn); syncNeatPage(); LB.wakka(); return; }
-      nt.close();
-    });
-    nt.addEventListener("close", () => canvas.focus && canvas.focus());
-    R.setNeat(openNeat);
     R.setRave(rave); // (on and off in the frame loop; its sound starts with the page's first click / key, like everything else)
     window.__R = R;
     window.__rave = rave; // tests: darkstar's music clock
@@ -972,7 +954,7 @@
         raveLastMode = g.mode;
         rave.duck(g.scene.name === "mina" || /intermission/i.test(g.mode || "") || poppedOut || (real && !live), real);
       }
-      core.g.neatOn = replay && replay.playing() ? replay.neat() : neatOn; // (NEAT's sticker in the header, render.js: a NEAT replay shows it, whatever the viewer's setting)
+      core.g.ogOn = replay && replay.playing() ? !replay.neat() : ogOn; // (the header's "og" while the original game is on, render.js; a replay as recorded)
       R.draw(); P.present();
       if (fpsOn) {
         fpsFrames += 1;
@@ -1023,7 +1005,7 @@
         if (real && lastScene !== "game") { // one week chip: a game on 7 days in a row (the player's own calendar); every
           // game is logged for the activity page, with its settings (and starting level when it isn't 1) and arena
           const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
-          const settings = (neatOn ? "NEAT  " : "") /* (NEAT games: the activity page's NEAT log) */ + LB.summary(200).join("  ") + (g.config.startingLevel > 1 ? "  starting level " + g.config.startingLevel : "");
+          const settings = (ogOn ? "OG  " : "") /* (OG ELROY games: the activity page's OG log) */ + LB.summary(200).join("  ") + (g.config.startingLevel > 1 ? "  starting level " + g.config.startingLevel : "");
           const ar = LB.inArena() && LB.currentArena();
           ACC.playedOn(d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()), settings, ar ? ar.name : null).then((n) => { if (n >= 7) earned(["streak"]); });
         }

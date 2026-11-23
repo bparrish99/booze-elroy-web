@@ -348,33 +348,35 @@ try {
     check(posted && posted.rank === 1 && rwKey.split(".")[7] === "4", "the server takes a Rewind board: " + rwKey);
     await ctx2.close();
   }
-  // NEAT (the author's arcade-exact game, 2026-11-22): its own boards, out of everyone else's sight
+  // OG ELROY (2026-11-23: NEAT, the arcade-exact game, became the default; the author's original behind "ogelroy"): its own
+  // boards, out of everyone else's sight; the default game on the plain ones
   {
     await ev(() => window.__core.setScene("attract")); await p.waitForTimeout(400);
-    await p.keyboard.type("neat"); await p.waitForTimeout(600);
-    check(await ev(() => localStorage.getItem("booze-elroy-neat") === "1"), "typing neat on the title switches NEAT on");
-    const plain = await ev(() => window.BoozeScoreKey.keyFor(window.__core.g.config)), neatKey = "neat:" + plain;
+    check(await ev(() => window.__core.g.ogOn === false), "the default game is the exact one (OG off)");
+    await p.keyboard.type("ogelroy"); await p.waitForTimeout(600);
+    check(await ev(() => localStorage.getItem("booze-elroy-og") === "1"), "typing ogelroy on the title switches the original game on");
+    const plain = await ev(() => window.BoozeScoreKey.keyFor(window.__core.g.config)), ogKey = "og:" + plain;
     const before = await api("?board=" + plain);
     await ev(() => { const c = window.__core; c.g.autoplay = false; c.g.attract = false; c.setScene("game"); });
-    check(await until("g.scene.name === 'game' && g.mode === 'normal'", 12000), "a NEAT game starts");
+    check(await until("g.scene.name === 'game' && g.mode === 'normal'", 12000), "an OG game starts");
     await ev(() => { const c = window.__core; c.g.score = 4321; c.mode.setMode("gameover"); });
     check(await until("g.scene.name === 'nameEntry'", 8000), "its top-10 score opens name entry");
-    check(await g("g.scene.key") === neatKey, "name entry is for the NEAT board: " + await g("g.scene.key"));
-    await ev(() => { window.__core.g.scene.entry = ""; }); await p.keyboard.type("neato"); await ev(() => window.__core.g.scene.submit()); // (the field starts with the last name used)
+    check(await g("g.scene.key") === ogKey, "name entry is for the OG board: " + await g("g.scene.key"));
+    await ev(() => { window.__core.g.scene.entry = ""; }); await p.keyboard.type("oldtimer"); await ev(() => window.__core.g.scene.submit()); // (the field starts with the last name used)
     check(await until("g.scene.name === 'leaderboard'", 8000), "submitting shows the board");
-    const nb = await api("?board=" + encodeURIComponent(neatKey));
-    check(JSON.stringify(nb.entries.map((e) => [e.name, e.score])) === JSON.stringify([["NEATO", 4321]]), "the score is on the NEAT board: " + JSON.stringify(nb.entries.map((e) => e.name)));
+    const ob = await api("?board=" + encodeURIComponent(ogKey));
+    check(JSON.stringify(ob.entries.map((e) => [e.name, e.score])) === JSON.stringify([["OLDTIMER", 4321]]), "the score is on the OG board: " + JSON.stringify(ob.entries.map((e) => e.name)));
     const after = await api("?board=" + plain);
-    check(JSON.stringify(after.entries) === JSON.stringify(before.entries), "the regular board for those settings is untouched");
-    const reg = await api("/boards"), nl = await api("/boards?neat=1");
-    check(!reg.boards.some((x) => x.board.startsWith("neat:")) && nl.boards.some((x) => x.board === neatKey), "the regular list never shows it; NEAT's does");
-    check(await g("g.scene.name === 'leaderboard' && g.scene.key") === neatKey, "with NEAT on, the Leaderboards page is on NEAT's board");
+    check(JSON.stringify(after.entries) === JSON.stringify(before.entries), "the default game's board for those settings is untouched");
+    const reg = await api("/boards"), ol = await api("/boards?og=1");
+    check(!reg.boards.some((x) => x.board.startsWith("og:")) && ol.boards.some((x) => x.board === ogKey), "the regular list never shows it; OG's does");
+    check(await g("g.scene.name === 'leaderboard' && g.scene.key") === ogKey, "with OG on, the Leaderboards page is on OG's board");
     await p.keyboard.press("Escape"); await p.waitForTimeout(400);
     await ev(() => window.__core.setScene("attract")); await p.waitForTimeout(300);
-    await p.keyboard.type("neat"); await p.waitForTimeout(600);
-    check(await ev(() => localStorage.getItem("booze-elroy-neat") === "0"), "neat again switches it off");
+    await p.keyboard.type("ogelroy"); await p.waitForTimeout(600);
+    check(await ev(() => localStorage.getItem("booze-elroy-og") === "0"), "ogelroy again switches it off");
     await ev(() => window.__core.setScene("leaderboard")); await p.waitForTimeout(400);
-    check(await g("g.scene.key") === plain, "NEAT off: the Leaderboards page is back on the regular board");
+    check(await g("g.scene.key") === plain, "OG off: the Leaderboards page is back on the default game's board");
     await ev(() => window.__core.setScene("attract"));
   }
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join(" | ") : ""));

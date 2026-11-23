@@ -40,7 +40,7 @@ import scorekey from "../../src/scorekey.js";
 import achievements from "../../src/achievements.js";
 import { json, sleep, readBody, updateJSON, sha } from "./scores.mjs";
 
-const { cleanName, isKey, isNeat, isBoardKey, MINI_BOARDS, configFor, MAX_SCORE } = scorekey;
+const { cleanName, isKey, isOg, isBoardKey, MINI_BOARDS, configFor, MAX_SCORE } = scorekey;
 const scryptP = promisify(scrypt);
 export const PW_MIN = 4, PW_MAX = 128;
 const hex = (name) => Buffer.from(name).toString("hex");
@@ -62,7 +62,7 @@ async function retroAward(store, scoresStore, name) {
   for (const ev of events) {
     const p = ev.key.split("/");
     if (p[0] !== "e" || p[2] !== "score" || p[3] !== hex(name)) continue;
-    try { const d = JSON.parse(decodeURIComponent(p[4])); if (Array.isArray(d) && Number.isInteger(d[1]) && !/^NEAT /.test(d[2])) logged.add(d[1]); /* (NEAT scores count for nothing) */ } catch { /* ignore */ }
+    try { const d = JSON.parse(decodeURIComponent(p[4])); if (Array.isArray(d) && Number.isInteger(d[1]) && !/^(NEAT|OG) /.test(d[2])) logged.add(d[1]); /* (NEAT scores count for nothing) */ } catch { /* ignore */ }
   }
   const { blobs } = await scoresStore.list();
   const best = new Map(); // board -> this account's best score there
@@ -275,8 +275,8 @@ export async function handleAccounts(req, store, opts = {}) {
       await logEvent(store, "arenascore", s.name, JSON.stringify([body.rank, body.score, text(body.arena, 24)]));
       return json(200, { ok: true });
     }
-    if (isNeat(body.board) && isBoardKey(body.board)) { // a NEAT board (the author's arcade-exact game): only logged, never counted
-      if (scored) await logEvent(store, "score", s.name, JSON.stringify([body.rank, body.score, "NEAT  " + (text(body.settings, 160).replace(/^NEAT {2}/, "") || body.board)]));
+    if (isOg(body.board) && isBoardKey(body.board)) { // an OG board (the original game, "ogelroy"): only logged, never counted
+      if (scored) await logEvent(store, "score", s.name, JSON.stringify([body.rank, body.score, "OG  " + (text(body.settings, 160).replace(/^OG {2}/, "") || body.board)]));
       return json(200, { count: null });
     }
     if (MINI_BOARDS.includes(body.board)) { // a hidden game's (Elroids, Booze Invaders): only logged, never counted as a board placed on

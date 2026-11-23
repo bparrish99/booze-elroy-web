@@ -56,21 +56,6 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
 .box [hidden]{display:none}
 .box input[name=name]{text-transform:uppercase}
 .box .switch{margin:12px 0 0;font-size:13px}.box .switch a{color:#a8a8ff}
-/* the NEAT page (the title's "neat!" sticker): most of the window, scrolling if it has to */
-#neat.box{max-width:min(600px,calc(100vw - 32px));max-height:calc(100vh - 32px);box-sizing:border-box;padding:0;overflow:hidden}
-#neat form{max-height:calc(100vh - 36px);overflow-y:auto;padding:22px 26px 20px;box-sizing:border-box}
-#neat h2{font-size:22px;letter-spacing:.2em;margin:0 0 2px}
-#neat .tag{margin:0 0 16px;color:#00ffff}
-#neat h3{margin:18px 0 6px;font-size:15px;letter-spacing:.15em;color:#ffb8ff;font-weight:normal}
-#neat p{margin:0 0 10px;color:#dedeff}
-#neat ul{margin:0 0 10px;padding:0 0 0 1.2em;color:#dedeff}
-#neat li{margin:0 0 6px}
-#neat b{color:#ffd400;font-weight:normal}
-#neat .fine{font-size:13px;color:#a8a8a8}
-#neat .switchbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:4px 0 6px;padding:12px 14px;border:1px solid #2121de;border-radius:4px}
-#neat .state{flex:1;letter-spacing:.15em;color:#a8a8a8}
-#neat.on .state{color:#00ff00}
-#neat .row{margin-top:18px}
 #tip{display:none;position:fixed;z-index:8;max-width:min(260px,calc(100vw - 32px));padding:8px 11px;background:#000;color:#ffd400;border:2px solid #2121de;border-radius:6px;font:14px/1.4 "Courier New",monospace;pointer-events:none;white-space:pre-line}
 #tip.on{display:block}
 #loading{position:absolute;color:#8a8a9a;letter-spacing:.2em;text-transform:uppercase;font-size:14px}
@@ -95,29 +80,6 @@ body.popout #vol,body.popout #look,body.popout #fs,body.popout #esc{display:none
 <div class="row"><button value="ok" class="go">Log in</button><button value="cancel" formnovalidate>Cancel</button></div>
 <p class="switch"><a href="#">Create an account</a></p>
 <div class="msg" role="status"></div></form></dialog>
-<dialog id="neat" class="box"><form method="dialog">
-<h2>NEAT!</h2>
-<p class="tag">Arcade-perfect Pac-Man</p>
-<div class="switchbar"><span class="state">NEAT is OFF</span><button value="toggle" class="go">Turn NEAT on</button></div>
-<p class="fine">Remembered in this browser. Turn it off again any time, here or by typing NEAT on the title screen.</p>
-<h3>WHAT IT IS</h3>
-<p>Booze Elroy plays almost exactly like Pac-Man. With NEAT on, it plays <b>exactly</b> like Pac-Man: The real 1980 arcade machine, down to the frame, and down to the pixel. Every ghost's turn, every change of speed, the little pauses when a ghost is eaten, when the fruit appears and how long it stays, how long the ghosts stay blue and when they flash, deaths, the READY signal, and all the rest.</p>
-<p>With Plus Mode on, and Difficulty set to Plus, it plays exactly like <b>Pac-Man Plus</b>, not <b>almost exactly</b> like it.</p>
-<p>Everything else is still here. You can change any setting, use the abilities, pick a maze style or a background. The arcade never had those, of course, so "exact" means the most on the Classic Pac-Man settings (or Plus).</p>
-<h3>WHAT CHANGES</h3>
-<ul>
-<li><b>Its own leaderboards.</b> NEAT games go on separate NEAT boards. While NEAT is on, the high score, name entry and the Leaderboards page all show those. Turn it off and you're back to the regular boards. NEAT scores never mix with the regular ones.</li>
-<li><b>No achievements.</b> Achievements belong to the regular game, so none are earned in a NEAT game.</li>
-<li><b>No arenas.</b> An arena game played with NEAT on isn't posted.</li>
-<li><b>Replays still work.</b> A NEAT score keeps its replay, and it plays back as NEAT for anyone who watches it, without switching their own NEAT on.</li>
-</ul>
-<h3>HOW IT CAME ABOUT</h3>
-<p>Booze Elroy started as one person's passion project: rebuild Pac-Man by hand, as close to the arcade as possible. A celebration of, and a love letter to his favorite arcade game. It got very close, close enough that hardly anyone could ever spot a difference.</p>
-<p>Hardly anyone. Its maker still could. So NEAT was built afterwards, with the help of an AI assistant, by running the original arcade program in an emulator side by side with this game, feeding both the same control inputs and comparing them frame by frame until they matched on every level.</p>
-<p>The regular game is still the hand-built one, untouched. NEAT is a switch, not a replacement. Like a drink served neat: the real thing, nothing added.</p>
-<p class="fine">One small difference remains: blue ghosts still pick their random turns with this game's own dice (the arcade machine reads its own program code for that).</p>
-<div class="row"><button value="close">Close</button></div>
-</form></dialog>
 <script>window.BOOZE_ASSETS=/*ASSETS*/;</script>
 <script>/*CODE*/</script>
 </body></html>

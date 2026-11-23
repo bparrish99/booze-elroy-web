@@ -19,7 +19,7 @@ try {
   async function roundTrip(label, cfg, start, pressAt, viewerPro = true, noReplay = false, viewerStyle = null, neat = false) {
     const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
     const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
-    await p.addInitScript(([c, n]) => { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); if (n) localStorage.setItem("booze-elroy-neat", "1"); }, [{ crtEffect: false, proMode: true, startingLives: 1, ...cfg }, neat]);
+    await p.addInitScript(([c, n]) => { localStorage.setItem("booze-elroy-options", JSON.stringify(c)); if (n) localStorage.setItem("booze-elroy-og", "1"); }, [{ crtEffect: false, proMode: true, startingLives: 1, ...cfg }, neat]);
     const lives = cfg.startingLives || 1;
     await p.goto(dev.url + "/"); await p.waitForTimeout(1200);
     await start(p);
@@ -57,7 +57,10 @@ try {
     check(await p.waitForFunction(() => window.__replay.playing(), null, { timeout: 10000 }).then(() => true, () => false), label + ": the replay plays");
     check(await p.evaluate(() => !!window.__replay.info()), label + ": with its REPLAY label (and the EXPERIMENTAL sticker)");
     await p.keyboard.press("Space"); await p.keyboard.press("Space"); // 4x
-    if (!viewerPro) check(await p.waitForFunction(() => window.__core.g.mode === "playerUp", null, { timeout: 5000 }).then(() => true, () => false), label + ": watched without Pro Mode, it shows the opening jingle the player skipped");
+    // watched without Pro Mode: an OG game (the original engine) uses the viewer's own, so it shows the opening jingle the player
+    // skipped; the default, exact game keeps its player's Pro Mode (its timings use it: the arcade's free-running clock), so it doesn't
+    if (!viewerPro && neat) check(await p.waitForFunction(() => window.__core.g.mode === "playerUp", null, { timeout: 5000 }).then(() => true, () => false), label + ": watched without Pro Mode, it shows the opening jingle the player skipped");
+    if (!viewerPro && !neat) check(await p.evaluate(() => window.__core.g.config.proMode === true) && !(await p.waitForFunction(() => window.__core.g.mode === "playerUp", null, { timeout: 1500 }).then(() => true, () => false)), label + ": watched without Pro Mode, it plays with its player's Pro Mode (no jingle)");
     await p.waitForFunction(() => !window.__replay.playing(), null, { timeout: 240000 });
     const watched = await p.evaluate(() => window.__lastGameEnd);
     check(JSON.stringify(watched) === JSON.stringify(played), label + ": the replay ends exactly as the game did " + JSON.stringify(played) + (JSON.stringify(watched) === JSON.stringify(played) ? "" : " vs " + JSON.stringify(watched)));
@@ -115,24 +118,25 @@ try {
   // played with Random background and maze style, watched with plain ones (a phone's replay of a PC's game went its own
   // way: the Random picks drew from the game's RNG; 2026-11-18)
   await roundTrip("RANDOM LOOKS", { ghostCount: 4, ability: 2, background: "random", mazeColor: 0 }, async (p) => { await p.keyboard.press("Enter"); }, (t) => t % 6 === 1, true, false, { background: "none", mazeColor: 99 });
-  // NEAT (the author's arcade-exact game, 2026-11-22): its replay says so and plays NEAT, with its player's Pro Mode, for a
-  // viewer who has NEAT off (opening the shared link), without switching NEAT on for them; it stays out of the olive's loop
+  // since 2026-11-23 the default game is the exact one (NEAT), so every round trip above was one; its replays keep their
+  // player's Pro Mode. OG ELROY (the original, "ogelroy"): its replay says so and plays the original for a viewer who has OG
+  // off (opening the shared link), without switching it on for them; it goes on its own board and stays out of the replay loop
   {
-    const neat = await roundTrip("NEAT GAME", { ghostCount: 4, startingLives: 3 }, async (p) => { await p.keyboard.press("Enter"); }, () => false, true, false, null, true);
-    check(neat.key.startsWith("neat:"), "a NEAT game's score goes on its NEAT board: " + neat.key);
+    const og = await roundTrip("OG GAME", { ghostCount: 4, startingLives: 3 }, async (p) => { await p.keyboard.press("Enter"); }, () => false, false, false, null, true);
+    check(og.key.startsWith("og:"), "an OG game's score goes on its OG board: " + og.key);
     const ctx = await b.newContext({ viewport: { width: 672, height: 864 } });
     const p = await ctx.newPage(); p.on("pageerror", (e) => errs.push(e.message));
     await p.addInitScript(() => { localStorage.setItem("booze-elroy-options", JSON.stringify({ crtEffect: false, proMode: false })); });
-    await p.goto(dev.url + "/?replay=" + neat.rid);
-    check(await p.waitForFunction(() => window.__replay && window.__replay.playing(), null, { timeout: 15000 }).then(() => true, () => false), "a NEAT replay's shared link plays it for a viewer without NEAT");
-    const st = await p.evaluate(() => ({ neat: window.__replay.neat(), on: window.__core.g.neatOn, pro: window.__core.g.config.proMode }));
-    check(st.neat && st.on && st.pro === true, "as NEAT, with its player's Pro Mode " + JSON.stringify(st));
+    await p.goto(dev.url + "/?replay=" + og.rid);
+    check(await p.waitForFunction(() => window.__replay && window.__replay.playing(), null, { timeout: 15000 }).then(() => true, () => false), "an OG replay's shared link plays it for a viewer without OG");
+    const st = await p.evaluate(() => ({ exact: window.__replay.neat(), og: window.__core.g.ogOn }));
+    check(!st.exact && st.og, "as the original game " + JSON.stringify(st));
     await p.keyboard.press("Space"); await p.keyboard.press("Space");
     await p.waitForFunction(() => !window.__replay.playing(), null, { timeout: 240000 });
-    check(JSON.stringify(await p.evaluate(() => window.__lastGameEnd)) === JSON.stringify(neat.played), "it ends exactly as the NEAT game did " + JSON.stringify(neat.played));
-    check(await p.evaluate(() => localStorage.getItem("booze-elroy-neat") !== "1" && window.__core.g.config.proMode === false), "and the viewer is back as they were: NEAT off, their own Pro Mode");
+    check(JSON.stringify(await p.evaluate(() => window.__lastGameEnd)) === JSON.stringify(og.played), "it ends exactly as the OG game did " + JSON.stringify(og.played));
+    check(await p.evaluate(() => localStorage.getItem("booze-elroy-og") !== "1" && window.__core.g.ogOn === false), "and the viewer is back as they were: OG off");
     const loop = await (await fetch(dev.url + "/api/scores/replays")).json();
-    check(!loop.replays.some((r) => r.rid === neat.rid), "NEAT replays stay out of the olive's loop");
+    check(!loop.replays.some((r) => r.rid === og.rid), "OG replays stay out of the replay loop");
     await ctx.close();
   }
   await roundTrip("NO THANKS", { ghostCount: 2, difficulty: 2 }, async (p) => { await p.keyboard.press("Enter"); }, () => false, true, true);

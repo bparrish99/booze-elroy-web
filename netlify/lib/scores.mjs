@@ -12,7 +12,7 @@
 import { createHash, timingSafeEqual, randomBytes } from "node:crypto";
 import scorekey from "../../src/scorekey.js";
 
-const { isKey, isBoardKey, isNeat, cleanName, placeOf, MAX_SCORE, BOARD_SIZE } = scorekey;
+const { isKey, isBoardKey, isNeat, NEAT, isOg, OG, cleanName, placeOf, MAX_SCORE, BOARD_SIZE } = scorekey;
 const MAX_BODY = 2048;
 export const json = (status, body) => new Response(JSON.stringify(body), {
   status, headers: { "content-type": "application/json", "cache-control": "no-store" },
@@ -100,8 +100,29 @@ export async function getReplay(req, replays) {
   return r && r.data ? json(200, { replay: r.data, name: (r.metadata && r.metadata.name) || "" }) : json(404, { error: "no such replay" });
 }
 
+// THE SWAP (2026-11-23: NEAT became the default game, the author's original hidden behind "ogelroy"; a fresh start): once, on
+// the first request after the deploy, the original's boards (plain keys) move to "og:<key>" and NEAT's ("neat:<key>") take the
+// plain keys, so arenas, favorites, achievements and the Leaderboards page carry on with the default game unchanged. Nothing
+// is deleted. A marker blob (written only if new: a lock against two instances) makes sure it never runs twice; a reset of
+// every board writes it again. Entries keep their replays (the replay store is apart)
+export const SWAP_MARK = "_swap-og";
+let swapped = false;
+export async function swapForNeat(store) {
+  if (swapped) return;
+  if (await store.get(SWAP_MARK, { type: "json" })) { swapped = true; return; }
+  const lock = await store.setJSON(SWAP_MARK, { state: "running", at: new Date().toISOString() }, { onlyIfNew: true });
+  if (lock && lock.modified === false) { swapped = true; return; } // (another instance is doing it)
+  const keys = (await store.list()).blobs.map((b) => b.key);
+  for (const k of keys.filter(isKey)) { const v = await store.get(k, { type: "json" }); if (v) await store.setJSON(OG + k, v); await store.delete(k); }
+  for (const k of keys.filter((k2) => isNeat(k2) && isKey(k2.slice(NEAT.length)))) { const v = await store.get(k, { type: "json" }); if (v) await store.setJSON(k.slice(NEAT.length), v); await store.delete(k); }
+  await store.setJSON(SWAP_MARK, { state: "done", at: new Date().toISOString() });
+  swapped = true;
+}
+export const resetSwapMemo = () => { swapped = false; }; // (tests: a fresh store)
+
 export async function handle(req, store, opts = {}) {
   const env = opts.env || process.env;
+  if (!opts.noSwap) await swapForNeat(store);
   const failDelay = opts.failDelay === undefined ? 1000 : opts.failDelay;
   const path = new URL(req.url).pathname.replace(/\/+$/, "");
 
@@ -123,6 +144,7 @@ export async function handle(req, store, opts = {}) {
     }
     if (opts.replays) { const { blobs } = await store.list(); for (const b of blobs) if (isBoardKey(b.key)) await dropReplays(opts.replays, await ridsOf(b.key)); }
     await store.deleteAll();
+    await store.setJSON(SWAP_MARK, { state: "done", at: new Date().toISOString() }); // (an empty store: nothing ever to swap again)
     return json(200, { reset: "all" });
   }
 
@@ -149,10 +171,10 @@ export async function handle(req, store, opts = {}) {
 
   if (path.endsWith("/boards")) {
     if (req.method !== "GET") return json(405, { error: "method not allowed" });
-    // (?neat=1: NEAT's boards instead; the regular list never shows them)
-    const neat = new URL(req.url).searchParams.get("neat") === "1";
+    // (?og=1: the original game's boards instead, "ogelroy"; the regular list never shows them)
+    const og = new URL(req.url).searchParams.get("og") === "1";
     const { blobs } = await store.list();
-    const keys = blobs.map((b) => b.key).filter((k) => (neat ? isNeat(k) && isBoardKey(k) : isKey(k)));
+    const keys = blobs.map((b) => b.key).filter((k) => (og ? isOg(k) && isBoardKey(k) : isKey(k)));
     const boards = [];
     for (let i = 0; i < keys.length; i += 25) { // a few reads at a time
       const part = await Promise.all(keys.slice(i, i + 25).map(async (board) => {

@@ -49,6 +49,7 @@
    *  Used by share links (?cfg=<key>). */
   function configFor(s) {
     if (isNeat(s)) s = s.slice(NEAT.length); // (a NEAT board's settings are its plain key's)
+    if (isOg(s)) s = s.slice(OG.length); // (an OG board's too)
     if (!isKey(s)) return null;
     const parts = s.split("."), c = {};
     FIELDS.forEach(([k, vals], i) => { c[k] = vals.find((v) => tok(v) === parts[i]); });
@@ -122,11 +123,17 @@
   // regular ones everywhere: arenas, favorites, picks and accounts only take plain keys (isKey); the score boards take either
   const NEAT = "neat:";
   const isNeat = (s) => typeof s === "string" && s.startsWith(NEAT);
+  // OG ELROY (2026-11-23: NEAT, the arcade-exact game, became the default, the author's original engine hidden behind the
+  // cheat "ogelroy"): the original's boards now are the plain key with "og:" in front, kept out of sight as NEAT's were;
+  // the plain keys are the default (NEAT) game's. The server swapped them once (scores.mjs swapForNeat); "neat:" keys are
+  // only read by that swap now
+  const OG = "og:";
+  const isOg = (s) => typeof s === "string" && s.startsWith(OG);
   // ELROIDS (the space background's easter egg, 2026-11-22): one board of its own, kept out of every list like NEAT's
   // (and BOOZE INVADERS, the second hidden game, 2026-11-22: the same)
   const ELROIDS = "elroids", INVADERS = "invaders", LASTCALL = "lastcall", MINI_BOARDS = [ELROIDS, INVADERS, LASTCALL];
   /** a score board's key: a plain one, a NEAT one, or a hidden game's */
-  const isBoardKey = (s) => isKey(s) || (isNeat(s) && isKey(s.slice(NEAT.length))) || MINI_BOARDS.includes(s);
+  const isBoardKey = (s) => isKey(s) || (isOg(s) && isKey(s.slice(OG.length))) || (isNeat(s) && isKey(s.slice(NEAT.length))) || MINI_BOARDS.includes(s);
   /** true if s is a well-formed board key */
   function isKey(s) {
     if (typeof s !== "string" || s.length > 100) return false;
@@ -155,5 +162,5 @@
     return i < BOARD_SIZE ? i : -1;
   }
 
-  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, isBoardKey, isNeat, NEAT, ELROIDS, INVADERS, LASTCALL, MINI_BOARDS, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
+  return { FIELDS, keyFor, configFor, shareCode, configFromCode, COMBOS, isKey, isBoardKey, isNeat, NEAT, isOg, OG, ELROIDS, INVADERS, LASTCALL, MINI_BOARDS, cleanName, placeOf, NAME_MAX, NAME_CHARS, MAX_SCORE, BOARD_SIZE };
 });

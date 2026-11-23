@@ -408,14 +408,14 @@ try {
   check(await p.evaluate(() => !/not logged in/.test(document.getElementById("log").textContent) && document.getElementById("anon").textContent === "Show anonymous"), "activity page: \"Hide anonymous\" hides logged-out players");
   await p.click("#anon");
   check(/played ghosts 7/.test(await p.evaluate(() => document.getElementById("log").textContent)), "activity page: and \"Show anonymous\" brings them back");
-  // NEAT's games and scores: a log of their own, behind a button (the regular log to start)
-  await p.evaluate(() => fetch("/api/account/anonplayed", { method: "POST", body: JSON.stringify({ settings: "NEAT  classic Pac-Man", arena: "" }) }));
+  // OG ELROY's games and scores (the original game, "ogelroy"): a log of their own, behind a button (the regular log to start)
+  await p.evaluate(() => fetch("/api/account/anonplayed", { method: "POST", body: JSON.stringify({ settings: "OG  classic Pac-Man", arena: "" }) }));
   await p.click("#reload"); await p.waitForTimeout(600);
-  check(await p.evaluate(() => !/NEAT/.test(document.getElementById("log").textContent) && /ghosts 7/.test(document.getElementById("log").textContent) && document.getElementById("neat").textContent === "Show NEAT"), "activity page: NEAT games stay out of the regular log");
+  check(await p.evaluate(() => !/played OG/.test(document.getElementById("log").textContent) && /ghosts 7/.test(document.getElementById("log").textContent) && document.getElementById("neat").textContent === "Show OG"), "activity page: OG games stay out of the regular log");
   await p.click("#neat");
-  check(await p.evaluate(() => /played NEAT {2}classic Pac-Man/.test(document.getElementById("log").textContent) && !/ghosts 7/.test(document.getElementById("log").textContent) && document.getElementById("logHead").textContent === "NEAT ACTIVITY"), "activity page: \"Show NEAT\" shows only NEAT's log");
+  check(await p.evaluate(() => /played OG {2}classic Pac-Man/.test(document.getElementById("log").textContent) && !/ghosts 7/.test(document.getElementById("log").textContent) && document.getElementById("logHead").textContent === "OG ACTIVITY"), "activity page: \"Show OG\" shows only OG's log");
   await p.click("#neat");
-  check(await p.evaluate(() => !/NEAT/.test(document.getElementById("log").textContent)), "activity page: and \"Show normal\" goes back");
+  check(await p.evaluate(() => !/played OG/.test(document.getElementById("log").textContent)), "activity page: and \"Show normal\" goes back");
   // auto-refresh: a new signup shows up (lit), and the "updated" line says it's live
   await p.evaluate(() => fetch("/api/account/signup", { method: "POST", body: JSON.stringify({ name: "night owl", password: "hoot" }) }));
   await p.evaluate(() => window.__refresh());

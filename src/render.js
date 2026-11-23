@@ -560,7 +560,7 @@
     function drawHeader() {
       print("1up", 3, 0); print("high score", 9, 0);
       print(core.formatScore(g.score || 0), 0, 1, 0);
-      if (g.neatOn) print("neat", 24, 1, 6); // NEAT (the "neat" cheat): its sticker, where 2UP's score would be
+      if (g.ogOn) print("og", 26, 1, 6); // OG ELROY (the "ogelroy" cheat: the original game; NEAT, the arcade-exact one, is the default): where 2UP's score would be
       drawHighScore();
       drawAccount();
     }
@@ -632,7 +632,6 @@
         drawMenu(core.attractMenu, 6, 23, 1);
         print("credits", 14 - "credits".length / 2, 35, 2); // (it said "web edition"; the author, 2026-11-15: the credits link, same pink)
         drawPicks();
-        drawNeat();
       }
       if (g.mode === "restart" && core.mode.isStarted("restart") && g.ghosts) {
         ctx.save(); ctx.translate(0, -TILE); maskShift = -TILE; // the intro a tile higher too (the vector look's text mask with it)
@@ -978,9 +977,8 @@
     // web edition: "credits" on the title opens the credits; "pinback's picks" (the sign right of the menu) opens the picks
     const TITLE_LINKS = [{ x0: 76, y0: 276, x1: 148, y1: 288, scene: "credits" }];
     const creditsLinks = () => (g.scene.name === "credits" ? LINKS : g.scene.name === "attract" && g.state && g.state.showHelperText
-      ? [...TITLE_LINKS, ...(picksBox ? [picksBox] : []), ...(neatBox ? [neatBox] : []), ...(martiniBox ? [martiniBox] : [])] : g.scene.links || []);
+      ? [...TITLE_LINKS, ...(picksBox ? [picksBox] : []), ...(martiniBox ? [martiniBox] : [])] : g.scene.links || []);
     let martiniBox = null, martiniAction = null; // (the martini in the title's banner: see drawAttract)
-    let neatBox = null, neatAction = null; // (the "neat!" sticker, lower left of the title: see drawNeat)
 
     // "PINBACK'S PICKS" (the author, 2026-11-15; the one place the font leaves the grid): the game font, smaller, on a
     // jaunty angle right of the main menu, level with FAVORITES, rocking gently, a colour a line with a white shine
@@ -1020,22 +1018,6 @@
       ctx.imageSmoothingEnabled = false;
       ctx.restore();
       picksBox = { x0: PICKS_X - 38, y0: PICKS_Y - 24, x1: PICKS_X + 36, y1: PICKS_Y + 16, scene: "picks" };
-    }
-    // "NEAT!" (the author, 2026-11-22): a sticker in the title's lower left, the picks sign's small font, tilted the other
-    // way and rocking out of step with it, a white shine passing now and then; a click / tap opens the NEAT page (main.js
-    // openNeat, set by setNeat). Render only
-    const NEAT_X = 32, NEAT_Y = 268, NEAT_ANGLE = 0.2;
-    function drawNeat() {
-      if (!neatAction) { neatBox = null; return; }
-      const t = performance.now() / 1000, shine = ((t % 4.2) / 4.2) * 12 - 3, ang = NEAT_ANGLE + Math.sin(t * 1.3 + 1) * 0.08;
-      ctx.save();
-      ctx.translate(NEAT_X, NEAT_Y); ctx.rotate(ang); ctx.scale(PICKS_SCALE, PICKS_SCALE);
-      ctx.imageSmoothingEnabled = true; ctx.globalAlpha = 1;
-      const word = "neat!";
-      for (let i = 0; i < word.length; i++) picksGlyph(word[i], Math.abs(i - shine) < 0.8 ? 0 : 6, -word.length * 4 + i * 8, -4);
-      ctx.imageSmoothingEnabled = false;
-      ctx.restore();
-      neatBox = { x0: NEAT_X - 26, y0: NEAT_Y - 12, x1: NEAT_X + 26, y1: NEAT_Y + 12, action: neatAction };
     }
 
     function drawCredits() {
@@ -1362,7 +1344,7 @@
     let drawCount = 0; const SHAKE_EVERY = 2, SHAKE_PX = 0.5; // (a new offset every other frame, half a pixel at most: the author tried 1, 2 and 3 frames and a whole pixel)
     function draw() {
       drawCount += 1;
-      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; neatBox = null; martiniBox = null; film = false; backdrop = null;
+      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; martiniBox = null; film = false; backdrop = null;
       if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
       masking = g.config.crtEffect === "vector";
       const scene = g.scene.name;
@@ -1455,7 +1437,7 @@
     // with the game's font, so every look takes it
     function drawWith(paint, bgName) {
       drawCount += 1;
-      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; neatBox = null; martiniBox = null; film = false; backdrop = null;
+      ctx.globalAlpha = 1; oyBlock = null; accountBox = null; picksBox = null; martiniBox = null; film = false; backdrop = null;
       if (masking || g.config.crtEffect === "vector") mctx.clearRect(0, 0, GW, GH);
       masking = g.config.crtEffect === "vector";
       clearScreen();
@@ -1494,7 +1476,7 @@
     };
     function saucer() { const L = living.space; return L && L.drawn === drawCount ? L.saucer() : null; }
     const quietSaucer = (q) => { saucerQuiet = !!q; };
-    return { screen, textMask, draw, drawWith, saucer, quietSaucer, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, setRave: (r) => { rave = r; }, setReplay: (f) => { replayInfo = f; }, setMartini: (f) => { martiniAction = f; }, setNeat: (f) => { neatAction = f; }, setLarry: (f) => { larryAction = f; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
+    return { screen, textMask, draw, drawWith, saucer, quietSaucer, filmOn: () => film, backdrop: () => backdrop, setDebug: (on) => { debug = !!on; }, setRave: (r) => { rave = r; }, setReplay: (f) => { replayInfo = f; }, setMartini: (f) => { martiniAction = f; }, setLarry: (f) => { larryAction = f; }, ghostColor, print, drawSprite, drawChar, ctx, GW, GH, menuLayout, creditsLinks, oyBlock: () => oyBlock,
       // account corner: fn() -> the logged-in name or null (fn.online false: no corner); hot = under the mouse
       setAccount(fn, online) { accountName = fn; accountOnline = !!online; }, accountBox: () => accountBox, setAccountHot(h) { accountHot = !!h; } };
   }

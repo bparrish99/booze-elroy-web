@@ -69,13 +69,14 @@ tr.new td{animation:glow 6s ease-out}
   // logged-out players (games and scores): shown to start, a button hides them (the author, 2026-11-20)
   let hideAnon = false;
   const isAnon = (e) => /^anon/.test(e.type);
-  // NEAT (the author's arcade-exact game, 2026-11-22): its games and scores are a log of their own, a button away (the
-  // regular log to start); they're told by their settings, which start "NEAT"
-  let neat = false;
+  // OG ELROY (2026-11-23: the arcade-exact game, NEAT, became the default; the author's original is behind "ogelroy"): its
+  // games and scores are a log of their own, a button away (the regular log to start); they're told by their settings,
+  // which start "OG". (Older entries starting "NEAT" were the exact game, now the default: they're in the regular log)
+  let neat = false; // (the OG log on show)
   const isNeat = (e) => {
     if (!/^(anon)?(game|score)$/.test(e.type)) return false;
     let d; try { d = JSON.parse(e.detail); } catch { return false; }
-    return Array.isArray(d) && /^NEAT /.test(String(d[/score$/.test(e.type) ? 2 : 0]));
+    return Array.isArray(d) && /^OG /.test(String(d[/score$/.test(e.type) ? 2 : 0]));
   };
   // auto-refresh: every 30 s (and at once when the tab comes back); events not seen before light up, and while the tab
   // is in the background the title counts them
@@ -131,8 +132,8 @@ tr.new td{animation:glow 6s ease-out}
     $("clear").hidden = !who;
     $("pinback").textContent = HIDE.size ? "Show PINBACK" : "Hide PINBACK";
     $("anon").textContent = hideAnon ? "Show anonymous" : "Hide anonymous";
-    $("neat").textContent = neat ? "Show normal" : "Show NEAT";
-    $("logHead").textContent = neat ? "NEAT ACTIVITY" : "ACTIVITY";
+    $("neat").textContent = neat ? "Show normal" : "Show OG";
+    $("logHead").textContent = neat ? "OG ACTIVITY" : "ACTIVITY";
     // a player picked: their achievements, earned / all, then the earned ones in the game's order with the date
     const mine = who && data.achievements ? data.achievements[who] || {} : null, ids = Object.keys(ACH);
     $("achBox").hidden = !mine;

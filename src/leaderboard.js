@@ -83,9 +83,10 @@
       let d = null; try { d = await r.json(); } catch { /* ignore */ }
       return { ok: r.ok, status: r.status, data: d };
     }
-    // (NEAT, opts.neat: its own boards, the same settings' key with "neat:" in front; never seen by anyone else)
-    const neatOn = () => !!(opts.neat && opts.neat());
-    const currentKey = () => { const k = SK.keyFor(g.config); return k && neatOn() ? SK.NEAT + k : k; };
+    // (OG ELROY, opts.og: the original game, "ogelroy"; its own boards, the same settings' key with "og:" in front, out of
+    // everyone else's sight. Since 2026-11-23 the default game is NEAT, the arcade-exact one, on the plain keys)
+    const ogOn = () => !!(opts.og && opts.og());
+    const currentKey = () => { const k = SK.keyFor(g.config); return k && ogOn() ? SK.OG + k : k; };
     const taken = (r) => !!(r && r.status === 403 && r.data && r.data.error === "name taken");
 
     // ---------------------------------------------------------------- header high score per configuration
@@ -269,16 +270,16 @@
     const wakka = () => { if (g.wakka) { sfx("wakka2"); g.wakka = false; } else { sfx("wakka1"); g.wakka = true; } };
 
     // every board that has scores (the Leaderboards page flips through them), from GET /api/scores/boards
-    // (NEAT: its own list, ?neat=1; switching NEAT on or off fetches the other)
-    const boardList = { status: api ? "loading" : "error", boards: [], p: null, neat: false };
+    // (OG: its own list, ?og=1; switching it on or off fetches the other)
+    const boardList = { status: api ? "loading" : "error", boards: [], p: null, og: false };
     function loadBoardList() {
       if (!api) return Promise.resolve(boardList);
-      const neat = neatOn();
-      if (boardList.neat !== neat) { boardList.neat = neat; boardList.boards = []; boardList.status = "loading"; boardList.p = null; }
+      const og = ogOn();
+      if (boardList.og !== og) { boardList.og = og; boardList.boards = []; boardList.status = "loading"; boardList.p = null; }
       if (boardList.p) return boardList.p;
-      boardList.p = fetchFn(api + "/boards" + (neat ? "?neat=1" : ""), { cache: "no-store" })
+      boardList.p = fetchFn(api + "/boards" + (og ? "?og=1" : ""), { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
-        .then((d) => { if (boardList.neat !== neat) return; boardList.boards = (d.boards || []).filter((b) => (neat ? SK.isNeat(b.board) && SK.isBoardKey(b.board) : SK.isKey(b.board))); boardList.status = "ok"; })
+        .then((d) => { if (boardList.og !== og) return; boardList.boards = (d.boards || []).filter((b) => (og ? SK.isOg(b.board) && SK.isBoardKey(b.board) : SK.isKey(b.board))); boardList.status = "ok"; })
         .catch(() => { if (boardList.status !== "ok") boardList.status = "error"; })
         .finally(() => { boardList.p = null; });
       return boardList.p;
@@ -720,9 +721,9 @@
     // a score placed on a regular board: opts.placed({ key, rank, score, settings, isDefault, first }) (achievements and the
     // activity log; settings: a one-line summary; first: the board's first ever score)
     const placed = (key, rank, entries, score) => {
-      if (rank && opts.placed && !SK.isNeat(key)) opts.placed({ key, rank, score, settings: summary(200, SK.configFor(key)).join("  "), isDefault: key === SK.keyFor(g.defaultConfig), first: rank === 1 && entries.length === 1 });
-      // (a NEAT board: no achievements, only the activity page's NEAT log)
-      if (rank && opts.neatPlaced && SK.isNeat(key)) opts.neatPlaced({ key, rank, score, settings: "NEAT  " + summary(200, SK.configFor(key)).join("  ") });
+      if (rank && opts.placed && !SK.isOg(key)) opts.placed({ key, rank, score, settings: summary(200, SK.configFor(key)).join("  "), isDefault: key === SK.keyFor(g.defaultConfig), first: rank === 1 && entries.length === 1 });
+      // (an OG board: no achievements, only the activity page's OG log)
+      if (rank && opts.ogPlaced && SK.isOg(key)) opts.ogPlaced({ key, rank, score, settings: "OG  " + summary(200, SK.configFor(key)).join("  ") });
     };
     const neMenu = [];
     GRID.forEach((row, r) => { for (let c = 0; c < row.length; c++) neMenu.push({ text: row[c], char: row[c], x: GRID_X + c * 2, y: GRID_Y + r * 2 }); });
@@ -830,7 +831,7 @@
         if (this.arenaId) return this.submitArena(name);
         let res = null;
         const replay = this.keepReplay && opts.replay ? await opts.replay(this.score) : null; // (its replay goes up with it, unless the player said no: kept if it places)
-        const body = { board: this.key, name, score: this.score, settings: (SK.isNeat(this.key) ? "NEAT  " : "") + summary(200, SK.configFor(this.key)).join("  ") };
+        const body = { board: this.key, name, score: this.score, settings: (SK.isOg(this.key) ? "OG  " : "") + summary(200, SK.configFor(this.key)).join("  ") };
         try { res = await post("", { ...body, ...(replay ? { replay } : {}) }); } catch { res = null; }
         // a replay must never cost a score: refused with one, the score goes again without it
         if (replay && res && (res.status === 400 || res.status === 413)) { try { res = await post("", body); } catch { res = null; } }
@@ -883,7 +884,7 @@
         const again = async (send, body) => { let r = await send(replay ? { ...body, replay } : body).catch(() => null); if (replay && r && (r.status === 400 || r.status === 413)) r = await send(body).catch(() => null); return r; };
         const [ar, gr] = await Promise.all([
           again((b) => post2(arenaApi + "/score", b), { id: this.arenaId, name, score: this.score }),
-          again((b) => post("", b), { board: this.key, name, score: this.score, settings: (SK.isNeat(this.key) ? "NEAT  " : "") + summary(200, SK.configFor(this.key)).join("  ") }),
+          again((b) => post("", b), { board: this.key, name, score: this.score, settings: (SK.isOg(this.key) ? "OG  " : "") + summary(200, SK.configFor(this.key)).join("  ") }),
         ]);
         if (taken(ar) || taken(gr)) return this.taken(name);
         if (gr && gr.ok && gr.data) { boards.set(this.key, { status: "ok", entries: gr.data.entries || [], at: performance.now() }); placed(this.key, gr.data.rank, gr.data.entries || [], this.score); }
@@ -904,7 +905,7 @@
     function afterGameOver(score, testMode) {
       // test mode (xyzzy) shows what the ghosts are up to: its games stay off the boards and arenas (the author, 2026-11-16)
       if (testMode) return !ownConfig ? null : playingBoard ? borrowHome : "arena"; // (silently: the author)
-      if (neatOn() && ownConfig && !playingBoard) return "arena"; // (NEAT: never an arena's, silently; the author, 2026-11-22)
+      if (ogOn() && ownConfig && !playingBoard) return "arena"; // (OG: never an arena's, silently, as NEAT's weren't before it became the default)
       if (ownConfig && !playingBoard) return afterArenaGame(score);
       // a game borrowed from the Leaderboards page ends back on that board
       return afterBoardGame(score) || (playingBoard ? borrowHome : null);
