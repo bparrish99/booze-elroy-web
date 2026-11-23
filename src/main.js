@@ -532,7 +532,7 @@
       const pw = rsForm.elements.password.value;
       if (!pw) { rsMsg.textContent = "Enter the password."; return; }
       rsMsg.textContent = rsMode === "arena" ? "Deleting…" : "Resetting…";
-      const res = rsMode === "arena" ? await LB.deleteArena(pw) : rsMode === "mini" ? await LB.resetBoard(pw, MINI_META[curMiniName].board) : await LB.reset(pw, rsForm.elements.scope.value === "all");
+      const res = rsMode === "arena" ? await LB.deleteArena(pw) : rsMode === "mini" ? await LB.resetBoard(pw, MINI_META[curMiniName].board) : await LB.reset(pw, rsForm.elements.scope.value); // ("board", "main" or "all")
       if (res.ok) { rsMsg.textContent = "Done."; if (rsMode === "mini" && curMini && curMini.refreshBoard) curMini.refreshBoard(); setTimeout(() => rs.close(), 900); }
       else rsMsg.textContent = res.status === 403 ? "Wrong password." : res.status === 503 ? "Reset isn't set up on the server." : res.status === 0 ? "Can't reach the leaderboard server." : "Reset failed (" + res.status + ").";
     });

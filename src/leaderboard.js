@@ -47,6 +47,20 @@
       set(k, v) { try { storage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } },
     };
     const BESTS = "booze-elroy-highscores", NAME = "booze-elroy-name";
+    // the swap, in this browser too (2026-11-23): its own bests are kept by board key, and when NEAT became the default the
+    // server moved the boards (the original's to og:, NEAT's to the plain keys) but each browser kept its bests where they
+    // were, so the header showed the original game's best on the NEAT board (Beefart: "a score he did not get"). Once per
+    // browser: plain -> og:, neat: -> plain (the better of the two if both)
+    const BESTS_SWAP = "booze-elroy-bests-swapped";
+    if (!store.get(BESTS_SWAP, false)) {
+      const old = store.get(BESTS, {}), next = {};
+      for (const [k, v] of Object.entries(old && typeof old === "object" ? old : {})) {
+        if (SK.isKey(k)) next[SK.OG + k] = Math.max(next[SK.OG + k] || 0, v);
+        else if (SK.isNeat(k)) { const p = k.slice(SK.NEAT.length); next[p] = Math.max(next[p] || 0, v); }
+        else next[k] = Math.max(next[k] || 0, v);
+      }
+      store.set(BESTS, next); store.set(BESTS_SWAP, true);
+    }
     // the name to fill in next time: logged out, the last one typed; logged in, the last one this account put on a board
     // (a player asked, 2026-11-16: people who post under a fun name want it again, not their login), kept per account
     const loginName = () => (opts.playerName && opts.playerName()) || null;
@@ -968,13 +982,20 @@
       if (!api || !SK.isBoardKey(key)) return { ok: false, status: 0 };
       try { return await post("/reset", { password, board: key }); } catch { return { ok: false, status: 0 }; }
     }
-    async function reset(password, allBoards) {
+    // scope: "board" (the current settings'), "main" (every board of the default game: the OG archive and the hidden games'
+    // stay) or "all" (everything); true / false still mean all / board
+    async function reset(password, scope) {
       if (!api) return { ok: false, status: 0 };
+      if (scope === true) scope = "all"; else if (!scope) scope = "board";
       const key = currentKey();
       let res;
-      try { res = await post("/reset", allBoards ? { password } : { password, board: key }); } catch { return { ok: false, status: 0 }; }
+      try { res = await post("/reset", scope === "all" ? { password } : scope === "main" ? { password, scope: "main" } : { password, board: key }); } catch { return { ok: false, status: 0 }; }
       if (res.ok) {
-        if (allBoards) { store.set(BESTS, {}); boards.clear(); }
+        if (scope === "all") { store.set(BESTS, {}); boards.clear(); }
+        else if (scope === "main") { // (this browser's own bests for those boards go too)
+          const bests = store.get(BESTS, {}); for (const k of Object.keys(bests)) if (SK.isKey(k)) delete bests[k]; store.set(BESTS, bests);
+          for (const k of [...boards.keys()]) if (SK.isKey(k)) boards.delete(k);
+        }
         else { const bests = store.get(BESTS, {}); delete bests[key]; store.set(BESTS, bests); boards.delete(key); }
         try { storage.removeItem("booze-elroy-highscore"); } catch { /* ignore */ }
         load(key, true);

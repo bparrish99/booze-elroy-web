@@ -379,6 +379,21 @@ try {
     check(await g("g.scene.key") === plain, "OG off: the Leaderboards page is back on the default game's board");
     await ev(() => window.__core.setScene("attract"));
   }
+  // the swap in a browser that played before it (Beefart, 2026-11-23: the header showed his original-game best on the NEAT
+  // board): its own bests move once like the boards did, plain -> og:, neat: -> plain
+  {
+    const CLASSIC = "pac.0.f.f.f.3.1.f.0.4.t.f.f";
+    const ctx3 = await b.newContext({ viewport: { width: 672, height: 864 } }), q = await ctx3.newPage(); q.on("pageerror", (e) => errs.push(e.message));
+    await q.addInitScript((k) => { if (!localStorage.getItem("booze-elroy-bests-swapped")) localStorage.setItem("booze-elroy-highscores", JSON.stringify({ [k]: 9999990, ["neat:" + k]: 1234560 })); }, CLASSIC);
+    await q.goto(dev.url + "/"); await q.waitForTimeout(1500);
+    const bests = await q.evaluate(() => JSON.parse(localStorage.getItem("booze-elroy-highscores")));
+    check(bests["og:" + CLASSIC] === 9999990 && bests[CLASSIC] === 1234560 && !bests["neat:" + CLASSIC], "a browser's old bests move once: the original's to og:, NEAT's to the plain key " + JSON.stringify(bests));
+    await q.evaluate(() => window.__core.setScene("leaderboard")); await q.waitForTimeout(800); await q.evaluate(() => window.__core.setScene("attract")); await q.waitForTimeout(800);
+    check(await q.evaluate(() => window.__core.g.highScore) !== 9999990, "the header no longer shows the original game's best on the default game (" + await q.evaluate(() => window.__core.g.highScore) + ")");
+    await q.reload(); await q.waitForTimeout(1200);
+    check(JSON.stringify(await q.evaluate(() => JSON.parse(localStorage.getItem("booze-elroy-highscores")))) === JSON.stringify(bests), "and only once (a reload changes nothing)");
+    await ctx3.close();
+  }
   check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.join(" | ") : ""));
 } finally {
   await b.close(); await dev.stop(); rmSync(blobsDir, { recursive: true, force: true });

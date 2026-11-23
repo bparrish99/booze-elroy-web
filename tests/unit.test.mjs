@@ -687,6 +687,26 @@ test("OG boards: the original game's own (og:<key>), never in the regular board 
   await call("POST", "/api/scores/reset", { password: "correct horse" });
 });
 
+test("reset scope main: every board of the default game and their replays; the OG archive and the hidden games stay", async () => {
+  const SK = createRequire(import.meta.url)("../src/scorekey.js");
+  const B = "pac.0.f.f.f.3.1.f.0.4.t.f.f", C = "pac.1.t.f.f.3.1.f.0.4.t.f.f", R = blobs.replayStore;
+  const call = (method, path, body) => handle(new Request("http://x" + path, { method, body: body === undefined ? undefined : JSON.stringify(body) }), blobs.store, { env, failDelay: 0, replays: R }).then(async (r) => ({ status: r.status, data: await r.json() }));
+  await call("POST", "/api/scores/reset", { password: "correct horse" });
+  const main = await call("POST", "/api/scores", { board: B, name: "neato", score: 900, replay: "js:{\"n\":1}" });
+  await call("POST", "/api/scores", { board: C, name: "neato2", score: 800 });
+  await call("POST", "/api/scores", { board: SK.OG + B, name: "original", score: 700 });
+  await call("POST", "/api/scores", { board: SK.ELROIDS, name: "rocker", score: 600 });
+  assert.equal((await call("POST", "/api/scores/reset", { password: "wrong", scope: "main" })).status, 403, "the password, as ever");
+  const r = await call("POST", "/api/scores/reset", { password: "correct horse", scope: "main" });
+  assert.deepEqual(r.data, { reset: "main", boards: 2 });
+  assert.equal((await call("GET", "/api/scores?board=" + B)).data.entries.length, 0, "the main boards are empty");
+  assert.equal((await call("GET", "/api/scores?board=" + C)).data.entries.length, 0);
+  assert.equal(await R.get("r/" + main.data.entries[0].rid), null, "their replays gone");
+  assert.deepEqual((await call("GET", "/api/scores?board=" + encodeURIComponent(SK.OG + B))).data.entries.map((e) => e.name), ["ORIGINAL"], "the OG archive stays");
+  assert.deepEqual((await call("GET", "/api/scores?board=elroids")).data.entries.map((e) => e.name), ["ROCKER"], "the hidden games' boards stay");
+  await call("POST", "/api/scores/reset", { password: "correct horse" });
+});
+
 test("the swap (2026-11-23, NEAT became the default): once, the original's boards move to og:, NEAT's take the plain keys; never twice", async () => {
   const SK = createRequire(import.meta.url)("../src/scorekey.js");
   const B = "pac.0.f.f.f.3.1.f.0.4.t.f.f", C = "pac.1.t.f.f.3.1.f.0.4.t.f.f", st = blobs.store;

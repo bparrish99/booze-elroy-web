@@ -5,7 +5,7 @@
 //   POST /api/scores        { board, name, score }    -> { board, entries, rank }   (rank null: didn't make the top 10)
 //        403 "name taken": the name is an account's and the request isn't logged in as it (opts.nameCheck)
 //   GET  /api/scores/boards                           -> { boards: [{ board, count, top: { name, score } }] }  (every board with scores)
-//   POST /api/scores/reset  { password, board? }      -> { reset: "all" | <key> }    (needs LEADERBOARD_ADMIN_PASSWORD)
+//   POST /api/scores/reset  { password, board? | scope: "main" }  -> { reset: "all" | "main" | <key> }    (needs LEADERBOARD_ADMIN_PASSWORD)
 //
 // Trust-the-client: scores aren't verified, only checked for shape. Each board is one JSON blob; writes are
 // conditional on the blob's ETag so two simultaneous submissions to the same board can't drop each other.
@@ -141,6 +141,13 @@ export async function handle(req, store, opts = {}) {
       await dropReplays(opts.replays, await ridsOf(body.board));
       await store.delete(body.board);
       return json(200, { reset: body.board });
+    }
+    // { scope: "main" }: every board of the default game (the plain keys) and their replays; the OG archive and the hidden
+    // games' boards stay (the author, 2026-11-23: a fresh start for the main boards without losing the original's scores)
+    if (body.scope === "main") {
+      const keys = (await store.list()).blobs.map((b) => b.key).filter(isKey);
+      for (const k of keys) { await dropReplays(opts.replays, await ridsOf(k)); await store.delete(k); }
+      return json(200, { reset: "main", boards: keys.length });
     }
     if (opts.replays) { const { blobs } = await store.list(); for (const b of blobs) if (isBoardKey(b.key)) await dropReplays(opts.replays, await ridsOf(b.key)); }
     await store.deleteAll();
