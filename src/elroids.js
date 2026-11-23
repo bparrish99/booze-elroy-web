@@ -18,6 +18,8 @@
   const SHIP_R = 5, GHOST_R = 6, SHOT_SPEED = 3.4, SHOT_LIFE = 52, MAX_SHOTS = 5, EXTRA_EVERY = 10000;
   const YELLOW = "#ffff00", ROCK_COL = "#7d93ff", DOT_COL = "#ffb8ae", BLUE = "#2121ff";
   const BEST_KEY = "booze-elroy-elroids-best";
+  const ENERGIZER_CHANCE = 0.12; // (the chance a middle-sized rock's break gives an energizer as one of its pieces)
+  const ENERGIZER_LIFE = 240; // (4 s, fading out over the last 1.5: grab it quick; 10 s had no urgency, the author)
   // ENRAGED (the author: no hanging about with one rock left, shooting Elroy for ever): 45 s into a wave (time alone, the
   // author), he flies into a rage for the rest of it: faster, steering harder, martinis three times as often (every third
   // throw a spread of three), back a couple of seconds after he's shot, red-hot and scowling
@@ -26,9 +28,10 @@
   function create(opts) {
     const audio = opts.audio, ghostColor = (n) => { try { return opts.ghostColor(n) || GHOST_FALLBACK[n]; } catch { return GHOST_FALLBACK[n]; } };
     let on = false, phase = "ready", t = 0, paused = false;
-    let ship, shots, rocks, ghost, drinks, popups = [], flash = 0, energizer, bits, score, lives, wave, nextExtra, ghostAt, energizerAt, ghostChain, warpWait = 0, waveT = 0, rage = false;
+    let ship, shots, rocks, ghost, drinks, popups = [], flash = 0, energizer, bits, score, lives, wave, nextExtra, ghostAt, ghostChain, warpWait = 0, waveT = 0, rage = false;
     let best = 0; try { best = parseInt(localStorage.getItem(BEST_KEY), 10) || 0; } catch { /* ignore */ }
     const held = {};
+    let eggChance = ENERGIZER_CHANCE; // (tests can raise it)
     // the leaderboard (opts.board, main.js: one board, "elroids"): its top 10, loaded as a game starts and shown on its game
     // over; a score that places asks for a name (a dialog) and goes up
     let board = null, myRank = null, asking = false;
@@ -99,6 +102,13 @@
         o.connect(gn); gn.connect(out()); o.start(n + d); o.stop(n + d + 0.3);
       }
     }
+    function tone2(f0, f1, len, v) { // the shield popping: a bright falling "bwoom"
+      if (!ctx || !out()) return;
+      const n = ctx.currentTime, o = ctx.createOscillator(), gn = ctx.createGain();
+      o.type = "triangle"; o.frequency.setValueAtTime(f0, n); o.frequency.exponentialRampToValueAtTime(f1, n + len);
+      gn.gain.setValueAtTime(0.0001, n); gn.gain.exponentialRampToValueAtTime(v * vol(), n + 0.01); gn.gain.exponentialRampToValueAtTime(0.0005, n + len);
+      o.connect(gn); gn.connect(out()); o.start(n); o.stop(n + len + 0.02);
+    }
     function blink() { // a warp: a rising sweep
       if (!ctx || !out()) return;
       const n = ctx.currentTime, o = ctx.createOscillator(), gn = ctx.createGain();
@@ -137,7 +147,7 @@
     }
 
     // ------------------------------------------------------------------ the game
-    function newShip() { return { x: W / 2, y: H / 2 + 8, vx: 0, vy: 0, a: -Math.PI / 2, alive: true, safe: 120, gone: 0, mouth: 0.5, thrust: false }; }
+    function newShip() { return { x: W / 2, y: H / 2 + 8, vx: 0, vy: 0, a: -Math.PI / 2, alive: true, safe: 120, gone: 0, mouth: 0.5, thrust: false, shield: false, grace: 0 }; }
     function rock(size, x, y, speed) {
       const n = Math.floor(rnd(7, 11)), shape = Array.from({ length: n }, () => (Math.random() < 0.3 ? rnd(0.55, 0.75) : rnd(0.85, 1.15))), a = rnd(0, TAU), v = ROCK[size].v * speed * rnd(0.7, 1.25);
       return { size, x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, rot: rnd(0, TAU), spin: rnd(-0.03, 0.03), shape };
@@ -150,7 +160,7 @@
         let x, y; do { x = rnd(0, W); y = rnd(0, H); } while (dist2({ x, y }, ship) < 75 * 75);
         rocks.push(rock(3, x, y, speedUp()));
       }
-      ghostAt = Math.max(240, 600 - wave * 40); energizerAt = ghostAt + 420;
+      ghostAt = Math.max(240, 600 - wave * 40);
     }
     function newGame() {
       loadBoard(); myRank = null;
@@ -169,7 +179,32 @@
     function breakRock(i) {
       const r = rocks[i]; rocks.splice(i, 1);
       addScore(ROCK[r.size].pts); crunch(r.size); burst(r.x, r.y, 4 + r.size * 3, ROCK_COL);
-      if (r.size > 1) for (let k = 0; k < 2; k++) rocks.push(rock(r.size - 1, r.x, r.y, speedUp()));
+      const kids = [];
+      // a middle-sized rock breaking into the smallest: now and then one of its pieces is an energizer, drifting off along
+      // that piece's path (the author: no more energizers turning up on a timer)
+      const egg = r.size === 2 && !energizer && Math.random() < eggChance;
+      if (r.size > 1) for (let k = 0; k < 2; k++) {
+        const kid = rock(r.size - 1, r.x, r.y, speedUp());
+        if (egg && k === 1) { energizer = { x: r.x, y: r.y, vx: kid.vx, vy: kid.vy, life: ENERGIZER_LIFE }; continue; }
+        rocks.push(kid); kids.push(kid);
+      }
+      return kids;
+    }
+    // THE SHIELD (the author, 2026-11-22): an energizer also puts a shimmering shield round Pac-Man that saves him once. A rock
+    // that hits it breaks as if shot and the two bounce apart; anything else (a martini, Elroy) just pops it. Then a moment's
+    // grace (not the respawn blink) so the pieces can't catch him the instant it's gone. -> true if it took the hit
+    function shieldTakes(from) {
+      if (!ship.shield) return false;
+      ship.shield = false; ship.grace = 30;
+      tone2(980, 180, 0.35, 0.09);
+      for (let i = 0; i < 16; i++) { const a = i / 16 * TAU, v = rnd(0.8, 1.6); bits.push({ x: ship.x + Math.cos(a) * 9, y: ship.y + Math.sin(a) * 9, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(18, 32), col: `hsl(${(i * 23 + t * 6) % 360},100%,70%)` }); }
+      if (from) { // bounce apart: Pac-Man off it, it (or its pieces) off him
+        let nx = near(ship.x - from.x, W), ny = near(ship.y - from.y, H); const d = Math.hypot(nx, ny) || 1; nx /= d; ny /= d;
+        const dot = ship.vx * nx + ship.vy * ny; if (dot < 0) { ship.vx -= 2 * dot * nx; ship.vy -= 2 * dot * ny; }
+        ship.vx += nx * 1.1; ship.vy += ny * 1.1;
+        return { nx, ny };
+      }
+      return true;
     }
     function killShip() {
       ship.alive = false; ship.gone = 0; thrustSound(false);
@@ -228,6 +263,7 @@
           const sp = Math.hypot(ship.vx, ship.vy); if (sp > 3.3) { ship.vx *= 3.3 / sp; ship.vy *= 3.3 / sp; }
           ship.x = wrap(ship.x + ship.vx, W); ship.y = wrap(ship.y + ship.vy, H);
           if (ship.safe > 0) ship.safe -= 1;
+          if (ship.grace > 0) ship.grace -= 1;
           ship.mouth += ((thrust ? 0.15 + 0.35 * Math.abs(Math.sin(t * 0.35)) : 0.5) - ship.mouth) * 0.25; // chomping as he goes
         }
         thrustSound(ship.thrust && !ship.gone);
@@ -250,12 +286,18 @@
         if ((d.life -= 1) <= 0) { drinks.splice(i, 1); continue; }
         const hitBy = shots.findIndex((s) => dist2(s, d) < 16);
         if (hitBy >= 0) { shots.splice(hitBy, 1); drinks.splice(i, 1); addScore(50); burst(d.x, d.y, 6, "#c8f0ff", 0.9); clink(); continue; }
-        if (ship.alive && !ship.gone && ship.safe <= 0 && dist2(d, ship) < (SHIP_R + 2) ** 2) { drinks.splice(i, 1); killShip(); }
+        if (ship.alive && !ship.gone && ship.safe <= 0 && !(ship.grace > 0) && dist2(d, ship) < (SHIP_R + 2) ** 2) { drinks.splice(i, 1); if (!shieldTakes()) killShip(); }
       }
       // rocks
       for (const r of rocks) { r.x = wrap(r.x + r.vx, W); r.y = wrap(r.y + r.vy, H); r.rot += r.spin; }
-      const live = ship.alive && !ship.gone && ship.safe <= 0;
-      if (live) for (let k = rocks.length - 1; k >= 0; k--) if (dist2(ship, rocks[k]) < (ROCK[rocks[k].size].r + SHIP_R - 1) ** 2) { breakRock(k); killShip(); break; }
+      const live = ship.alive && !ship.gone && ship.safe <= 0 && !(ship.grace > 0);
+      if (live) for (let k = rocks.length - 1; k >= 0; k--) if (dist2(ship, rocks[k]) < (ROCK[rocks[k].size].r + SHIP_R - 1) ** 2) {
+        const r = rocks[k], b = shieldTakes(r);
+        const kids = breakRock(k);
+        if (b) for (const kid of kids) { kid.vx -= b.nx * 0.9; kid.vy -= b.ny * 0.9; } // (its pieces fly off away from him)
+        else killShip();
+        break;
+      }
       // enraged: once the wave has gone on 45 s, by time alone (the author; 2 rocks left did it too, for a while), and he comes at once if he's away
       if (phase === "play") waveT += 1;
       if (phase === "play" && !rage && waveT >= RAGE_AFTER) {
@@ -301,22 +343,23 @@
             for (const o of spread) drinks.push({ x: ghost.x + 8, y: ghost.y, vx: Math.cos(a + o) * v, vy: Math.sin(a + o) * v, life: 170, rot: 0, spin: rnd(-0.12, 0.12) });
             clink();
           }
-          if (live && dist2(ghost, ship) < (GHOST_R + SHIP_R - 1) ** 2) { if (ghost.blue) eatGhost(); else killShip(); }
+          if (live && dist2(ghost, ship) < (GHOST_R + SHIP_R - 1) ** 2) {
+            if (ghost.blue) eatGhost();
+            else { const b = shieldTakes(ghost); if (b) { ghost.vx = -b.nx * 2.2; ghost.vy = -b.ny * 2.2; } else killShip(); } // (bounced apart, or he'd still be on him when the grace ran out)
+          }
         }
       }
       loop("scared", !!(ghost && ghost.blue && phase === "play"), 0.35);
       const hunting = !!(ghost && !ghost.eyes && !ghost.leaving && !ghost.blue && phase === "play");
       loop("siren1", hunting && !ghost.rage, 0.3);
       loop("siren5", hunting && !!ghost.rage, 0.32); // (enraged: the game's fastest siren)
-      // an energizer, now and then: eat it and the ghost turns blue
-      if (phase === "play" && !energizer && (energizerAt -= 1) <= 0) {
-        let x, y; do { x = rnd(16, W - 16); y = rnd(28, H - 16); } while (dist2({ x, y }, ship) < 60 * 60);
-        energizer = { x, y, life: 600 };
-      }
+      // the energizer (one of a broken rock's pieces, now and then), drifting and wrapping like the rocks for 4 s: eat it and
+      // Elroy turns blue, and Pac-Man has a shield
       if (energizer) {
-        if ((energizer.life -= 1) <= 0) { energizer = null; energizerAt = 900; }
+        energizer.x = wrap(energizer.x + energizer.vx, W); energizer.y = wrap(energizer.y + energizer.vy, H);
+        if ((energizer.life -= 1) <= 0) energizer = null;
         else if (ship.alive && !ship.gone && dist2(energizer, ship) < (SHIP_R + 4) ** 2) {
-          energizer = null; energizerAt = 1200; addScore(50); sample("fruit", 0.7);
+          energizer = null; addScore(50); sample("fruit", 0.7); ship.shield = true; // (and the shield)
           if (ghost && !ghost.eyes && !ghost.leaving) { ghost.blue = 360; ghost.vx = -ghost.vx; ghost.vy = -ghost.vy; }
         }
       }
@@ -392,12 +435,25 @@
       }));
       x.globalAlpha = 1; x.fillStyle = DOT_COL;
       for (const s of shots) x.fillRect(Math.round(s.x) - 1, Math.round(s.y) - 1, 2, 2);
-      if (energizer && Math.floor(energizer.life / 10) % 2 === 0) { x.beginPath(); x.arc(energizer.x, energizer.y, 3.5, 0, TAU); x.fill(); }
+      if (energizer && Math.floor(energizer.life / 10) % 2 === 0) { // (blinking as in the game, fading out over its last 1.5 s)
+        x.globalAlpha = Math.min(1, energizer.life / 90);
+        wrapped(energizer, 5, (px, py) => { x.beginPath(); x.arc(px, py, 3.5, 0, TAU); x.fill(); });
+        x.globalAlpha = 1;
+      }
       for (const d of drinks) wrapped(d, 6, (px, py) => martini(x, px, py, 0.85, d.rot));
       if (ghost) drawGhost(x, ghost);
       if (ship.alive && !ship.gone && !(ship.safe > 0 && Math.floor(ship.safe / 6) % 2)) {
-        wrapped(ship, 10, (px, py) => {
+        wrapped(ship, 12, (px, py) => {
           drawPac(x, px, py, ship.a, ship.mouth, YELLOW);
+          if (ship.shield) { // shimmering: six arcs of the rainbow turning slowly round him, breathing a little (no flashing)
+            const R = 9 + Math.sin(t * 0.15) * 0.6;
+            for (let k = 0; k < 6; k++) {
+              const a0 = t * 0.04 + k * TAU / 6;
+              x.globalAlpha = 0.75 + 0.2 * Math.sin(t * 0.1 + k);
+              beam(x, `hsl(${(t * 3 + k * 60) % 360},100%,65%)`, 1, () => { x.moveTo(px + Math.cos(a0) * R, py + Math.sin(a0) * R); x.arc(px, py, R, a0, a0 + TAU / 6 - 0.15); });
+            }
+            x.globalAlpha = 1;
+          }
           if (ship.thrust && t % 4 < 3) beam(x, "#ff9a20", 1, () => { // the flame, out of his back
             const bx = px - Math.cos(ship.a) * (SHIP_R + 1), by = py - Math.sin(ship.a) * (SHIP_R + 1), L = rnd(3, 6), s = 2.2;
             x.moveTo(bx + Math.cos(ship.a + Math.PI / 2) * s, by + Math.sin(ship.a + Math.PI / 2) * s);
@@ -489,7 +545,7 @@
       const f = onExit; onExit = null; if (f) f();
     }
     // (tests: a look inside, and Elroy shot on demand)
-    const test = { state: () => ({ phase, score, lives, wave, rage, waveT, ghost, board, myRank, asking, rocks: rocks && rocks.length, drinks: drinks && drinks.length }), shootElroy: () => { if (ghost && !ghost.eyes) eatGhost(); }, endGame: (s) => { score = s; lives = 0; if (ship.alive) killShip(); }, enrage: () => { waveT = RAGE_AFTER; }, immortal: () => { ship.safe = 1e9; } };
+    const test = { state: () => ({ phase, score, lives, wave, rage, waveT, ghost, board, myRank, asking, rocks: rocks && rocks.length, drinks: drinks && drinks.length }), shootElroy: () => { if (ghost && !ghost.eyes) eatGhost(); }, endGame: (s) => { score = s; lives = 0; if (ship.alive) killShip(); }, enrage: () => { waveT = RAGE_AFTER; }, immortal: () => { ship.safe = 1e9; }, shield: () => { ship.shield = true; }, eggs: (c) => { eggChance = c; }, breakSize: (sz) => { const i = rocks.findIndex((r) => r.size === sz); if (i >= 0) breakRock(i); return i >= 0; }, energizer: () => energizer && { ...energizer }, martiniAtShip: () => { ship.safe = 0; ship.grace = 0; drinks.push({ x: ship.x, y: ship.y, vx: 0, vy: 0, life: 99, rot: 0, spin: 0 }); }, ship: () => ship && { shield: ship.shield, alive: ship.alive, grace: ship.grace, vx: ship.vx, vy: ship.vy } };
     return { active: () => on, start, exit, step, key, touch, draw, test, onBoard: () => on && phase === "over" && !asking, refreshBoard: () => { board = []; myRank = null; loadBoard(); } };
   }
   root.BoozeElroids = { create };

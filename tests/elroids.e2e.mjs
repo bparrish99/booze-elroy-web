@@ -41,6 +41,22 @@ try {
   { const n = await pixels(p, [125, 147, 255], 16, 288); check(n > 80, "its rocks are on the screen (" + n + " rock-blue pixels)"); }
   await p.keyboard.down("ArrowLeft"); await p.keyboard.press("Space"); await p.waitForTimeout(2500); await p.keyboard.up("ArrowLeft");
   check((await snap()) === before, "the Pac-Man game stands completely still meanwhile");
+  // the shield (an energizer's): it takes one hit, a martini here, and Pac-Man lives; without it, the same martini costs a life
+  await p.waitForFunction(() => window.__elroids.test.state().phase === "play" && window.__elroids.test.ship().alive, null, { timeout: 8000 }).catch(() => {});
+  { const T = "window.__elroids.test";
+    const l0 = await p.evaluate(`${T}.state().lives`);
+    await p.evaluate(`${T}.shield(); ${T}.martiniAtShip()`); await p.waitForTimeout(150);
+    const a = await p.evaluate(`({ s: ${T}.ship(), lives: ${T}.state().lives })`);
+    check(!a.s.shield && a.s.alive && a.lives === l0, "the shield takes a martini: gone, and Pac-Man lives");
+    await p.waitForTimeout(700); await p.evaluate(`${T}.martiniAtShip()`); await p.waitForTimeout(150);
+    check(await p.evaluate(`${T}.state().lives`) === l0 - 1, "without it, the same martini costs a life"); }
+  // energizers: only ever one of a middle-sized rock's two pieces (12%; forced here), drifting off along its path
+  { const T = "window.__elroids.test";
+    check(await p.evaluate(`${T}.energizer()`) === null, "no energizer before a rock breaks");
+    await p.evaluate(`${T}.eggs(1); ${T}.breakSize(3); ${T}.breakSize(2)`);
+    const e0 = await p.evaluate(`${T}.energizer()`); await p.waitForTimeout(300); const e1 = await p.evaluate(`${T}.energizer()`);
+    check(!!e0 && !!e1 && (e0.x !== e1.x || e0.y !== e1.y), "a middle-sized rock's break gives one, drifting");
+    await p.evaluate(`${T}.eggs(0.12)`); }
   // the leaderboard: a game over with a score that places asks for a name
   await p.waitForFunction(() => window.__elroids.test.state().board, null, { timeout: 5000 }).catch(() => {});
   check(Array.isArray(await p.evaluate(() => window.__elroids.test.state().board)), "its board loads (empty to start)");
