@@ -244,6 +244,7 @@
     let rwd = null; // the Rewind ability (rewind.js), made once the core exists
     let replay = null; // (src/replay.js, created just below the core: the core's env reaches it lazily)
     const core = BoozeCore.create(A.data, {
+      plusColorEveryMaze: () => true, // (Plus Mode's style 5 is "Default" on every maze, the author)
       testMaze, noExit: true, noAutoplay: true, crtKey: true, fixedVolume: 8, centerMenus: true, creditsOnTitle: true, restoreKeepsAV: true, proMode: true, video, rng: () => (replay ? replay.rng() : Math.random()), makeSound: audio.makeSound,
       // (replays, src/replay.js: the held keys a game sees are the replay's while one plays; a real game seeds the RNG as it starts)
       isDown: (k) => (replay ? replay.isDown(k, (q) => !!down[q]) : !!down[k]), gameStarting: () => { if (replay) replay.gameStarting(); },

@@ -352,7 +352,9 @@
         } else {
           setCurrentMaze(mazepack);
         }
-        const defaultColor = (g.config.plusMode && g.currentMaze === "pac") ? 5 : getCurrentMaze().defaultColor;
+        // (web edition, the author 2026-11-23: with Plus Mode on, "Default" is Pac-Man Plus's blue-green style 5 on every maze, not
+        // just the arcade one: env.plusColorEveryMaze; without it, the original)
+        const defaultColor = (g.config.plusMode && (g.currentMaze === "pac" || (env.plusColorEveryMaze && env.plusColorEveryMaze()))) ? 5 : getCurrentMaze().defaultColor;
         if (g.config.mazeColor === 99) g.currentMazeColor = defaultColor;
         else if (g.config.mazeColor === 0) g.currentMazeColor = styleRand(1, maze.maxColors - 1); // Random: 1-26 (never 27, darkstar: the author)
         else g.currentMazeColor = g.config.mazeColor;
